@@ -26,6 +26,8 @@ import scair.transformations.cdt.TestInsertionPass
 import scair.transformations.cdt.TestReplacementPass
 import scair.transformations.cse.CommonSubexpressionElimination
 import scair.transformations.reconcile.ReconcileUnrealizedCasts
+import scair.dialects.dlam.DlamDialect
+import scair.passes.DependentTypeVerifierPass
 
 val allDialects: Seq[Dialect] =
   Seq(
@@ -45,7 +47,8 @@ val allDialects: Seq[Dialect] =
     AffineDialect,
     FuncDialect,
     LLVMDialect,
-    SCFDialect
+    SCFDialect,
+    DlamDialect
   )
 
 val allPasses: Seq[MLContext => ModulePass] =
@@ -56,5 +59,6 @@ val allPasses: Seq[MLContext => ModulePass] =
     ReconcileUnrealizedCasts(_),
     TestInsertionPass(_),
     TestReplacementPass(_),
-    Canonicalize(_)
+    Canonicalize(_),
+    DependentTypeVerifierPass(_)
   )
