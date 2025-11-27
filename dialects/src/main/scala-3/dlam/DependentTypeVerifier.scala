@@ -12,6 +12,7 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
   override def transform(op: Operation): Operation =
     op match
       case m: ModuleOp =>
+        DepTypeSymbolicResolver.resolveInModule(m)
         val table = ModuleValueTable(m)
         verifyModule(m, table)
         m
@@ -25,7 +26,6 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
 
     def walkRegion(r: Region): Unit =
       r.blocks.foreach { b =>
-        // block args types
         b.arguments.foreach { arg =>
           checkTypeAttr(arg.typ, m, table, None)
         }
@@ -39,11 +39,8 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
       m: ModuleOp,
       table: ModuleValueTable
   ): Unit =
-    // result types
     o.results.foreach(r => checkTypeAttr(r.typ, m, table, Some(o)))
-    // operand types
     o.operands.foreach(v => checkTypeAttr(v.typ, m, table, Some(o)))
-    // attributes
     o.attributes.values.foreach {
       case d: DepType       => checkDepType(d, m, table, Some(o))
       case tv: DlamTVarType => checkDepTypeExpr(tv.expr, m, table, Some(o))
@@ -66,14 +63,9 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
       table: ModuleValueTable,
       useSite: Option[Operation]
   ): Unit =
-    // 1) resolve TENamedValueRef / NENamedValueRef -> TEValueRef / NEFromValue
-    val resolvedExpr =
-      DepTypeSymbolicResolver.resolveDepTypeExpr(d.expr, m, table)
 
-    // 2) extract all SSAValueIds from the resolved tree
-    val ids = DepTypeAnalysis.collectValueIds(resolvedExpr)
+    val ids = DepTypeAnalysis.collectValueIds(d.expr)
 
-    // 3) dominance checks as before
     ids.foreach { id =>
       table.valueOf(id) match
         case None =>
@@ -173,7 +165,6 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
     def visitOp(op: Operation): Unit =
       if found.isDefined then return
 
-      // op results
       op.results.foreach { r =>
         r.ssaName match
           case Some(n) if n == name =>
@@ -181,17 +172,14 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
           case _ => ()
       }
 
-      // nested regions
       op.regions.foreach { r =>
         r.blocks.foreach { b =>
-          // block arguments
           b.arguments.foreach { arg =>
             arg.ssaName match
               case Some(n) if n == name =>
                 found = Some(arg)
               case _ => ()
           }
-          // operations inside block
           b.operations.foreach(visitOp)
         }
       }

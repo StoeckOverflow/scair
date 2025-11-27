@@ -74,7 +74,6 @@ final case class TApply(
           DBI.instantiate(fa, argType)
         if res.typ == inst then Right(this)
         else Left(s"tapply: result ${res.typ} != instantiated ${inst}")
-      case other => Left(s"tapply: not a forall, got $other")
 
 final case class VApply(
     fun: Value[TypeAttribute],

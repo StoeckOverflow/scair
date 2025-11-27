@@ -40,7 +40,7 @@ final case class TENamedValueRef(ssaName: String) extends DepTypeExpr
 
 // ---------- Bridging attribute ----------
 
-final case class DepType(expr: DepTypeExpr)
+final case class DepType(var expr: DepTypeExpr)
     extends TypeAttribute,
       ParametrizedAttribute:
   override def name = "dlam.dep_type"

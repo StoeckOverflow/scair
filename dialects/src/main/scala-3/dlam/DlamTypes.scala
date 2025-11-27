@@ -26,7 +26,7 @@ final case class DlamBVarType(k: IntegerAttr)
     derives DerivedAttributeCompanion
 
 // !dlam.tvar<%s> - type refereencing a SSA value %s
-final case class DlamTVarType(expr: DepTypeExpr)
+final case class DlamTVarType(var expr: DepTypeExpr)
     extends TypeAttribute,
       ParametrizedAttribute:
   override def name = "dlam.tvar"

@@ -48,7 +48,6 @@ object DepTypeSymbolicResolver:
     def visitOp(op: Operation): Unit =
       if found.isDefined then return
 
-      // results of this op
       op.results.foreach { r =>
         r.ssaName match
           case Some(n) if n == name =>
@@ -56,17 +55,14 @@ object DepTypeSymbolicResolver:
           case _ => ()
       }
 
-      // nested regions
       op.regions.foreach { r =>
         r.blocks.foreach { b =>
-          // block arguments
           b.arguments.foreach { arg =>
             arg.ssaName match
               case Some(n) if n == name =>
                 found = Some(arg)
               case _ => ()
           }
-          // operations inside block
           b.operations.foreach(visitOp)
         }
       }
@@ -74,7 +70,6 @@ object DepTypeSymbolicResolver:
     visitOp(m)
     found
 
-  // Recursive resolution for DepTypeExpr
   private def resolveDepTypeExprRec(
       e: DepTypeExpr,
       m: ModuleOp,
@@ -99,11 +94,9 @@ object DepTypeSymbolicResolver:
           resolveDepTypeExprRec(elem, m, table)
         )
 
-      // already resolved
       case TEValueRef(id) =>
         TEValueRef(id)
 
-      // symbolic: %name
       case TENamedValueRef(name) =>
         val v =
           findValueByName(m, name).getOrElse {
@@ -121,7 +114,6 @@ object DepTypeSymbolicResolver:
 
         TEValueRef(id)
 
-  // Recursive resolution for NatExprExpr
   private def resolveNatExprRec(
       n: NatExprExpr,
       m: ModuleOp,
@@ -143,11 +135,9 @@ object DepTypeSymbolicResolver:
           resolveNatExprRec(b, m, table)
         )
 
-      // already resolved
       case NEFromValue(id) =>
         NEFromValue(id)
 
-      // symbolic: %name
       case NENamedValueRef(name) =>
         val v =
           findValueByName(m, name).getOrElse {
@@ -165,52 +155,65 @@ object DepTypeSymbolicResolver:
 
         NEFromValue(id)
 
+  /** Resolve all symbolic dependent-type / nat expressions in the module.
+    *
+    * This *mutates* the IR in-place:
+    *
+    *   - DepType.expr and DlamTVarType.expr are rewritten so that any
+    *     TENamedValueRef / NENamedValueRef become TEValueRef / NEFromValue.
+    *
+    * After this pass, all dependent-type expressions reachable from `module`
+    * should be fully SSA-based (no symbolic %names).
+    */
   def resolveInModule(module: ModuleOp): Unit =
-    // Build a fresh value table for this module
     val table = ModuleValueTable(module)
 
-    // Try to resolve any dependent-typed attribute we see.
-    // We ignore the result, because the resolver is pure and the IR is immutable.
-    def resolveTypeAttr(attr: Attribute): Unit =
+    // Mutate a single Attribute in-place if it is a dlam dependent type
+    def resolveTypeAttrInPlace(attr: Attribute): Unit =
       attr match
         // !dlam.dep<...>
-        case DepType(expr) =>
-          // Will throw if any TENamedValueRef / NENamedValueRef cannot be resolved
-          resolveDepTypeExpr(expr, module, table)
-          ()
+        case d: DepType =>
+          d.expr = resolveDepTypeExpr(d.expr, module, table)
+
         // !dlam.tvar<...>
-        case DlamTVarType(expr) =>
-          resolveDepTypeExpr(expr, module, table)
-          ()
+        case tv: DlamTVarType =>
+          tv.expr = resolveDepTypeExpr(tv.expr, module, table)
+
+        // Any compound attribute (fun, forall, vec, etc.) that exposes children
+        case pa: ParametrizedAttribute =>
+          pa.parameters.foreach {
+            case a: Attribute =>
+              resolveTypeAttrInPlace(a)
+            case seq: Seq[?] =>
+              // parameters is Seq[Attribute | Seq[Attribute]]; recurse into nested sequences
+              seq.asInstanceOf[Seq[Attribute]].foreach(resolveTypeAttrInPlace)
+          }
+
         case _ =>
           ()
 
     def walkRegion(r: Region): Unit =
       r.blocks.foreach { b =>
-        // Block argument types
         b.arguments.foreach { arg =>
-          resolveTypeAttr(arg.typ)
+          resolveTypeAttrInPlace(arg.typ)
         }
-        // Operations in the block
+
         b.operations.foreach(walkOp)
       }
 
     def walkOp(o: Operation): Unit =
-      // Result types
       o.results.foreach { res =>
-        resolveTypeAttr(res.typ)
+        resolveTypeAttrInPlace(res.typ)
       }
 
-      // Operand types
       o.operands.foreach { v =>
-        resolveTypeAttr(v.typ)
+        resolveTypeAttrInPlace(v.typ)
       }
 
-      // Attributes on the op
-      o.attributes.values.foreach(resolveTypeAttr)
+      o.attributes.values.foreach { attr =>
+        resolveTypeAttrInPlace(attr)
+      }
 
-      // Nested regions
       o.regions.foreach(walkRegion)
 
-    // Kick off from the top-level module op
     walkOp(module)

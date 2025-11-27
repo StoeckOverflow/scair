@@ -4,6 +4,7 @@ import scair.MLContext
 import scair.Printer
 import scair.exceptions.VerifyException
 import scair.ir.*
+import scair.dialects.builtin.ModuleOp
 import scopt.OParser
 
 import scala.io.BufferedSource
@@ -165,14 +166,47 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
               else throw new VerifyException(errorMsg)
         )
 
+      // {
+      //  val printer = new Printer(parsed_args.print_generic)
+      //  processed_module.fold(
+      //    printer.print,
+      //    printer.printTopLevel
+      //  )
+      //  if inputModule != inputModules.last then printer.print("// -----\n")
+      //  printer.flush()
+      // }
       {
-        val printer = new Printer(parsed_args.print_generic)
-        processed_module.fold(
-          printer.print,
-          printer.printTopLevel
-        )
-        if inputModule != inputModules.last then printer.print("// -----\n")
-        printer.flush()
+        processed_module match
+          // If we got a verification / pass error string, just print it
+          case Left(msg) =>
+            val printer = new Printer(parsed_args.print_generic)
+            printer.print(msg)
+            printer.flush()
+
+          // Normal case: we have an Operation to print
+          case Right(op) =>
+            op match
+              // If it's a ModuleOp, build a ModuleValueTable so dependent types
+              // can resolve SSAValueIds to the same numeric names as SSA values.
+              case m: ModuleOp =>
+                val mvt = ModuleValueTable(m)
+                val printer = Printer(
+                  strictly_generic = parsed_args.print_generic,
+                  p = new java.io.PrintWriter(System.out),
+                  moduleValueTable = Some(mvt)
+                )
+                printer.printTopLevel(m)
+                if inputModule != inputModules.last then
+                  printer.print("// -----\n")
+                printer.flush()
+
+              // Fallback: any other top-level op, no value table
+              case other =>
+                val printer = new Printer(parsed_args.print_generic)
+                printer.printTopLevel(other)
+                if inputModule != inputModules.last then
+                  printer.print("// -----\n")
+                printer.flush()
       }
     )
 
