@@ -134,6 +134,7 @@ object Parser:
         valueMap(name)
       else
         val v = Value[Attribute](typ)
+        v.ssaName = Some(name)
         valueMap(name) = v
         v
 
