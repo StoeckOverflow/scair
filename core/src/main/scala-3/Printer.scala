@@ -22,8 +22,7 @@ case class Printer(
       mutable.Map.empty,
     val blockNameMap: mutable.Map[Block, String] = mutable.Map.empty,
     private val p: PrintWriter = new PrintWriter(System.out),
-    private var aliasesMap: Map[Attribute, String] = Map.empty,
-    var moduleValueTable: Option[ModuleValueTable] = None
+    private var aliasesMap: Map[Attribute, String] = Map.empty
 ):
 
   /*≡==--==≡≡≡==--=≡≡*\
@@ -281,8 +280,7 @@ class AliasPrinter(
         mutable.Map.empty,
       blockNameMap: mutable.Map[Block, String] = mutable.Map.empty,
       p: PrintWriter = new PrintWriter(System.out),
-      aliasesMap: Map[Attribute, String] = Map.empty,
-      moduleValueTable: Option[ModuleValueTable] = None
+      aliasesMap: Map[Attribute, String] = Map.empty
   ): AliasPrinter =
     new AliasPrinter(
       strictly_generic = strictly_generic,

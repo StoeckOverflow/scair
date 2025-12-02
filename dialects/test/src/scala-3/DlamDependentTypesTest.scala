@@ -20,8 +20,8 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
 
   given indentLevel: Int = 0
 
-  /** Parse a module, resolve symbolic DepType refs, run the verifier pass, then
-    * re-print it.
+  /** Parse a module, run the dependent-type verifier pass (which also resolves
+    * symbolic DepType refs), then re-print it.
     */
   private def roundTrip(text: String): String =
     val ctx = MLContext()
@@ -53,16 +53,14 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
         }
       )
 
+    // Pass internally calls DepTypeSymbolicResolver.resolveInModule(module)
     val pass = new DependentTypeVerifierPass(ctx)
     pass.transform(module)
 
     val sw = new StringWriter()
     val pw = new PrintWriter(sw)
-    val mvt = ModuleValueTable(module)
-
     val printer = Printer(
-      p = pw,
-      moduleValueTable = Some(mvt)
+      p = pw
     )
 
     printer.printTopLevel(module)
@@ -75,7 +73,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
    * Expected:
    * - parses
    * - DepTypeSymbolicResolver + DependentTypeVerifierPass succeed
-   * - re-print contains the right dlam ops and !dlam.dep/!dlam.tvar forms
+   * - re-print contains the right dlam ops and !dlam.tvar forms
    */
   "SSA-polymorphic identity (ΛT. λ(x:T). x)" should
     "round-trip through parser + dep-type resolution + verifier" in {
@@ -106,7 +104,9 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
       printed should include("dlam.vlambda")
       printed should include("dlam.vreturn")
       printed should include("dlam.treturn")
+
       printed should include("!dlam.tvar<%1>")
+      printed should not include ("%T")
     }
 
   /*
@@ -164,17 +164,20 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
 
       printed should include("!dlam.tvar<%1>")
       printed should include("!dlam.tvar<%3>")
+      printed should not include ("%T")
+      printed should not include ("%U")
+
     }
 
   /*
    * Build:
    *   builtin.module {
-   *     ^entry(%T : !dlam.type):
-   *       // no ops; we only care about the block arg %T
+   *     // %T : !dlam.type
+   *     %T = "test.defT"() : () -> !dlam.type
    *   }
    *
    * Then run the symbolic resolver on TENamedValueRef("T") and check that
-   * it becomes a TEValueRef whose SSAValueId maps back to %T.
+   * it becomes a TEValueRef pointing at the right Value.
    */
   "DepTypeSymbolicResolver" should
     "resolve TENamedValueRef(%T) into a TEValueRef pointing at the right value" in {
@@ -185,22 +188,20 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
         name = "test.defT",
         results = Seq(tRes)
       )
-      tRes.ssaName = Some("T") // SSA name %T
+      tRes.ssaName = Some("T") // textual SSA name %T
 
       val block = Block(operations = Seq(defOp))
       val module: ModuleOp = ModuleOp(body = Region(Seq(block)))
 
-      val table = ModuleValueTable(module)
+      // Symbolic dependent-type expression %T
       val expr: DepTypeExpr = TENamedValueRef("T")
 
+      // New resolver signature: no ModuleValueTable, returns TEValueRef(Value)
       val resolved: DepTypeExpr =
-        DepTypeSymbolicResolver.resolveDepTypeExpr(expr, module, table)
+        DepTypeSymbolicResolver.resolveDepTypeExpr(expr, module)
 
       resolved match
-        case TEValueRef(id) =>
-          val vOpt = table.valueOf(id)
-          vOpt.isDefined shouldBe true
-          val v = vOpt.get
+        case TEValueRef(v) =>
           v.ssaName shouldBe Some("T")
         case other =>
           fail(s"Expected TEValueRef, got: $other")
@@ -216,12 +217,11 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
       // Completely empty module (no values at all)
       val emptyBlock = Block(operations = Seq.empty[Operation])
       val module = ModuleOp(body = Region(Seq(emptyBlock)))
-      val table = ModuleValueTable(module)
 
       val expr: DepTypeExpr = TENamedValueRef("missing")
 
       an[Exception] should be thrownBy {
-        DepTypeSymbolicResolver.resolveDepTypeExpr(expr, module, table)
+        DepTypeSymbolicResolver.resolveDepTypeExpr(expr, module)
       }
     }
 
@@ -260,8 +260,6 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
       val block = Block(operations = Seq(defOp, useOp))
       val module = ModuleOp(body = Region(Seq(block)))
 
-      // Register dialects for the pass (it doesn't create ops, but this mirrors
-      // the rest of infrastructure and keeps things consistent).
       val ctx = MLContext()
       ctx.registerDialect(BuiltinDialect)
       ctx.registerDialect(DlamDialect)
@@ -271,7 +269,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
       noException should be thrownBy {
         pass.transform(
           module
-        ) // should return the same module if all checks pass
+        ) // resolveInModule + dominance check
       }
     }
 
@@ -316,7 +314,6 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
 
       val pass = new DependentTypeVerifierPass(ctx)
 
-      // The pass should throw because isDominated(...) will return false
       an[Exception] should be thrownBy {
         pass.transform(module)
       }

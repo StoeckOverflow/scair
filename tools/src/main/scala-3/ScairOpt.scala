@@ -186,14 +186,10 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
           // Normal case: we have an Operation to print
           case Right(op) =>
             op match
-              // If it's a ModuleOp, build a ModuleValueTable so dependent types
-              // can resolve SSAValueIds to the same numeric names as SSA values.
               case m: ModuleOp =>
-                val mvt = ModuleValueTable(m)
                 val printer = Printer(
                   strictly_generic = parsed_args.print_generic,
-                  p = new java.io.PrintWriter(System.out),
-                  moduleValueTable = Some(mvt)
+                  p = new java.io.PrintWriter(System.out)
                 )
                 printer.printTopLevel(m)
                 if inputModule != inputModules.last then

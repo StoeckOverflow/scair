@@ -13,21 +13,20 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
     op match
       case m: ModuleOp =>
         DepTypeSymbolicResolver.resolveInModule(m)
-        val table = ModuleValueTable(m)
-        verifyModule(m, table)
+        verifyModule(m)
         m
       case _ =>
         op
 
-  private def verifyModule(m: ModuleOp, table: ModuleValueTable): Unit =
+  private def verifyModule(m: ModuleOp): Unit =
     def walkOp(o: Operation): Unit =
-      checkOpTypes(o, m, table)
+      checkOpTypes(o, m)
       o.regions.foreach(walkRegion)
 
     def walkRegion(r: Region): Unit =
       r.blocks.foreach { b =>
         b.arguments.foreach { arg =>
-          checkTypeAttr(arg.typ, m, table, None)
+          checkTypeAttr(arg.typ, m, None)
         }
         b.operations.foreach(walkOp)
       }
@@ -36,55 +35,47 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
 
   private def checkOpTypes(
       o: Operation,
-      m: ModuleOp,
-      table: ModuleValueTable
+      m: ModuleOp
   ): Unit =
-    o.results.foreach(r => checkTypeAttr(r.typ, m, table, Some(o)))
-    o.operands.foreach(v => checkTypeAttr(v.typ, m, table, Some(o)))
+    o.results.foreach(r => checkTypeAttr(r.typ, m, Some(o)))
+    o.operands.foreach(v => checkTypeAttr(v.typ, m, Some(o)))
     o.attributes.values.foreach {
-      case d: DepType       => checkDepType(d, m, table, Some(o))
-      case tv: DlamTVarType => checkDepTypeExpr(tv.expr, m, table, Some(o))
+      case d: DepType       => checkDepType(d, m, Some(o))
+      case tv: DlamTVarType => checkDepTypeExpr(tv.expr, m, Some(o))
       case _                =>
     }
 
   private def checkTypeAttr(
       t: Attribute,
       m: ModuleOp,
-      table: ModuleValueTable,
       useSite: Option[Operation]
   ): Unit =
     t match
-      case d: DepType => checkDepType(d, m, table, useSite)
+      case d: DepType => checkDepType(d, m, useSite)
       case _          => ()
 
   private def checkDepType(
       d: DepType,
       m: ModuleOp,
-      table: ModuleValueTable,
       useSite: Option[Operation]
   ): Unit =
+    // 1) assume DepTypeSymbolicResolver.resolveInModule(m) already ran,
+    // so no TENamedValueRef / NENamedValueRef left.
+    val values = DepTypeAnalysis.collectValues(d.expr)
 
-    val ids = DepTypeAnalysis.collectValueIds(d.expr)
-
-    ids.foreach { id =>
-      table.valueOf(id) match
-        case None =>
+    // 2) dominance checks
+    values.foreach { v =>
+      useSite.foreach { user =>
+        if !isDominated(v, user) then
           throw new Exception(
-            s"Dependent type refers to dead or unknown value: $id"
+            s"Dependent type use not dominated by its definition: value=${v.ssaName.getOrElse("<anon>")}, user=${user.name}"
           )
-        case Some(v) =>
-          useSite.foreach { user =>
-            if !isDominated(v, user) then
-              throw new Exception(
-                s"Dependent type use not dominated by its definition: valueId=$id, user=${user.name}"
-              )
-          }
+      }
     }
 
   private def checkDepTypeExpr(
       e: DepTypeExpr,
       m: ModuleOp,
-      table: ModuleValueTable,
       useSite: Option[Operation]
   ): Unit =
     e match
@@ -92,24 +83,18 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
         ()
 
       case TEFun(in, out) =>
-        checkDepTypeExpr(in, m, table, useSite)
-        checkDepTypeExpr(out, m, table, useSite)
+        checkDepTypeExpr(in, m, useSite)
+        checkDepTypeExpr(out, m, useSite)
 
       case TEForall(body) =>
-        checkDepTypeExpr(body, m, table, useSite)
+        checkDepTypeExpr(body, m, useSite)
 
       case TEVec(len, elem) =>
-        checkNatExpr(len, m, table, useSite)
-        checkDepTypeExpr(elem, m, table, useSite)
+        checkNatExpr(len, m, useSite)
+        checkDepTypeExpr(elem, m, useSite)
 
-      case TEValueRef(id) =>
-        table.valueOf(id) match
-          case None =>
-            throw new Exception(
-              s"Dependent type refers to dead or unknown SSAValueId: $id"
-            )
-          case Some(v) =>
-            checkValueDominance(v, useSite)
+      case TEValueRef(v) =>
+        checkValueDominance(v, useSite)
 
       case TENamedValueRef(name) =>
         findValueByName(m, name) match
@@ -123,7 +108,6 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
   private def checkNatExpr(
       n: NatExprExpr,
       m: ModuleOp,
-      table: ModuleValueTable,
       useSite: Option[Operation]
   ): Unit =
     n match
@@ -131,21 +115,15 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
         ()
 
       case NEAdd(a, b) =>
-        checkNatExpr(a, m, table, useSite)
-        checkNatExpr(b, m, table, useSite)
+        checkNatExpr(a, m, useSite)
+        checkNatExpr(b, m, useSite)
 
       case NEMul(a, b) =>
-        checkNatExpr(a, m, table, useSite)
-        checkNatExpr(b, m, table, useSite)
+        checkNatExpr(a, m, useSite)
+        checkNatExpr(b, m, useSite)
 
-      case NEFromValue(id) =>
-        table.valueOf(id) match
-          case None =>
-            throw new Exception(
-              s"NatExpr refers to dead or unknown SSAValueId: $id"
-            )
-          case Some(v) =>
-            checkValueDominance(v, useSite)
+      case NEFromValue(v) =>
+        checkValueDominance(v, useSite)
 
       case NENamedValueRef(name) =>
         findValueByName(m, name) match

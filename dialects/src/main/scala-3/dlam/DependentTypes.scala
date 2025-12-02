@@ -16,7 +16,8 @@ final case class NEAdd(a: NatExprExpr, b: NatExprExpr) extends NatExprExpr
 final case class NEMul(a: NatExprExpr, b: NatExprExpr) extends NatExprExpr
 
 // After resolution:
-final case class NEFromValue(id: SSAValueId) extends NatExprExpr
+final case class NEFromValue(id: Value[Attribute]) extends NatExprExpr
+//final case class NEFromValue(id: SSAValueId) extends NatExprExpr
 
 // Before resolution (what the parser builds):
 final case class NENamedValueRef(ssaName: String) extends NatExprExpr
@@ -33,7 +34,8 @@ final case class TEVec(len: NatExprExpr, elem: DepTypeExpr) extends DepTypeExpr
 // ---------- SSA value references in types ----------
 
 // After resolution:
-final case class TEValueRef(id: SSAValueId) extends DepTypeExpr
+final case class TEValueRef(id: Value[Attribute]) extends DepTypeExpr
+//final case class TEValueRef(id: SSAValueId) extends DepTypeExpr
 
 // Before resolution (what the parser builds):
 final case class TENamedValueRef(ssaName: String) extends DepTypeExpr
@@ -49,7 +51,7 @@ final case class DepType(var expr: DepTypeExpr)
   override def custom_print(p: Printer): Unit =
     given indent: Int = 0
     p.print("!dlam.dep<")
-    DepTypePrinter.printResolved(expr, p)
+    DepTypePrinter.print(expr, p)
     p.print(">")
 
   override def custom_verify(): Either[String, Unit] = Right(())
@@ -136,8 +138,8 @@ object DepTypePrinter:
     case TEConst(pure) =>
       p.print(pure)
 
-    case TEValueRef(id) =>
-      p.print("%", ValueNameResolver.resolve(id, p))
+    case TEValueRef(v) =>
+      p.print(v)
 
     case TENamedValueRef(name) =>
       p.print("%", name)
@@ -170,87 +172,39 @@ object DepTypePrinter:
         printNatResolved(a, p); p.print(" + "); printNatResolved(b, p)
       case NEMul(a, b) =>
         printNatResolved(a, p); p.print(" * "); printNatResolved(b, p)
-      case NEFromValue(id) =>
-        p.print("%", ValueNameResolver.resolve(id, p))
+      case NEFromValue(v) =>
+        p.print(v)
       case NENamedValueRef(name) =>
         p.print("%", name)
 
   def print(e: DepTypeExpr, p: Printer)(using indent: Int = 0): Unit =
-    p.moduleValueTable match
-      case Some(table) =>
-        // Resolve TENamedValueRef / NENamedValueRef to TEValueRef / NEFromValue
-        val resolved = DepTypeSymbolicResolver.resolveDepTypeExpr(
-          e,
-          table.module,
-          table
-        )
-        printResolved(resolved, p)
-
-      case None =>
-        // No table: just print whatever we have
-        printResolved(e, p)
+    printResolved(e, p)
 
   def printNat(n: NatExprExpr, p: Printer)(using indent: Int = 0): Unit =
-    p.moduleValueTable match
-      case Some(table) =>
-        val resolved = DepTypeSymbolicResolver.resolveNatExpr(
-          n,
-          table.module,
-          table
-        )
-        printNatResolved(resolved, p)
-      case None =>
-        printNatResolved(n, p)
-
-object ValueNameResolver:
-
-  /** Resolve an SSAValueId to the *same* name the Printer would give to that
-    * value in normal SSA printing.
-    *
-    * If we can’t find the value or don’t have a ModuleValueTable, we fall back
-    * to a stable-but-ugly synthetic name.
-    */
-  def resolve(id: SSAValueId, p: Printer): String =
-    p.moduleValueTable match
-      case Some(table) =>
-        table.valueOf(id) match
-          case Some(v) =>
-            // assignValueName returns "%0", "%1", …
-            // we want just the bare suffix ("0", "1") so we can add our own '%'
-            val full = p.assignValueName(v)
-            full.stripPrefix("%")
-          case None =>
-            // Value disappeared or table out of sync; fallback
-            fallbackName(id)
-      case None =>
-        // No table available (e.g. someone created a Printer by hand)
-        fallbackName(id)
-
-  private def fallbackName(id: SSAValueId): String =
-    s"v${id.defOpId.path.mkString("_")}_${id.resultIndex}"
+    printNatResolved(n, p)
 
 // ---------- Small helper to collect ValueIDs ----------
 object DepTypeAnalysis:
 
-  def collectValueIds(t: DepTypeExpr): List[SSAValueId] =
+  def collectValues(t: DepTypeExpr): List[Value[Attribute]] =
     t match
-      case TEConst(_)       => Nil
-      case TEValueRef(id)   => id :: Nil
-      case TEFun(i, o)      => collectValueIds(i) ++ collectValueIds(o)
-      case TEForall(b)      => collectValueIds(b)
-      case TEVec(len, elem) => collectValueIdsNat(len) ++ collectValueIds(elem)
+      case TEConst(_)            => Nil
+      case TEValueRef(v)         => v :: Nil
+      case TEFun(i, o)           => collectValues(i) ++ collectValues(o)
+      case TEForall(b)           => collectValues(b)
+      case TEVec(len, elem)      => collectValuesNat(len) ++ collectValues(elem)
       case TENamedValueRef(name) =>
         throw new Exception(
           s"DepTypeAnalysis: encountered unresolved TENamedValueRef(%$name). " +
             "Did you forget to run DepTypeSymbolicResolver.resolveAll(module) first?"
         )
 
-  def collectValueIdsNat(n: NatExprExpr): List[SSAValueId] =
+  def collectValuesNat(n: NatExprExpr): List[Value[Attribute]] =
     n match
-      case NELit(_)        => Nil
-      case NEAdd(a, b)     => collectValueIdsNat(a) ++ collectValueIdsNat(b)
-      case NEMul(a, b)     => collectValueIdsNat(a) ++ collectValueIdsNat(b)
-      case NEFromValue(id) => id :: Nil
+      case NELit(_)              => Nil
+      case NEAdd(a, b)           => collectValuesNat(a) ++ collectValuesNat(b)
+      case NEMul(a, b)           => collectValuesNat(a) ++ collectValuesNat(b)
+      case NEFromValue(v)        => v :: Nil
       case NENamedValueRef(name) =>
         throw new Exception(
           s"DepTypeAnalysis: encountered unresolved NENamedValueRef(%$name). " +
