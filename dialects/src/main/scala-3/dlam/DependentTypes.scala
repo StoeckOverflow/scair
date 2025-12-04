@@ -45,7 +45,7 @@ final case class TENamedValueRef(ssaName: String) extends DepTypeExpr
 final case class DepType(var expr: DepTypeExpr)
     extends TypeAttribute,
       ParametrizedAttribute:
-  override def name = "dlam.dep_type"
+  override def name = "dlam.dep"
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq()
 
   override def custom_print(p: Printer): Unit =
@@ -57,7 +57,7 @@ final case class DepType(var expr: DepTypeExpr)
   override def custom_verify(): Either[String, Unit] = Right(())
 
 object DepType extends AttributeCompanion:
-  override def name = "dlam.dep_type"
+  override def name = "dlam.dep"
 
   override def parse[$: P](p: AttrParser): P[DepType] =
     import scair.AttrParser.whitespace
