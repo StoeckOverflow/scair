@@ -187,20 +187,35 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
             )
     }
 
-  /** Very conservative dominance: only allow uses later in the *same block*. If
-    * def and use are in different blocks/regions, treat as illegal for now.
+  /** Dominance check for a value at a given use site.
+    *
+    * For now we implement:
+    *   - If def and use are in the same block: def must come before use.
+    *   - If they are in different blocks: allow (outer defs can be used in
+    *     nested regions).
+    *   - Block arguments dominate their whole block and any nested regions.
     */
   private def isDominated(
       v: Value[Attribute],
       user: Operation
   ): Boolean =
-    (v.owner, user.container_block) match
-      case (Some(defOp: Operation), Some(block))
-          if defOp.container_block.contains(block) =>
-        val ops = block.operations.toSeq
-        val defIdx = ops.indexOf(defOp)
-        val useIdx = ops.indexOf(user)
-        defIdx >= 0 && useIdx >= 0 && defIdx <= useIdx
+    val vOwner = v.owner
+    val userBlockOpt = user.container_block
+
+    (vOwner, userBlockOpt) match
+      case (Some(defBlock: Block), Some(userBlock)) =>
+        true
+
+      case (Some(defOp: Operation), Some(userBlock)) =>
+        defOp.container_block match
+          case Some(defBlock) if defBlock eq userBlock =>
+            val ops = userBlock.operations.toSeq
+            val defIx = ops.indexOf(defOp)
+            val useIx = ops.indexOf(user)
+            defIx >= 0 && useIx >= 0 && defIx <= useIx
+
+          case _ =>
+            true
+
       case _ =>
-        // different block / unknown: disallow for now
-        false
+        true
