@@ -1,306 +1,218 @@
-# *Dependent Types in ScaIR — Architecture & Design Overview*
+# Dlam Dialect Notes
 
-This document describes how ScaIR implements dependent types that reference SSA values, how such references are resolved, verified, and printed, and how this connects to Dlam operations.
+## 1. Purpose of the Dlam Dialect
 
-# 1. Motivation
+The `dlam` dialect extends ScaIR with dependent typing.
+It introduces:
 
-MLIR does *not* allow SSA values to appear in types.
+### 1.1 Type-level constructs
 
-ScaIR extends MLIR by introducing:
+* `dlam.tlambda` — type-level lambda abstraction
+* `dlam.tapply` — instantiate a type-level lambda
+* `dlam.treturn` — return from a type-level lambda
 
-* **Dependent type expressions (`DepTypeExpr`)** that *may contain SSA value references* (e.g. `%T`, `%len`).
-* **ModuleValueTable**, which gives every SSA value (including *block arguments*) a stable ID.
-* **DepTypeSymbolicResolver**, which replaces textual `%T` with `SSAValueId`.
-* **DependentTypeVerifierPass**, which verifies dominance and correctness.
-* **Printer integration**, so resolved SSA IDs print back using normal `%0`, `%1`, … names.
+### 1.2 Value-level constructs
 
-This enables types like:
+* `dlam.vlambda` — value-level lambda abstraction
+* `dlam.vreturn` — return from a value-level lambda
+
+### 1.3 Dependent types
+
+Types may depend on:
+
+* SSA values (`Value`)
+* SSA types (via type-level lambdas)
+* Natural-number expressions (lengths of vectors, etc.)
+
+This allows IR such as:
 
 ```
-!dlam.tvar<%T>
-!dlam.dep<vec<%len, !dlam.tvar<%T>>>
+%len = dlam.nat_source() : i32
+%x   : !dlam.dep<vec<%len, i32>>
 ```
 
+Here the type of `%x` literally contains a reference to the SSA value `%len`.
 
-# 2. Value Identification Layer
+# 2. Dependent Types in Dlam
 
-*(ModuleValueTable & SSAValueId)*
+Dependent types are encoded using an embedded expression language.
 
-Source: 
+## 2.1 Dependent Type Expressions
 
-Every SSA value in the module (including **block arguments**) is assigned a *stable* identity:
-
-```scala
-final case class SSAValueId(defOpId: OpId, resultIndex: Int)
+```
+DepTypeExpr =
+  TEConst(pure MLIR type)
+  TEFun(input, output)               // dependent function type
+  TEForall(body)                     // type-level abstraction
+  TEVec(length: NatExprExpr, elem: DepTypeExpr)
+  TEValueRef(v: Value)               // refers directly to an SSA value
+  TENamedValueRef(name: String)      // placeholder during parsing
 ```
 
-Where:
+### Example:
 
-* `defOpId` = *path to the defining op or block header*
-* `resultIndex` = result slot (or block argument index)
+```
+!dlam.dep<vec<%len, i32>>
+```
+
+parses initially as:
+
+```
+TEVec(NENamedValueRef("len"), TEConst(i32))
+```
+
+and after resolution becomes:
+
+```
+TEVec(NEFromValue(%2), TEConst(i32))
+```
+
+## 2.2 Natural Expressions Used in Types
+
+```
+NatExprExpr =
+  NELit(int)
+  NEAdd(a, b)
+  NEMul(a, b)
+  NEFromValue(v: Value)             // refers directly to an SSA value
+  NENamedValueRef(name: String)     // placeholder during parsing
+```
 
 Example:
 
 ```
-%T : !dlam.type     // block argument
-%len = dlam.nat_source() : i32
+vec<%len + 4, i32>
 ```
 
-Might get IDs:
+becomes:
 
 ```
-%T   → SSAValueId(OpId(List(0,0)), 0)
-%len → SSAValueId(OpId(List(0,0,1)), 0)
+NEAdd(
+  NEFromValue(%len),
+  NELit(4)
+)
 ```
 
-The mapping is provided through:
+# 3. The Dependent-Type Resolver Pass
 
-```scala
-val table = ModuleValueTable(module)
-table.idOf(value): Option[SSAValueId]
-table.valueOf(id): Option[Value[Attribute]]
-```
+File: *DepTypeResolve.scala*
 
-This forms the backbone for dependent typing.
+### 3.1 Purpose
 
-# 3. Dependent Type AST
-
-*(DepTypeExpr & NatExprExpr)*
-
-Source: 
-
-Types may contain *unresolved textual SSA names*:
-
-```scala
-TENamedValueRef("T")
-NENamedValueRef("len")
-```
-
-After resolution they become:
-
-```scala
-TEValueRef(SSAValueId(...))
-NEFromValue(SSAValueId(...))
-```
-
-The full tree includes:
-
-* `TEConst(pureType)`
-* `TEFun(in, out)`
-* `TEForall(body)`
-* `TEVec(lenExpr, elemType)`
-* SSA-aware:
-
-  * `TEValueRef(id)`
-  * `TENamedValueRef(name)`
-
-# 4. Symbolic Resolution
-
-*(DepTypeSymbolicResolver)*
-
-Source: 
-
-This phase maps textual **`%T` → SSAValueId**:
-
-### Algorithm:
-
-1. Walk the dependent type tree.
-2. When encountering:
-
-   * `TENamedValueRef(name)`
-     → find SSA value `v` using `v.ssaName == name`
-3. Convert it to:
-
-   * `TEValueRef(table.idOf(v))`
-
-### Resolution does **NOT** mutate the IR.
-
-### Example:
+During parsing, dependent types may contain symbolic textual references:
 
 ```
-!dlam.tvar<%T>
+TENamedValueRef("n")
+NENamedValueRef("A")
 ```
 
-Parsed as:
+These must be replaced with actual SSA values.
+
+### 3.2 What the resolver does
+
+It:
+
+1. Scans the entire module for SSA values and block arguments.
+2. Matches values by textual name (`ssaName`).
+3. Rewrites every dependent type expression in-place:
 
 ```
-DlamTVarType(TENamedValueRef("T"))
+TENamedValueRef("n") → TEValueRef(value)
+NENamedValueRef("n") → NEFromValue(value)
 ```
 
-Resolved as:
+### 3.3 Why this pass exists
+
+ScaIR’s parser builds types before it knows which SSA values exist.
+The resolver is the step that “links” dependent types to the actual IR.
+
+### 3.4 Example
+
+Source:
 
 ```
-DlamTVarType(TEValueRef(SSAValueId(...)))
+!dlam.dep<vec<%len, i32>>
 ```
 
----
-
-# 5. Dominance Verification
-
-*(DependentTypeVerifierPass)*
-
-Source: 
-
-This pass ensures dependent types never reference *future* (non-dominating) SSA values.
-
-### Steps:
-
-#### 1. Resolve all symbolic refs
-
-```scala
-val resolvedExpr = DepTypeSymbolicResolver.resolveDepTypeExpr(...)
-```
-
-#### 2. Collect all SSAValueIds
-
-(using `DepTypeAnalysis.collectValueIds`)
-
-#### 3. For each value ID:
-
-* Look up the value in the ModuleValueTable.
-* Check dominance against the operation that uses the dependent type.
-
-Block arguments *automatically dominate* their block.
-
-### Example of rejection:
+After resolution:
 
 ```
-%y = ... : !dlam.dep<%x>   // uses %x
-%x = ...
+!dlam.dep<vec<%2, i32>>
 ```
 
-Fails because `%x` is defined after its use.
+where `%2` is the actual SSA value defined earlier in the IR.
 
-# 6. Printer Integration
+# 4. The Dependent-Type Verifier Pass
 
-*(ValueNameResolver & DepTypePrinter)*
+File: *DependentTypeVerifier.scala*
 
-Source: Printer.scala + DepTypePrinter in 
+### 4.1 Purpose
 
-The printer must:
+The verifier ensures dependent types are *well-formed* and satisfy dominance:
 
-1. Ask the ModuleValueTable for the actual SSA value.
-2. Ask the Printer to assign the same name (`%0`, `%1`) used everywhere.
+#### It checks:
 
-### Resolution inside printer:
+1. All dependent types are fully resolved
+   (i.e., no `TENamedValueRef` or `NENamedValueRef` remain)
 
-```scala
-case TEValueRef(id) =>
-  p.print("%", ValueNameResolver.resolve(id, p))
-```
+2. All values referenced inside types dominate their use
+   If a type refers to `%n`, then `%n` must be defined *before* the operation that uses the type.
 
-`resolve`:
+3. Natural expressions are valid
+   No invalid constructs or unresolvable values.
 
-* fetches the actual `Value` from the table
-* calls `p.assignValueName(value)`
-* strips the leading `%`
+### 4.2 Dominance check example
 
-This ensures types use the canonical SSA names.
-
-### Example:
+Invalid:
 
 ```
-!dlam.tvar<TEValueRef(SSAValueId(...))>
+%f = dlam.vlambda (...)  // references %n inside its type
+%n = dlam.nat_source()   // defined later → error
 ```
 
-Prints as:
+The verifier emits an exception:
 
 ```
-!dlam.tvar<%1>
+Dependent type use not dominated by its definition
 ```
 
-Matching the rest of the IR.
-
-# 7. TLambda, TApply, VLambda — semantics
-
-Source: Ops.scala ()
-
-### `TLambda`
+Valid:
 
 ```
-"dlam.tlambda"() ({
-  ^bb0(%T : !dlam.type):
-     ...
-}) : () -> !dlam.forall<...>
+%n = dlam.nat_source()
+%f = dlam.vlambda (...)  // now safe
 ```
 
-* Introduces **a type parameter** as a *block argument* `%T : !dlam.type`
-* Body may reference `%T` via `!dlam.tvar<%T>`
+# 5. Printing Dependent Types
 
-### `TApply`
+Because dependent types now contain `Value` objects directly, the ScaIR printer automatically prints types using the same SSA naming logic as normal values.
 
-Instantiates a polymorphic function:
-
-```
-%h = dlam.tapply %G, %T
-```
-
-Internally uses DBI.instantiate.
-
-### `VLambda`
-
-Value-level lambda:
-
-* Has one block argument
-* Function type may depend on SSA values.
-
-# 8. How Everything Works Together
+Example:
 
 ```
-               ┌──────────────────────┐
-               │  Parsed IR (textual) │
-               └──────────┬───────────┘
-                          ▼
-        ┌─────────────────────────────────────────┐
-        │ DepTypeExpr contains TENamedValueRef     │
-        └─────────────────────────────────────────┘
-                          ▼
-     ┌──────────────────────────────────────────────┐
-     │ DepTypeSymbolicResolver                       │
-     │  - finds SSA values in ModuleValueTable       │
-     │  - rewrites %T → TEValueRef(id)               │
-     └──────────────────────────────────────────────┘
-                          ▼
-  ┌────────────────────────────────────────────────────────────────┐
-  │ DependentTypeVerifierPass                                      │
-  │  - checks all references dominate the use site                 │
-  │  - errors if unresolved or illegal SSA reference               │
-  └────────────────────────────────────────────────────────────────┘
-                          ▼
-         ┌──────────────────────────────────┐
-         │ Printer + ValueNameResolver      │
-         │  - assignValueName               │
-         │  - types print using %0, %1      │
-         └──────────────────────────────────┘
+TEValueRef(v0)   →   %0
+NEFromValue(v1)  →   %1
 ```
 
-### This yields:
-
-#### Input IR:
+So:
 
 ```
-!dlam.tvar<%T>
+TEVec(NEFromValue(%0), TEConst(i32))
 ```
 
-#### Output IR:
+prints as:
 
 ```
-!dlam.tvar<%1>   // %1 is the block argument of tlambda
+vec<%0, i32>
 ```
 
-# 9. Summary of Guarantees Provided
+No special logic is required.
 
-| Layer                         | Responsibility                                              |
-| ----------------------------- | ----------------------------------------------------------- |
-| **Parser**                    | Builds unresolved DepTypeExpr with TENamedValueRef          |
-| **ModuleValueTable**          | Gives every SSA value (ops + block args) a stable ID        |
-| **DepTypeSymbolicResolver**   | Rewrites `%T` → `TEValueRef(SSAValueId(...))`               |
-| **DependentTypeVerifierPass** | Ensures dominance + no illegal references                   |
-| **Printer**                   | Prints SSA references inside types consistently with the IR |
+# 6. Summary of the Compilation Pipeline
 
-
-# 10. Future Extensions
-
-* Allow multiple type parameters: `%T %U %V`
-* Add binder variable shadowing
-* Support `tapply` as an SSA-level dependent application in types
+| Stage                | Purpose                                                 |
+| -------------------- | ------------------------------------------------------- |
+| 1. Parser            | Builds IR, but dependent types contain *symbolic names* |
+| 2. Resolver Pass     | Replaces symbolic references with `Value` objects       |
+| 3. Verifier Pass     | Ensures dominance and dependent-type well-formedness    |
+| 4. Printer           | Prints value-based dependent types normally             |
