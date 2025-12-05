@@ -72,8 +72,8 @@ object DepTypeParser:
   // ---------------------------
   // Parse a %name SSA reference
   // ---------------------------
-  def SsaName[$: P]: P[String] =
-    P("%" ~ Parser.SuffixId) // SuffixId parses MLIR-like identifiers
+  def valueRef[$: P](p: AttrParser): P[Value[Attribute]] =
+    Parser.ValueUse.flatMap(p.currentScope.useValue(_, DlamTypeType()))
 
   // ---------------------------
   // NatExpr grammar
@@ -89,7 +89,7 @@ object DepTypeParser:
   def NatExpr[$: P](p: AttrParser): P[NatExprExpr] =
     def Atom = P(
       Parser.DecimalLiteral.map(n => NELit(n.toLong))
-        | SsaName.map(NENamedValueRef(_))
+        | valueRef(p).map(NEFromValue(_))
         | "(" ~ NatExpr(p) ~ ")"
     )
 
@@ -109,7 +109,7 @@ object DepTypeParser:
   def DepTypeExpr[$: P](p: AttrParser): P[DepTypeExpr] =
     P(
       // SSA value reference in type position
-      SsaName.map(name => TENamedValueRef(name))
+      valueRef(p).map(value => TEValueRef(value))
 
       // Pure underlying MLIR type (delegated to AttrParser.Type)
         | p.Type.map { t =>

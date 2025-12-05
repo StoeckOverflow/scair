@@ -68,6 +68,103 @@ class AttrParser(
 
   import AttrParser.whitespace
 
+  var currentScope: Scope = new Scope()
+
+  /*≡==--==≡≡≡==--=≡≡*\
+  ||      SCOPE      ||
+  \*≡==---==≡==---==≡*/
+
+  class Scope(
+      var parentScope: Option[Scope] = None,
+      var valueMap: mutable.Map[String, Value[Attribute]] =
+        mutable.Map.empty[String, Value[Attribute]],
+      var forwardValues: mutable.Set[String] = mutable.Set.empty[String],
+      var blockMap: mutable.Map[String, Block] =
+        mutable.Map.empty[String, Block],
+      var forwardBlocks: mutable.Set[String] = mutable.Set.empty[String]
+  ):
+
+    def useValue[$: P](name: String, typ: Attribute): P[Value[Attribute]] =
+      Pass(
+        valueMap.getOrElseUpdate(
+          name, {
+            forwardValues += name
+            Value[Attribute](typ)
+          }
+        )
+      )
+
+    def checkForwardedValues[$: P]() =
+      forwardValues.headOption match
+        case Some(valueName) =>
+          Fail(s"Value %${valueName} not defined within Scope")
+        case None => Pass
+
+    private def defineValue[$: P](
+        name: String,
+        typ: Attribute
+    ): P[Value[Attribute]] =
+      if valueMap.contains(name) then
+        if !forwardValues.remove(name) then
+          Fail(
+            s"Value cannot be defined twice within the same scope - %${name}"
+          )
+        Pass(valueMap(name))
+      else
+        val v = Value[Attribute](typ)
+        v.ssaName = Some(name)
+        valueMap(name) = v
+        Pass(v)
+
+    inline def defineResult[$: P](
+        name: String,
+        typ: Attribute
+    ): P[Result[Attribute]] =
+      defineValue(name, typ).map(_.asInstanceOf[Result[Attribute]])
+
+    inline def defineBlockArgument[$: P](
+        name: String,
+        typ: Attribute
+    ): P[BlockArgument[Attribute]] =
+      defineValue(name, typ).map(_.asInstanceOf[BlockArgument[Attribute]])
+
+    def checkForwardedBlocks[$: P]() =
+      forwardBlocks.headOption match
+        case Some(blockName) =>
+          Fail(s"Successor ^$blockName not defined within Scope")
+        case None => Pass
+
+    def defineBlock[$: P](
+        blockName: String
+    ): P[Block] =
+      if blockMap.contains(blockName) then
+        if !forwardBlocks.remove(blockName) then
+          Fail(
+            f"Block cannot be defined twice within the same scope - ^${blockName}"
+          )
+        else Pass(blockMap(blockName))
+      else
+        val newBlock = new Block()
+        blockMap(blockName) = newBlock
+        Pass(newBlock)
+
+    def forwardBlock(
+        blockName: String
+    ): Block =
+      blockMap.getOrElseUpdate(
+        blockName, {
+          forwardBlocks += blockName
+          new Block()
+        }
+      )
+
+    // child starts off from the parents context
+    def createChild(): Scope =
+      return new Scope(
+        valueMap = valueMap.clone,
+        parentScope = Some(this)
+      )
+
   def DialectAttribute[$: P]: P[Attribute] = P(
     "#" ~~ PrettyDialectReferenceName.flatMapTry {
       (dialect: String, attrName: String) =>

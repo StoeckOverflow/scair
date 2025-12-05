@@ -11,7 +11,7 @@ builtin.module {
     "dlam.treturn"(%v)
       <{expected = !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>}>
       : (!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>) -> ()
-  }) : () -> (!dlam.forall<!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>>)
+  }) : () -> (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>)
 }
 
 // CHECK: builtin.module {
