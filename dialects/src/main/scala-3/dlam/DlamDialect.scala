@@ -5,7 +5,7 @@ import scair.clair.macros.*
 
 val DlamDialect = summonDialect[
   // Custom attributes
-  (DlamTypeType, DlamBVarType, DlamForAllType),
+  (DlamTypeType, DlamBVarType, DlamForAllType, DlamFunType, DepType, DlamTVarType),
   // Operations
   (VLambda, VReturn, TLambda, TReturn, TApply, VApply)
-](Seq(DlamFunType, DepType, DlamTVarType))
+]

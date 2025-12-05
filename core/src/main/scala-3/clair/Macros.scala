@@ -9,6 +9,7 @@ import scair.Printer
 import scair.clair.codegen.*
 import scair.clair.mirrored.*
 import scair.dialects.builtin.*
+import scair.enums.macros.*
 import scair.ir.*
 import scair.transformations.CanonicalizationPatterns
 import scair.transformations.RewritePattern
@@ -190,19 +191,19 @@ def customPrintMacro(
         )
       }
 
-def parseMacro(
+def parseMacro[O <: Operation: Type](
     opDef: OperationDef,
     p: Expr[Parser],
     resNames: Expr[Seq[String]]
 )(using
     Quotes
-): Expr[P[Any] ?=> P[Operation]] =
+): Expr[P[Any] ?=> P[O]] =
   opDef.assembly_format match
     case Some(format) =>
       format.parse(opDef, p, resNames)
     case None =>
       '{
-        throw new Exception(
+        Fail(
           s"No custom Parser implemented for Operation '${${
               Expr(opDef.name)
             }}'"
@@ -670,7 +671,24 @@ def tryConstruct[T: Type](
       properties
     ) zip opDef.successors).map((e, d) => NamedArg(d.name, e.asTerm)) ++
     opDef.properties.map { case OpPropertyDef(name, tpe, variadicity, _) =>
-      tpe match
+      val namedArg = tpe match
+        case '[type t <: scala.reflect.Enum; `t`] =>
+          val property = variadicity match
+            case Variadicity.Optional =>
+              enumFromPropertyOption[t](
+                properties,
+                name
+              )
+            case Variadicity.Single =>
+              enumFromProperty[t](
+                properties,
+                name
+              )
+            case Variadicity.Variadic =>
+              report.errorAndAbort(
+                s"Properties cannot be variadic in an ADT."
+              )
+          NamedArg(name, property.asTerm)
         case '[type t <: Attribute; `t`] =>
           val property = variadicity match
             case Variadicity.Optional =>
@@ -688,6 +706,7 @@ def tryConstruct[T: Type](
                 s"Properties cannot be variadic in an ADT."
               )
           NamedArg(name, property.asTerm)
+      namedArg
     }
   // Return a call to the primary constructor of the ADT.
   Apply(
@@ -710,7 +729,7 @@ def tryConstruct[T: Type](
     *   ADT.
     */
 
-def fromUnstructuredOperationMacro[T: Type](
+def fromUnstructuredOperationMacro[T <: Operation: Type](
     opDef: OperationDef,
     genExpr: Expr[DerivedOperationCompanion[T]#UnstructuredOp]
 )(using Quotes): Expr[T] =
@@ -859,10 +878,10 @@ def deriveOperationCompanion[T <: Operation: Type](using
       override def parse[$: P as ctx](
           p: Parser,
           resNames: Seq[String]
-      ): P[Operation] =
+      ): P[T] =
         ${
           (getOpCustomParse[T]('{ p }, '{ resNames })
-            .getOrElse(parseMacro(opDef, '{ p }, '{ resNames })))
+            .getOrElse(parseMacro[T](opDef, '{ p }, '{ resNames })))
         }(using ctx)
 
       def apply(

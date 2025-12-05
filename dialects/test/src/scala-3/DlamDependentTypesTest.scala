@@ -184,8 +184,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
 
       // Define an op that produces %T : !dlam.type
       val tRes: Result[TypeAttribute] = Result(DlamTypeType()) // !dlam.type
-      val defOp = UnregisteredOperation(
-        name = "test.defT",
+      val defOp = UnregisteredOperation("test.defT")(
         results = Seq(tRes)
       )
       tRes.ssaName = Some("T") // textual SSA name %T
@@ -243,8 +242,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
 
       // Definition op: %x : i32
       val defRes: Result[TypeAttribute] = Result(I32)
-      val defOp = UnregisteredOperation(
-        name = "test.def",
+      val defOp = UnregisteredOperation("test.def")(
         results = Seq(defRes)
       )
       defOp.results.head.ssaName = Some("x") // so we can refer to %x by name
@@ -252,8 +250,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
       // Use op: result typed !dlam.dep<%x>
       val depAttr = DepType(TENamedValueRef("x"))
       val useRes: Result[TypeAttribute] = Result(depAttr)
-      val useOp = UnregisteredOperation(
-        name = "test.use",
+      val useOp = UnregisteredOperation("test.use")(
         results = Seq(useRes)
       )
 
@@ -291,15 +288,13 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
       // Use op: first, with result typed !dlam.dep<%x>
       val depAttr = DepType(TENamedValueRef("x"))
       val useRes: Result[TypeAttribute] = Result(depAttr)
-      val useOp = UnregisteredOperation(
-        name = "test.use",
+      val useOp = UnregisteredOperation("test.use")(
         results = Seq(useRes)
       )
 
       // Def op: second, defines %x : i32
       val defRes: Result[TypeAttribute] = Result(I32)
-      val defOp = UnregisteredOperation(
-        name = "test.def",
+      val defOp = UnregisteredOperation("test.def")(
         results = Seq(defRes)
       )
       defOp.results.head.ssaName = Some("x")

@@ -56,7 +56,7 @@ final case class DepType(var expr: DepTypeExpr)
 
   override def custom_verify(): Either[String, Unit] = Right(())
 
-object DepType extends AttributeCompanion:
+given AttributeCompanion[DepType]:
   override def name = "dlam.dep"
 
   override def parse[$: P](p: AttrParser): P[DepType] =

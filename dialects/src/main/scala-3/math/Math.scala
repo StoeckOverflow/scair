@@ -3,7 +3,24 @@ package scair.dialects.math
 import fastparse.*
 import scair.AttrParser.whitespace
 import scair.Parser
+import scair.Parser.orElse
+import scair.clair.macros.*
+import scair.clair.macros.DerivedOperation
+import scair.clair.macros.DerivedOperationCompanion
+import scair.clair.macros.summonDialect
+import scair.dialects.arith.FastMathFlags
+import scair.dialects.arith.FastMathFlagsAttr
+import scair.dialects.builtin.*
 import scair.ir.*
+
+//
+// ███╗░░░███╗ ░█████╗░ ████████╗ ██╗░░██╗
+// ████╗░████║ ██╔══██╗ ╚══██╔══╝ ██║░░██║
+// ██╔████╔██║ ███████║ ░░░██║░░░ ███████║
+// ██║╚██╔╝██║ ██╔══██║ ░░░██║░░░ ██╔══██║
+// ██║░╚═╝░██║ ██║░░██║ ░░░██║░░░ ██║░░██║
+// ╚═╝░░░░░╚═╝ ╚═╝░░╚═╝ ░░░╚═╝░░░ ╚═╝░░╚═╝
+//
 
 ////////////////
 // OPERATIONS //
@@ -13,122 +30,101 @@ import scair.ir.*
 //   AbsfOp   //
 // ==--------== //
 
-object AbsfOp extends OperationCompanion:
-  override def name: String = "math.absf"
+object AbsfOp:
+  def name: String = "math.absf"
 
-  override def parse[$: P](
+  def parse[$: P](
       parser: Parser,
       resNames: Seq[String]
-  ): P[Operation] =
+  ): P[AbsfOp] =
     P(
-      "" ~ Parser.ValueUse ~ ":" ~ parser.Type
-    ).map { case (operandName, type_) =>
-      parser.generateOperation(
-        opName = name,
-        operandsNames = Seq(operandName),
-        operandsTypes = Seq(type_),
-        resultsNames = resNames,
-        resultsTypes = Seq(type_)
-      )
-    }
+      "" ~ Parser.ValueUse
+        .flatMap(operandName =>
+          (parser.Attribute.orElse(
+            FastMathFlagsAttr(FastMathFlags.none)
+          ) ~ ":" ~ parser.Type.flatMap(tpe =>
+            parser.currentScope.useValue(operandName, tpe) ~
+              parser.currentScope.defineResult(resNames.head, tpe)
+          ))
+        )
+        .flatMap { case (flags, operandAndResult) =>
+          val (operand, result) = operandAndResult
+          summon[DerivedOperationCompanion[AbsfOp]]
+            .apply(
+              operands = Seq(operand),
+              results = Seq(result),
+              properties = Map("fastmath" -> flags)
+            )
+            .structured match
+            case Right(op: AbsfOp) => Pass(op)
+            case Left(err)         => Fail(err)
+
+        }
+    )
 
 case class AbsfOp(
-    override val operands: Seq[Value[Attribute]],
-    override val successors: Seq[Block],
-    override val results: Seq[Result[Attribute]],
-    override val regions: Seq[Region],
-    override val properties: Map[String, Attribute],
-    override val attributes: DictType[String, Attribute]
-) extends BaseOperation(
-      name = "math.absf",
-      operands,
-      successors,
-      results,
-      regions,
-      properties,
-      attributes
-    )
-    with NoMemoryEffect:
-
-  override def custom_verify(): Either[String, Operation] = (
-    operands.length,
-    results.length,
-    successors.length,
-    regions.length,
-    properties.size
-  ) match
-    case (1, 1, 0, 0, 0) => Right(this)
-    case _               =>
-      Left(
-        "AbsfOp must have 1 result and 1 operand."
-      )
+    fastmath: FastMathFlagsAttr,
+    operand: Operand[FloatType],
+    result: Result[FloatType]
+) extends DerivedOperation["math.absf", AbsfOp]
+    with NoMemoryEffect derives DerivedOperationCompanion
 
 // ==--------== //
 //   FPowIOp   //
 // ==--------== //
 
-object FPowIOp extends OperationCompanion:
-  override def name: String = "math.fpowi"
+object FPowIOp:
+  def name: String = "math.fpowi"
 
-  override def parse[$: P](
+  def parse[$: P](
       parser: Parser,
       resNames: Seq[String]
-  ): P[Operation] =
+  ): P[FPowIOp] =
     P(
-      Parser.ValueUse ~ "," ~ Parser.ValueUse ~ ":" ~ parser.Type ~ "," ~ parser.Type
-    ).map {
-      case (
-            operand1Name,
-            operand2Name,
-            operand1Type,
-            operand2Type
-          ) =>
-        parser.generateOperation(
-          opName = name,
-          operandsNames = Seq(operand1Name, operand2Name),
-          operandsTypes = Seq(operand1Type, operand2Type),
-          resultsNames = resNames,
-          resultsTypes = Seq(operand1Type)
-        )
-    }
+      Parser.ValueUse.flatMap(lhsName =>
+        ("," ~ Parser.ValueUse.flatMap(rhsName =>
+          (parser.Attribute.orElse(
+            FastMathFlagsAttr(FastMathFlags.none)
+          ) ~ ":" ~ parser.Type.flatMap(lhsType =>
+            parser.currentScope.useValue(lhsName, lhsType) ~
+              parser.currentScope.defineResult(resNames.head, lhsType)
+          )
+            ~ "," ~ parser.Type.flatMap(
+              parser.currentScope.useValue(rhsName, _)
+            ))
+            .flatMap {
+              case (
+                    flags,
+                    lhsAndRes,
+                    rhs
+                  ) =>
+                println(f"Attempting construction")
+                val made = summon[DerivedOperationCompanion[FPowIOp]].apply(
+                  operands = Seq(lhsAndRes._1, rhs),
+                  results = Seq(lhsAndRes._2),
+                  properties = Map("fastmath" -> flags)
+                )
+                println(f"Made: $made")
+                made.structured match
+                  case Right(op: FPowIOp) => Pass(op)
+                  case Left(err)          => Fail(err)
+
+            }
+        ))
+      )
+    )
 
 case class FPowIOp(
-    override val operands: Seq[Value[Attribute]],
-    override val successors: Seq[Block],
-    override val results: Seq[Result[Attribute]],
-    override val regions: Seq[Region],
-    override val properties: Map[String, Attribute],
-    override val attributes: DictType[String, Attribute]
-) extends BaseOperation(
-      name = "math.fpowi",
-      operands,
-      successors,
-      results,
-      regions,
-      properties,
-      attributes
-    )
-    with NoMemoryEffect:
-
-  override def custom_verify(): Either[String, Operation] = (
-    operands.length,
-    results.length,
-    successors.length,
-    regions.length,
-    properties.size
-  ) match
-    case (2, 1, 0, 0, 0) => Right(this)
-    case _               =>
-      Left(
-        "FPowIOp must have 1 result and 2 operands."
-      )
+    lhs: Operand[FloatType],
+    rhs: Operand[IntegerType],
+    fastmath: FastMathFlagsAttr,
+    result: Result[FloatType]
+) extends DerivedOperation["math.fpowi", FPowIOp]
+    with NoMemoryEffect derives DerivedOperationCompanion
 
 /////////////
 // DIALECT //
 /////////////
 
 val MathDialect: Dialect =
-  new Dialect(
-    operations = Seq(AbsfOp, FPowIOp),
-    attributes = Seq()
-  )
+  summonDialect[EmptyTuple, (AbsfOp, FPowIOp)]

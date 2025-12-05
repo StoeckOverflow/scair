@@ -37,7 +37,7 @@ final case class DlamTVarType(var expr: DepTypeExpr)
     DepTypePrinter.print(expr, p)
     p.print(">")
 
-object DlamTVarType extends AttributeCompanion:
+given AttributeCompanion[DlamTVarType]:
   override def name = "dlam.tvar"
 
   override def parse[$: P](p: AttrParser): P[DlamTVarType] =
@@ -52,7 +52,7 @@ final case class DlamFunType(in: TypeAttribute, out: TypeAttribute)
   override def name: String = "dlam.fun"
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(in, out)
 
-object DlamFunType extends AttributeCompanion:
+given AttributeCompanion[DlamFunType]:
   override def name = "dlam.fun"
 
   override def parse[$: P](p: AttrParser): P[DlamFunType] =

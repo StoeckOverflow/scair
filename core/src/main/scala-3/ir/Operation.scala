@@ -8,14 +8,15 @@ import scair.utils.IntrusiveNode
 
 import scala.collection.mutable
 import scala.collection.mutable.LinkedHashMap
-// import scala.reflect.ClassTag
 
-// ██╗ ██████╗░
-// ██║ ██╔══██╗
-// ██║ ██████╔╝
-// ██║ ██╔══██╗
-// ██║ ██║░░██║
-// ╚═╝ ╚═╝░░╚═╝
+//
+// ░█████╗░ ██████╗░ ███████╗ ██████╗░ ░█████╗░ ████████╗ ██╗ ░█████╗░ ███╗░░██╗
+// ██╔══██╗ ██╔══██╗ ██╔════╝ ██╔══██╗ ██╔══██╗ ╚══██╔══╝ ██║ ██╔══██╗ ████╗░██║
+// ██║░░██║ ██████╔╝ █████╗░░ ██████╔╝ ███████║ ░░░██║░░░ ██║ ██║░░██║ ██╔██╗██║
+// ██║░░██║ ██╔═══╝░ ██╔══╝░░ ██╔══██╗ ██╔══██║ ░░░██║░░░ ██║ ██║░░██║ ██║╚████║
+// ╚█████╔╝ ██║░░░░░ ███████╗ ██║░░██║ ██║░░██║ ░░░██║░░░ ██║ ╚█████╔╝ ██║░╚███║
+// ░╚════╝░ ╚═╝░░░░░ ╚══════╝ ╚═╝░░╚═╝ ╚═╝░░╚═╝ ░░░╚═╝░░░ ╚═╝ ░╚════╝░ ╚═╝░░╚══╝
+//
 
 /*≡==--==≡≡≡≡≡≡≡≡≡==--=≡≡*\
 ||    MLIR OPERATIONS    ||
@@ -151,46 +152,32 @@ trait Operation extends IRNode with IntrusiveNode[Operation]:
   final override def hashCode(): Int = System.identityHashCode(this)
   final override def equals(o: Any): Boolean = this eq o.asInstanceOf[Object]
 
-abstract class BaseOperation(
-    val name: String,
-    val operands: Seq[Value[Attribute]] = Seq(),
-    val successors: Seq[Block] = Seq(),
-    val results: Seq[Result[Attribute]] = Seq(),
-    val regions: Seq[Region] = Seq(),
-    val properties: Map[String, Attribute] = Map.empty[String, Attribute],
-    override val attributes: DictType[String, Attribute] =
-      DictType.empty[String, Attribute]
-) extends Operation:
+object UnregisteredOperation:
 
-  // def companion : OperationCompanion
+  def apply(_name: String) =
+    new OperationCompanion[UnregisteredOperation]:
+      override def name = _name
 
-  def copy(
-      operands: Seq[Value[Attribute]],
-      successors: Seq[Block],
-      results: Seq[Result[Attribute]],
-      regions: Seq[Region],
-      properties: Map[String, Attribute],
-      attributes: DictType[String, Attribute]
-  ): BaseOperation
+      def apply(
+          operands: Seq[Value[Attribute]] = Seq(),
+          successors: Seq[Block] = Seq(),
+          results: Seq[Result[Attribute]] = Seq(),
+          regions: Seq[Region] = Seq(),
+          properties: Map[String, Attribute] = Map.empty[String, Attribute],
+          attributes: DictType[String, Attribute] =
+            DictType.empty[String, Attribute]
+      ): UnregisteredOperation =
+        new UnregisteredOperation(
+          name = _name,
+          operands = operands,
+          successors = successors,
+          results = results,
+          regions = regions,
+          properties = properties,
+          attributes = attributes
+        )
 
-  override def updated(
-      operands: Seq[Value[Attribute]] = operands,
-      successors: Seq[Block] = successors,
-      results: Seq[Result[Attribute]] = results.map(_.typ).map(Result(_)),
-      regions: Seq[Region] = detached_regions,
-      properties: Map[String, Attribute] = properties,
-      attributes: DictType[String, Attribute] = attributes
-  ) =
-    copy(
-      operands = operands,
-      successors = successors,
-      results = results,
-      regions = regions,
-      properties = properties,
-      attributes = attributes
-    )
-
-case class UnregisteredOperation(
+case class UnregisteredOperation private (
     override val name: String,
     override val operands: Seq[Value[Attribute]] = Seq(),
     override val successors: Seq[Block] = Seq(),
@@ -200,39 +187,30 @@ case class UnregisteredOperation(
       Map.empty[String, Attribute],
     override val attributes: DictType[String, Attribute] =
       DictType.empty[String, Attribute]
-) extends BaseOperation(
-      name = name,
+) extends Operation:
+
+  override def updated(
+      operands: Seq[Value[Attribute]] = operands,
+      successors: Seq[Block] = successors,
+      results: Seq[Result[Attribute]] = results.map(_.typ).map(Result(_)),
+      regions: Seq[Region] = detached_regions,
+      properties: Map[String, Attribute] = properties,
+      attributes: DictType[String, Attribute] = attributes
+  ) =
+    UnregisteredOperation(name)(
       operands = operands,
       successors = successors,
       results = results,
       regions = regions,
       properties = properties,
       attributes = attributes
-    ):
-
-  override def copy(
-      operands: Seq[Value[Attribute]],
-      successors: Seq[Block],
-      results: Seq[Result[Attribute]],
-      regions: Seq[Region],
-      properties: Map[String, Attribute],
-      attributes: DictType[String, Attribute]
-  ) =
-    UnregisteredOperation(
-      name = name,
-      operands = operands,
-      successors = successors,
-      results = results,
-      regions = regions.map(_.detached),
-      properties = properties,
-      attributes = attributes
     )
 
-trait OperationCompanion:
+trait OperationCompanion[O <: Operation]:
   def name: String
 
-  def parse[$: P](parser: Parser, resNames: Seq[String]): P[Operation] =
-    throw new Exception(
+  def parse[$: P](parser: Parser, resNames: Seq[String]): P[O] =
+    fastparse.Fail(
       s"No custom Parser implemented for Operation '${name}'"
     )
 

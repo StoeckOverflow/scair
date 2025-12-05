@@ -10,6 +10,22 @@ import scair.ir.*
 
 import scala.quoted.*
 
+//
+// ░█████╗░ ░██████╗ ░██████╗ ███████╗ ███╗░░░███╗ ██████╗░ ██╗░░░░░ ██╗░░░██╗
+// ██╔══██╗ ██╔════╝ ██╔════╝ ██╔════╝ ████╗░████║ ██╔══██╗ ██║░░░░░ ╚██╗░██╔╝
+// ███████║ ╚█████╗░ ╚█████╗░ █████╗░░ ██╔████╔██║ ██████╦╝ ██║░░░░░ ░╚████╔╝░
+// ██╔══██║ ░╚═══██╗ ░╚═══██╗ ██╔══╝░░ ██║╚██╔╝██║ ██╔══██╗ ██║░░░░░ ░░╚██╔╝░░
+// ██║░░██║ ██████╔╝ ██████╔╝ ███████╗ ██║░╚═╝░██║ ██████╦╝ ███████╗ ░░░██║░░░
+// ╚═╝░░╚═╝ ╚═════╝░ ╚═════╝░ ╚══════╝ ╚═╝░░░░░╚═╝ ╚═════╝░ ╚══════╝ ░░░╚═╝░░░
+//
+// ███████╗ ░█████╗░ ██████╗░ ███╗░░░███╗ ░█████╗░ ████████╗
+// ██╔════╝ ██╔══██╗ ██╔══██╗ ████╗░████║ ██╔══██╗ ╚══██╔══╝
+// █████╗░░ ██║░░██║ ██████╔╝ ██╔████╔██║ ███████║ ░░░██║░░░
+// ██╔══╝░░ ██║░░██║ ██╔══██╗ ██║╚██╔╝██║ ██╔══██║ ░░░██║░░░
+// ██║░░░░░ ╚█████╔╝ ██║░░██║ ██║░╚═╝░██║ ██║░░██║ ░░░██║░░░
+// ╚═╝░░░░░ ░╚════╝░ ╚═╝░░╚═╝ ╚═╝░░░░░╚═╝ ╚═╝░░╚═╝ ░░░╚═╝░░░
+//
+
 /** Utility function to check if a character is alphabetic */
 private inline def isalpha(c: Char): Boolean =
   (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
@@ -450,7 +466,7 @@ case class AssemblyFormatDirective(
       p: Expr[Parser],
       parsed: Expr[Tuple],
       resNames: Expr[Seq[String]]
-  )(using Quotes) =
+  )(using ctx: Expr[P[Any]])(using Quotes) =
     import quotes.reflect.report
 
     // TODO: Bunch of refactoring to do here, akin to what happened in main Macros.
@@ -551,7 +567,7 @@ case class AssemblyFormatDirective(
         resultsTypes = $flatResultTypes,
         attributes = $attrDict,
         properties = $propertiesDict.asInstanceOf[Map[String, Attribute]]
-      )
+      )(using $ctx)
     }
 
   /** Generate a complete specialized parser for this assembly format and
@@ -568,12 +584,17 @@ case class AssemblyFormatDirective(
     * @return
     *   Specialized code to parse an assembly format into an Operation.
     */
-  def parse(opDef: OperationDef, p: Expr[Parser], resNames: Expr[Seq[String]])(
-      using quotes: Quotes
-  ) =
+  def parse[O <: Operation: Type](
+      opDef: OperationDef,
+      p: Expr[Parser],
+      resNames: Expr[Seq[String]]
+  )(using
+      quotes: Quotes
+  ): Expr[P[Any] ?=> P[O]] =
     '{ (ctx: P[Any]) ?=>
-      ${ parseTuple(p)(using '{ ctx }) }.map(parsed =>
-        ${ buildOperation(opDef, p, '{ parsed }, resNames) }
+      ${ parseTuple(p)(using '{ ctx }) }.flatMap(parsed =>
+        ${ buildOperation(opDef, p, '{ parsed }, resNames)(using 'ctx) }
+          .asInstanceOf[P[O]]
       )
     }
 

@@ -1,7 +1,6 @@
 package scair.dialects.func
 
 import fastparse.*
-import fastparse.ParsingRun
 import scair.AttrParser.whitespace
 import scair.Parser
 import scair.Parser.*
@@ -11,30 +10,39 @@ import scair.clair.macros.*
 import scair.dialects.builtin.*
 import scair.ir.*
 
+//
+// ███████╗ ██╗░░░██╗ ███╗░░██╗ ░█████╗░
+// ██╔════╝ ██║░░░██║ ████╗░██║ ██╔══██╗
+// █████╗░░ ██║░░░██║ ██╔██╗██║ ██║░░╚═╝
+// ██╔══╝░░ ██║░░░██║ ██║╚████║ ██║░░██╗
+// ██║░░░░░ ╚██████╔╝ ██║░╚███║ ╚█████╔╝
+// ╚═╝░░░░░ ░╚═════╝░ ╚═╝░░╚══╝ ░╚════╝░
+//
+
 case class Call(
     callee: SymbolRefAttr,
     _operands: Seq[Operand[Attribute]],
     _results: Seq[Result[Attribute]]
-) extends DerivedOperation["func.call", Call]
+) extends DerivedOperation["func.call", Call] derives DerivedOperationCompanion
 
 object Func:
 
-  def parseResultTypes[$: ParsingRun](
+  def parseResultTypes[$: P](
       parser: Parser
-  ): ParsingRun[Seq[Attribute]] =
+  ): P[Seq[Attribute]] =
     ("->" ~ (parser.ParenTypeList | parser.Type.map(Seq(_)))).orElse(Seq())
 
-  def parse[$: ParsingRun](
+  def parse[$: P](
       parser: Parser,
       resNames: Seq[String]
-  ): ParsingRun[Operation] =
-    ("private".!.? ~ parser.SymbolRefAttrP ~ ((parser.BlockArgList.flatMap(
+  ): P[Func] =
+    ("private".!.? ~ parser.SymbolRefAttrP ~ (parser.BlockArgList.flatMap(
       (args: Seq[(String, Attribute)]) =>
         Pass(args.map(_._2)) ~ parseResultTypes(
           parser
         ) ~ ("attributes" ~ parser.DictionaryAttribute).orElse(Map()) ~ parser
           .RegionP(args)
-    )) | (
+    ) | (
       parser.ParenTypeList ~ parseResultTypes(
         parser
       ) ~ ("attributes" ~ parser.DictionaryAttribute).orElse(Map()) ~ Pass(
@@ -62,7 +70,7 @@ case class Func(
     sym_visibility: Option[StringData],
     body: Region
 ) extends DerivedOperation["func.func", Func]
-    with IsolatedFromAbove:
+    with IsolatedFromAbove derives DerivedOperationCompanion:
 
   override def custom_print(printer: Printer)(using indentLevel: Int) =
     val lprinter = printer.copy()
@@ -109,6 +117,6 @@ case class Return(
 ) extends DerivedOperation["func.return", Return]
     with AssemblyFormat["attr-dict ($_operands^ `:` type($_operands))?"]
     with NoMemoryEffect
-    with IsTerminator
+    with IsTerminator derives DerivedOperationCompanion
 
-val FuncDialect = summonDialect[EmptyTuple, (Call, Func, Return)](Seq())
+val FuncDialect = summonDialect[EmptyTuple, (Call, Func, Return)]

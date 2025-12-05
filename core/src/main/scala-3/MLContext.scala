@@ -22,14 +22,25 @@ class MLContext():
     val pass = passFactory(this)
     passContext += pass.name -> pass
 
-  val dialectOpContext: mutable.Map[String, OperationCompanion] = mutable.Map()
-
-  val dialectAttrContext: mutable.Map[String, AttributeCompanion] =
+  val dialectOpContext: mutable.Map[String, OperationCompanion[?]] =
     mutable.Map()
 
-  def getOperation(name: String) = dialectOpContext.get(name)
+  val dialectAttrContext: mutable.Map[String, AttributeCompanion[?]] =
+    mutable.Map()
 
-  def getAttribute(name: String) = dialectAttrContext.get(name)
+  def getOpCompanion(
+      name: String,
+      allowUnregisteredDialect: Boolean = false
+  ) = dialectOpContext.get(name) match
+    case Some(companion) => Right(companion)
+    case None            =>
+      if allowUnregisteredDialect then Right(UnregisteredOperation(name))
+      else
+        Left(
+          s"Operation ${name} is not registered. If this is intended, use `--allow-unregistered-dialect`."
+        )
+
+  def getAttrCompanion(name: String) = dialectAttrContext.get(name)
 
   def registerDialect(dialect: Dialect) =
     dialectOpContext ++= {

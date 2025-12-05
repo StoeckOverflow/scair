@@ -14,6 +14,21 @@ package scair
   * import scair.clair.macros.*
   * import scair.dialects.builtin.*
   * import scair.dialects.cmath.*
+  * import scair.enums.enumattr.I32Enum
+  *
+  * /*≡≡=---=≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡=---=≡≡*\
+  * ||   defining a custom I32 enum attribute   ||
+  * \*≡==----=≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡=----==≡*/
+  *
+  * enum Color(name: String) extends I32Enum(name):
+  *   case Red extends Color("red")
+  *   case Green extends Color("green")
+  *   case Blue extends Color("blue")
+  *
+  * case class EnumOperation(
+  *     val color: Color
+  * ) extends DerivedOperation["arith.enum_op", EnumOperation]
+  *     derives DerivedOperationCompanion
   *
   * /*≡≡=---=≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡=---=≡≡*\
   * ||   defining a custom data attribute   ||
@@ -32,6 +47,7 @@ package scair
   * case class SampleAttr(
   *     val value: FloatType
   * ) extends DerivedAttribute["sample.sample_attr", SampleAttr]
+  *     derives DerivedAttributeCompanion
   *
   * /*≡≡=---=≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡=---=≡≡*\
   * ||   defining a custom type attribute   ||
@@ -40,7 +56,7 @@ package scair
   * case class SampleType(
   *     val value: FloatType
   * ) extends DerivedAttribute["sample.sample_type", SampleType]
-  *     with TypeAttribute
+  *     with TypeAttribute derives DerivedAttributeCompanion
   *
   * /*≡≡=---=≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡=---=≡≡*\
   * ||   defining custom operations   ||
@@ -51,11 +67,13 @@ package scair
   *     e2: Result[Attribute],
   *     e3: Region
   * ) extends DerivedOperation["sample.sampop1", SampOp1]
+  *     derives DerivedOperationCompanion
   *
   * case class SampOp2(
   *     e1: Seq[Operand[Complex]],
   *     e2: Result[Attribute]
   * ) extends DerivedOperation["sample.sampop2", SampOp2]
+  *     derives DerivedOperationCompanion
   *
   * /*≡≡=---=≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡=---=≡≡*\
   * ||   constraints over operation components   ||
@@ -71,20 +89,21 @@ package scair
   *     rhs: Operand[IntegerType !> EqAttr[i32.type]],
   *     result: Result[IntegerType]
   * ) extends DerivedOperation["samplecnstr.mulieq", MulIEq]
+  *     derives DerivedOperationCompanion
   *
   * case class MulIVar(
   *     lhs: Operand[IntegerType !> T],
   *     rhs: Operand[IntegerType !> T],
   *     result: Result[IntegerType]
   * ) extends DerivedOperation["samplecnstr.mulivar", MulIVar]
+  *     derives DerivedOperationCompanion
   *
   * /*≡≡=---=≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡=---=≡≡*\
   * ||   packaging into a dialect   ||
   * \*≡==----=≡≡≡≡≡≡≡≡≡≡≡≡≡≡=----==≡*/
   *
-  * val Sample = summonDialect[(SampleAttr, SampleType), (SampOp1, SampOp1)](
-  *   Seq(SampleData)
-  * )
+  * val Sample =
+  *   summonDialect[(SampleAttr, SampleType, SampleData), (SampOp1, SampOp1)]
   * ```
   *
   * To include the defined Dialect in ScaIR, the user should put the file into
