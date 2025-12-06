@@ -22,5 +22,5 @@ builtin.module {
 // CHECK:       "dlam.vreturn"(%3) <{expected = !dlam.tvar<%1>}> : (!dlam.tvar<%1>) -> ()
 // CHECK:     }) : () -> !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>
 // CHECK:     "dlam.treturn"(%2) <{expected = !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>}> : (!dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>) -> ()
-// CHECK:   }) : () -> !dlam.forall<!dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>>
+// CHECK:   }) : () -> !dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>
 // CHECK: }

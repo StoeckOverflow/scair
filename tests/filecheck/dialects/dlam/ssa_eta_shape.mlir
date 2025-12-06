@@ -17,23 +17,22 @@ builtin.module {
     "dlam.treturn"(%id)
       <{expected = !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>}>
       : (!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>) -> ()
-  }) : () -> !dlam.forall<!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>>
+  }) : () -> !dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>
 }
 
-// We don't care about concrete SSA numbers, just structure and sharing:
-//  - a tlambda with a type binder T
-//  - a vlambda with funAttr !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>
-//  - a block arg x : !dlam.tvar<%T>
-//  - vreturn x with expected = !dlam.tvar<%T>
-//  - treturn id with expected = !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>
-
-// CHECK: %[[F:[0-9]+]] = "dlam.tlambda"() ({
-// CHECK: ^bb0(%[[T:[0-9]+]]: !dlam.type):
-
-// CHECK: %[[ID:[0-9]+]] = "dlam.vlambda"() <{funAttr = !dlam.fun<!dlam.tvar<%[[T]]>, !dlam.tvar<%[[T]]>>}> ({
-// CHECK: ^bb{{[0-9]+}}(%[[X:[0-9]+]]: !dlam.tvar<%[[T]]>):
-// CHECK: "dlam.vreturn"(%[[X]]) <{expected = !dlam.tvar<%[[T]]>}> : (!dlam.tvar<%[[T]]>) -> ()
-// CHECK: }) : () -> !dlam.fun<!dlam.tvar<%[[T]]>, !dlam.tvar<%[[T]]>
-
-// CHECK: "dlam.treturn"(%[[ID]]) <{expected = !dlam.fun<!dlam.tvar<%[[T]]>, !dlam.tvar<%[[T]]>>}>
-// CHECK: }) : () -> !dlam.forall<!dlam.fun<!dlam.tvar<%[[T]]>, !dlam.tvar<%[[T]]>>>
+//CHECK: builtin.module { 
+//CHECK:   %0 = "dlam.tlambda"() ({ 
+//CHECK:   ^bb0(%1: !dlam.type): 
+//CHECK:     %2 = "dlam.vlambda"() <{funAttr = 
+//CHECK:       !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>
+//CHECK:     }> ({ 
+//CHECK:     ^bb1(%3: !dlam.tvar<%1>): 
+//CHECK:       "dlam.vreturn"(%3) 
+//CHECK:         <{expected = !dlam.tvar<%1>}> 
+//CHECK:         : (!dlam.tvar<%1>) -> () 
+//CHECK:      }) : () -> !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>
+//CHECK:      "dlam.treturn"(%2) 
+//CHECK:         <{expected = !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>}> 
+//CHECK:         : (!dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>) -> () 
+//CHECK:     }) : () -> !dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>> 
+//CHECK: }

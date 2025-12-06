@@ -15,19 +15,19 @@ builtin.module {
       "dlam.treturn"(%v)
         <{expected = !dlam.fun<!dlam.tvar<%U>, !dlam.tvar<%U>>}>
         : (!dlam.fun<!dlam.tvar<%U>, !dlam.tvar<%U>>) -> ()
-    }) : () -> (!dlam.forall<!dlam.fun<!dlam.tvar<%U>, !dlam.tvar<%U>>>)
+    }) : () -> (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>)
 
     // h = G T : T → T
     %h = "dlam.tapply"(%G)
       <{argType = !dlam.tvar<%T>}>
-      : (!dlam.forall<!dlam.fun<!dlam.tvar<%U>, !dlam.tvar<%U>>>)
+      : (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>)
         -> (!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>)
 
     // return h : T → T
     "dlam.treturn"(%h)
       <{expected = !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>}>
       : (!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>) -> ()
-  }) : () -> (!dlam.forall<!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>>)
+  }) : () -> (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>)
 }
 
 // CHECK: builtin.module {
@@ -40,8 +40,8 @@ builtin.module {
 // CHECK:         "dlam.vreturn"(%5) <{expected = !dlam.tvar<%3>}> : (!dlam.tvar<%3>) -> ()
 // CHECK:       }) : () -> !dlam.fun<!dlam.tvar<%3>, !dlam.tvar<%3>>
 // CHECK:       "dlam.treturn"(%4) <{expected = !dlam.fun<!dlam.tvar<%3>, !dlam.tvar<%3>>}> : (!dlam.fun<!dlam.tvar<%3>, !dlam.tvar<%3>>) -> ()
-// CHECK:     }) : () -> !dlam.forall<!dlam.fun<!dlam.tvar<%3>, !dlam.tvar<%3>>>
-// CHECK:     %3 = "dlam.tapply"(%2) <{argType = !dlam.tvar<%1>}> : (!dlam.forall<!dlam.fun<!dlam.tvar<%3>, !dlam.tvar<%3>>>) -> !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>
+// CHECK:     }) : () -> !dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>
+// CHECK:     %3 = "dlam.tapply"(%2) <{argType = !dlam.tvar<%1>}> : (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>) -> !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>
 // CHECK:     "dlam.treturn"(%3) <{expected = !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>}> : (!dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>) -> ()
-// CHECK:   }) : () -> !dlam.forall<!dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>>
+// CHECK:   }) : () -> !dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>
 // CHECK: }

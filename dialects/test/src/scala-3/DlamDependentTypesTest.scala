@@ -90,7 +90,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
           |    "dlam.treturn"(%v)
           |      <{expected = !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>}>
           |      : (!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>) -> ()
-          |  }) : () -> (!dlam.forall<!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>>)
+          |  }) : () -> (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>)
           |}
           |""".stripMargin
 
@@ -134,19 +134,19 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
           |      "dlam.treturn"(%v)
           |        <{expected = !dlam.fun<!dlam.tvar<%U>, !dlam.tvar<%U>>}>
           |        : (!dlam.fun<!dlam.tvar<%U>, !dlam.tvar<%U>>) -> ()
-          |    }) : () -> (!dlam.forall<!dlam.fun<!dlam.tvar<%U>, !dlam.tvar<%U>>>)
+          |    }) : () -> (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>)
           |
           |    // h = G T : T → T
           |    %h = "dlam.tapply"(%G)
           |      <{argType = !dlam.tvar<%T>}>
-          |      : (!dlam.forall<!dlam.fun<!dlam.tvar<%U>, !dlam.tvar<%U>>>)
-          |        -> (!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>)
+          |      : (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>)
+          |        -> (!dlam.fun<!dlam.bvar<1>, !dlam.bvar<1>>)
           |
           |    // return h : T → T
           |    "dlam.treturn"(%h)
-          |      <{expected = !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>}>
-          |      : (!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>) -> ()
-          |  }) : () -> (!dlam.forall<!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>>)
+          |      <{expected = !dlam.fun<!dlam.bvar<1>, !dlam.bvar<1>>}>
+          |      : (!dlam.fun<!dlam.bvar<1>, !dlam.bvar<1>>) -> ()
+          |  }) : () -> (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>)
           |}
           |""".stripMargin
 
