@@ -112,7 +112,6 @@ class AttrParser(
         Pass(valueMap(name))
       else
         val v = Value[Attribute](typ)
-        v.ssaName = Some(name)
         valueMap(name) = v
         Pass(v)
 

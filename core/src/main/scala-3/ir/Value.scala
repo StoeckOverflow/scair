@@ -26,8 +26,6 @@ final case class Value[+T <: Attribute](
   val uses: collection.mutable.Set[Use] = collection.mutable.Set.empty[Use]
   var owner: Option[Operation | Block] = None
 
-  var ssaName: Option[String] = None
-
   def erase(): Unit =
     if uses.nonEmpty then
       throw new Exception(

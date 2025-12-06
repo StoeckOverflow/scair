@@ -14,13 +14,7 @@ sealed trait NatExprExpr
 final case class NELit(n: Long) extends NatExprExpr
 final case class NEAdd(a: NatExprExpr, b: NatExprExpr) extends NatExprExpr
 final case class NEMul(a: NatExprExpr, b: NatExprExpr) extends NatExprExpr
-
-// After resolution:
 final case class NEFromValue(id: Value[Attribute]) extends NatExprExpr
-//final case class NEFromValue(id: SSAValueId) extends NatExprExpr
-
-// Before resolution (what the parser builds):
-final case class NENamedValueRef(ssaName: String) extends NatExprExpr
 
 // ---------- DepTypeExpr (dependent type layer) ----------
 
@@ -30,15 +24,7 @@ final case class TEConst(pure: TypeAttribute) extends DepTypeExpr
 final case class TEFun(in: DepTypeExpr, out: DepTypeExpr) extends DepTypeExpr
 final case class TEForall(body: DepTypeExpr) extends DepTypeExpr
 final case class TEVec(len: NatExprExpr, elem: DepTypeExpr) extends DepTypeExpr
-
-// ---------- SSA value references in types ----------
-
-// After resolution:
 final case class TEValueRef(id: Value[Attribute]) extends DepTypeExpr
-//final case class TEValueRef(id: SSAValueId) extends DepTypeExpr
-
-// Before resolution (what the parser builds):
-final case class TENamedValueRef(ssaName: String) extends DepTypeExpr
 
 // ---------- Bridging attribute ----------
 
@@ -72,19 +58,13 @@ object DepTypeParser:
   // ---------------------------
   // Parse a %name SSA reference
   // ---------------------------
+
   def valueRef[$: P](p: AttrParser): P[Value[Attribute]] =
     Parser.ValueUse.flatMap(p.currentScope.useValue(_, DlamTypeType()))
 
   // ---------------------------
   // NatExpr grammar
   // ---------------------------
-  // def NatExpr[$: P](p: AttrParser): P[NatExprExpr] =
-  //  P(
-  //    Parser.DecimalLiteral.map(n => NELit(n.toLong))
-  //      | SsaName.map(name => NENamedValueRef(name))
-  //      | (NatExpr(p) ~ "+" ~ NatExpr(p)).map { case (a, b) => NEAdd(a, b) }
-  //      | (NatExpr(p) ~ "*" ~ NatExpr(p)).map { case (a, b) => NEMul(a, b) }
-  //  )
 
   def NatExpr[$: P](p: AttrParser): P[NatExprExpr] =
     def Atom = P(
@@ -106,6 +86,7 @@ object DepTypeParser:
   // ---------------------------
   // DepTypeExpr grammar
   // ---------------------------
+
   def DepTypeExpr[$: P](p: AttrParser): P[DepTypeExpr] =
     P(
       // SSA value reference in type position
@@ -141,9 +122,6 @@ object DepTypePrinter:
     case TEValueRef(v) =>
       p.print(v)
 
-    case TENamedValueRef(name) =>
-      p.print("%", name)
-
     case TEFun(i, o) =>
       p.print("fun<")
       printResolved(i, p)
@@ -174,8 +152,6 @@ object DepTypePrinter:
         printNatResolved(a, p); p.print(" * "); printNatResolved(b, p)
       case NEFromValue(v) =>
         p.print(v)
-      case NENamedValueRef(name) =>
-        p.print("%", name)
 
   def print(e: DepTypeExpr, p: Printer)(using indent: Int = 0): Unit =
     printResolved(e, p)
@@ -188,25 +164,15 @@ object DepTypeAnalysis:
 
   def collectValues(t: DepTypeExpr): List[Value[Attribute]] =
     t match
-      case TEConst(_)            => Nil
-      case TEValueRef(v)         => v :: Nil
-      case TEFun(i, o)           => collectValues(i) ++ collectValues(o)
-      case TEForall(b)           => collectValues(b)
-      case TEVec(len, elem)      => collectValuesNat(len) ++ collectValues(elem)
-      case TENamedValueRef(name) =>
-        throw new Exception(
-          s"DepTypeAnalysis: encountered unresolved TENamedValueRef(%$name). " +
-            "Did you forget to run DepTypeSymbolicResolver.resolveAll(module) first?"
-        )
+      case TEConst(_)       => Nil
+      case TEValueRef(v)    => v :: Nil
+      case TEFun(i, o)      => collectValues(i) ++ collectValues(o)
+      case TEForall(b)      => collectValues(b)
+      case TEVec(len, elem) => collectValuesNat(len) ++ collectValues(elem)
 
   def collectValuesNat(n: NatExprExpr): List[Value[Attribute]] =
     n match
-      case NELit(_)              => Nil
-      case NEAdd(a, b)           => collectValuesNat(a) ++ collectValuesNat(b)
-      case NEMul(a, b)           => collectValuesNat(a) ++ collectValuesNat(b)
-      case NEFromValue(v)        => v :: Nil
-      case NENamedValueRef(name) =>
-        throw new Exception(
-          s"DepTypeAnalysis: encountered unresolved NENamedValueRef(%$name). " +
-            "Did you forget to run DepTypeSymbolicResolver.resolveAll(module) first?"
-        )
+      case NELit(_)       => Nil
+      case NEAdd(a, b)    => collectValuesNat(a) ++ collectValuesNat(b)
+      case NEMul(a, b)    => collectValuesNat(a) ++ collectValuesNat(b)
+      case NEFromValue(v) => v :: Nil

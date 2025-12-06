@@ -12,70 +12,67 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
   override def transform(op: Operation): Operation =
     op match
       case m: ModuleOp =>
-        DepTypeSymbolicResolver.resolveInModule(m)
         verifyModule(m)
         m
       case _ =>
         op
 
+  // ----------------- top-level walk -----------------
+
   private def verifyModule(m: ModuleOp): Unit =
     def walkOp(o: Operation): Unit =
-      checkOpTypes(o, m)
+      checkOpTypes(o)
       o.regions.foreach(walkRegion)
 
     def walkRegion(r: Region): Unit =
       r.blocks.foreach { b =>
         b.arguments.foreach { arg =>
-          checkTypeAttr(arg.typ, m, None)
+          checkTypeAttr(arg.typ, None)
         }
         b.operations.foreach(walkOp)
       }
 
     walkOp(m)
 
+  // ----------------- per-op checks -----------------
+
   private def checkOpTypes(
-      o: Operation,
-      m: ModuleOp
+      o: Operation
   ): Unit =
-    o.results.foreach(r => checkTypeAttr(r.typ, m, Some(o)))
-    o.operands.foreach(v => checkTypeAttr(v.typ, m, Some(o)))
+    o.results.foreach(r => checkTypeAttr(r.typ, Some(o)))
+    o.operands.foreach(v => checkTypeAttr(v.typ, Some(o)))
     o.attributes.values.foreach {
-      case d: DepType       => checkDepType(d, m, Some(o))
-      case tv: DlamTVarType => checkDepTypeExpr(tv.expr, m, Some(o))
-      case _                =>
+      case d: DepType       => checkDepType(d, Some(o))
+      case tv: DlamTVarType => checkDepTypeExpr(tv.expr, Some(o))
+      case _                => ()
     }
 
   private def checkTypeAttr(
       t: Attribute,
-      m: ModuleOp,
       useSite: Option[Operation]
   ): Unit =
     t match
-      case d: DepType => checkDepType(d, m, useSite)
+      case d: DepType => checkDepType(d, useSite)
       case _          => ()
+
+  // ----------------- DepType (wrapper attribute) -----------------
 
   private def checkDepType(
       d: DepType,
-      m: ModuleOp,
       useSite: Option[Operation]
   ): Unit =
-    // 1) assume DepTypeSymbolicResolver.resolveInModule(m) already ran,
-    // so no TENamedValueRef / NENamedValueRef left.
+    // 1) Collect all Value[Attribute]s referred to inside the dependent type.
     val values = DepTypeAnalysis.collectValues(d.expr)
 
-    // 2) dominance checks
+    // 2) Dominance checks for each such value.
     values.foreach { v =>
-      useSite.foreach { user =>
-        if !isDominated(v, user) then
-          throw new Exception(
-            s"Dependent type use not dominated by its definition: value=${v.ssaName.getOrElse("<anon>")}, user=${user.name}"
-          )
-      }
+      checkValueDominance(v, useSite)
     }
+
+  // ----------------- DepTypeExpr / NatExprExpr recursion -----------------
 
   private def checkDepTypeExpr(
       e: DepTypeExpr,
-      m: ModuleOp,
       useSite: Option[Operation]
   ): Unit =
     e match
@@ -83,31 +80,21 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
         ()
 
       case TEFun(in, out) =>
-        checkDepTypeExpr(in, m, useSite)
-        checkDepTypeExpr(out, m, useSite)
+        checkDepTypeExpr(in, useSite)
+        checkDepTypeExpr(out, useSite)
 
       case TEForall(body) =>
-        checkDepTypeExpr(body, m, useSite)
+        checkDepTypeExpr(body, useSite)
 
       case TEVec(len, elem) =>
-        checkNatExpr(len, m, useSite)
-        checkDepTypeExpr(elem, m, useSite)
+        checkNatExpr(len, useSite)
+        checkDepTypeExpr(elem, useSite)
 
       case TEValueRef(v) =>
         checkValueDominance(v, useSite)
 
-      case TENamedValueRef(name) =>
-        findValueByName(m, name) match
-          case None =>
-            throw new Exception(
-              s"Dependent type refers to unknown SSA value %$name"
-            )
-          case Some(v) =>
-            checkValueDominance(v, useSite)
-
   private def checkNatExpr(
       n: NatExprExpr,
-      m: ModuleOp,
       useSite: Option[Operation]
   ): Unit =
     n match
@@ -115,61 +102,25 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
         ()
 
       case NEAdd(a, b) =>
-        checkNatExpr(a, m, useSite)
-        checkNatExpr(b, m, useSite)
+        checkNatExpr(a, useSite)
+        checkNatExpr(b, useSite)
 
       case NEMul(a, b) =>
-        checkNatExpr(a, m, useSite)
-        checkNatExpr(b, m, useSite)
+        checkNatExpr(a, useSite)
+        checkNatExpr(b, useSite)
 
       case NEFromValue(v) =>
         checkValueDominance(v, useSite)
 
-      case NENamedValueRef(name) =>
-        findValueByName(m, name) match
-          case None =>
-            throw new Exception(
-              s"NatExpr refers to unknown SSA value %$name"
-            )
-          case Some(v) =>
-            checkValueDominance(v, useSite)
-
-  private def findValueByName(
-      m: ModuleOp,
-      name: String
-  ): Option[Value[Attribute]] =
-    var found: Option[Value[Attribute]] = None
-
-    def visitOp(op: Operation): Unit =
-      if found.isDefined then return
-
-      op.results.foreach { r =>
-        r.ssaName match
-          case Some(n) if n == name =>
-            found = Some(r)
-          case _ => ()
-      }
-
-      op.regions.foreach { r =>
-        r.blocks.foreach { b =>
-          b.arguments.foreach { arg =>
-            arg.ssaName match
-              case Some(n) if n == name =>
-                found = Some(arg)
-              case _ => ()
-          }
-          b.operations.foreach(visitOp)
-        }
-      }
-
-    visitOp(m)
-    found
+  // ----------------- Dominance logic -----------------
 
   /** Dominance check for a value at a given use site.
     *
-    *   - If the value is an op result, we use the existing isDominated logic.
-    *   - If the value is a block argument, we treat it as dominating everything
-    *     in its block (standard SSA semantics).
+    *   - If the value is a block argument, it dominates the entire block.
+    *   - If the definition and use are in the same block: def must come before
+    *     use.
+    *   - If they are in different blocks: currently allowed (outer defs can be
+    *     used in nested regions).
     */
   private def checkValueDominance(
       v: Value[Attribute],
@@ -178,7 +129,7 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
     useSite.foreach { user =>
       (v.owner, user.container_block) match
         case (Some(block: Block), Some(userBlock)) if block eq userBlock =>
-          () // block argument dominates within its block
+          ()
 
         case _ =>
           if !isDominated(v, user) then
@@ -187,14 +138,6 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
             )
     }
 
-  /** Dominance check for a value at a given use site.
-    *
-    * For now we implement:
-    *   - If def and use are in the same block: def must come before use.
-    *   - If they are in different blocks: allow (outer defs can be used in
-    *     nested regions).
-    *   - Block arguments dominate their whole block and any nested regions.
-    */
   private def isDominated(
       v: Value[Attribute],
       user: Operation

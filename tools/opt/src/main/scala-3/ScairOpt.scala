@@ -155,7 +155,7 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
               case Left(errorMsg) =>
                 if parsed_args.verify_diagnostics then Left(errorMsg + "\n")
                 else throw new VerifyException(errorMsg)
-                
+
           {
             val printer = new Printer(parsed_args.print_generic)
             processed_module.fold(

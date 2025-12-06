@@ -7,7 +7,6 @@ import scair.MLContext
 
 import scair.dialects.builtin.*
 import scair.dialects.dlam.*
-import scair.dialects.dlam.DepTypeSymbolicResolver
 import scair.passes.DependentTypeVerifierPass
 
 import org.scalatest.*
@@ -53,7 +52,6 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
         }
       )
 
-    // Pass internally calls DepTypeSymbolicResolver.resolveInModule(module)
     val pass = new DependentTypeVerifierPass(ctx)
     pass.transform(module)
 
@@ -171,61 +169,6 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
 
   /*
    * Build:
-   *   builtin.module {
-   *     // %T : !dlam.type
-   *     %T = "test.defT"() : () -> !dlam.type
-   *   }
-   *
-   * Then run the symbolic resolver on TENamedValueRef("T") and check that
-   * it becomes a TEValueRef pointing at the right Value.
-   */
-  "DepTypeSymbolicResolver" should
-    "resolve TENamedValueRef(%T) into a TEValueRef pointing at the right value" in {
-
-      // Define an op that produces %T : !dlam.type
-      val tRes: Result[TypeAttribute] = Result(DlamTypeType()) // !dlam.type
-      val defOp = UnregisteredOperation("test.defT")(
-        results = Seq(tRes)
-      )
-      tRes.ssaName = Some("T") // textual SSA name %T
-
-      val block = Block(operations = Seq(defOp))
-      val module: ModuleOp = ModuleOp(body = Region(Seq(block)))
-
-      // Symbolic dependent-type expression %T
-      val expr: DepTypeExpr = TENamedValueRef("T")
-
-      // New resolver signature: no ModuleValueTable, returns TEValueRef(Value)
-      val resolved: DepTypeExpr =
-        DepTypeSymbolicResolver.resolveDepTypeExpr(expr, module)
-
-      resolved match
-        case TEValueRef(v) =>
-          v.ssaName shouldBe Some("T")
-        case other =>
-          fail(s"Expected TEValueRef, got: $other")
-    }
-
-  /*
-   * Build an empty module and try to resolve TENamedValueRef("missing").
-   * The resolver should throw, because no value %missing exists.
-   */
-  "DepTypeSymbolicResolver" should
-    "throw when asked to resolve a TENamedValueRef that has no defining SSA value" in {
-
-      // Completely empty module (no values at all)
-      val emptyBlock = Block(operations = Seq.empty[Operation])
-      val module = ModuleOp(body = Region(Seq(emptyBlock)))
-
-      val expr: DepTypeExpr = TENamedValueRef("missing")
-
-      an[Exception] should be thrownBy {
-        DepTypeSymbolicResolver.resolveDepTypeExpr(expr, module)
-      }
-    }
-
-  /*
-   * Build:
    *
    * builtin.module {
    *   ^bb0:
@@ -240,15 +183,15 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
   "DependentTypeVerifierPass" should
     "accept dependent types that refer only to dominating definitions" in {
 
-      // Definition op: %x : i32
       val defRes: Result[TypeAttribute] = Result(I32)
       val defOp = UnregisteredOperation("test.def")(
         results = Seq(defRes)
       )
-      defOp.results.head.ssaName = Some("x") // so we can refer to %x by name
 
-      // Use op: result typed !dlam.dep<%x>
-      val depAttr = DepType(TENamedValueRef("x"))
+      val depExpr: DepTypeExpr =
+        TEValueRef(defRes.asInstanceOf[Value[Attribute]])
+      val depAttr = DepType(depExpr)
+
       val useRes: Result[TypeAttribute] = Result(depAttr)
       val useOp = UnregisteredOperation("test.use")(
         results = Seq(useRes)
@@ -264,9 +207,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
       val pass = new DependentTypeVerifierPass(ctx)
 
       noException should be thrownBy {
-        pass.transform(
-          module
-        ) // resolveInModule + dominance check
+        pass.transform(module)
       }
     }
 
@@ -285,21 +226,20 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
   "DependentTypeVerifierPass" should
     "reject dependent types that refer to non-dominating SSA values" in {
 
-      // Use op: first, with result typed !dlam.dep<%x>
-      val depAttr = DepType(TENamedValueRef("x"))
+      val defRes: Result[TypeAttribute] = Result(I32)
+      val defOp = UnregisteredOperation("test.def")(
+        results = Seq(defRes)
+      )
+
+      val depExpr: DepTypeExpr =
+        TEValueRef(defRes.asInstanceOf[Value[Attribute]])
+      val depAttr = DepType(depExpr)
+
       val useRes: Result[TypeAttribute] = Result(depAttr)
       val useOp = UnregisteredOperation("test.use")(
         results = Seq(useRes)
       )
 
-      // Def op: second, defines %x : i32
-      val defRes: Result[TypeAttribute] = Result(I32)
-      val defOp = UnregisteredOperation("test.def")(
-        results = Seq(defRes)
-      )
-      defOp.results.head.ssaName = Some("x")
-
-      // Note: useOp comes *before* defOp in the block → dominance violation
       val block = Block(operations = Seq(useOp, defOp))
       val module = ModuleOp(body = Region(Seq(block)))
 
