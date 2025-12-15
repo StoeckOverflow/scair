@@ -66,6 +66,7 @@ object DepTypeParser:
   // NatExpr grammar
   // ---------------------------
 
+  /*
   def NatExpr[$: P](p: AttrParser): P[NatExprExpr] =
     def Atom = P(
       Parser.DecimalLiteral.map(n => NELit(n.toLong))
@@ -82,6 +83,44 @@ object DepTypeParser:
     }
 
     Add
+   */
+
+  def NatExpr[$: P](p: AttrParser): P[NatExprExpr] =
+    def Lit: P[NatExprExpr] =
+      Parser.DecimalLiteral.map(n => NELit(n.toLong))
+
+    def LitAtom: P[NatExprExpr] = P(Lit | "(" ~ LitOnly ~ ")")
+
+    def LitMul: P[NatExprExpr] =
+      P(LitAtom ~ (("*" ~ LitAtom).rep)).map { case (head, rest) =>
+        rest.foldLeft(head) { case (acc, rhs) => NEMul(acc, rhs) }
+      }
+
+    def LitOnly: P[NatExprExpr] =
+      P(LitMul ~ (("+" ~ LitMul).rep)).map { case (head, rest) =>
+        rest.foldLeft(head) { case (acc, rhs) => NEAdd(acc, rhs) }
+      }
+
+    def Val: P[NatExprExpr] =
+      valueRef(p).map(NEFromValue(_))
+
+    // (%v) | (k * %v) | (%v * k)
+    def ScaledVal: P[NatExprExpr] =
+      P(
+        (LitOnly ~ "*" ~ Val).map { case (k, v) => NEMul(k, v) } |
+          (Val ~ "*" ~ LitOnly).map { case (v, k) => NEMul(v, k) } |
+          Val |
+          "(" ~ NatExpr(p) ~ ")"
+      )
+
+    // Allow: ScaledVal [+ LitOnly]?  OR  LitOnly + ScaledVal
+    P(
+      (ScaledVal ~ ("+" ~ LitOnly).?).map {
+        case (base, Some(off)) => NEAdd(base, off)
+        case (base, None)      => base
+      } |
+        (LitOnly ~ "+" ~ ScaledVal).map { case (off, base) => NEAdd(off, base) }
+    )
 
   // ---------------------------
   // DepTypeExpr grammar

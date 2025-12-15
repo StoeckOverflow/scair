@@ -22,7 +22,7 @@ Types may depend on:
 
 * SSA values (`Value`)
 * SSA types (via type-level lambdas)
-* Natural-number expressions (lengths of vectors, etc.)
+* Natural-number expressions (lengths of vectors, etc.),restricted to at most one SSA value reference per expression  (e.g. `4 * %n`, `%n + 4`, `(2 * %n) + 3`), and disallowing combinations of multiple SSA values (e.g. `%n + %m`).
 
 This allows IR such as:
 
@@ -82,6 +82,8 @@ NatExprExpr =
   NEFromValue(v: Value)             // SSA value providing a natural number
 ```
 
+**Surface restriction**: although the internal AST includes NEAdd and NEMul, the textual syntax only permits nat-expressions containing zero or one NEFromValue. Arithmetic may combine that single SSA value with literals only. Expressions like `%a + %b` or `%a * %b` are rejected by the parser.
+
 #### Example:
 
 ```
@@ -132,7 +134,7 @@ Dominance policy
 ## 4. Parsing Dependent Types
 
 The `DepTypeParser` integrates directly with ScaIR’s SSA-use parser.
-Whenever the parser encounters `%x` inside a dependent type or nat-expression, it immediately resolves it to the corresponding `Value`.
+Whenever the parser encounters `%x` inside a dependent type or nat-expression, it immediately resolves it to the corresponding `Value`. The parser enforces the NatExpr restriction: any nat-expression containing more than one SSA value reference (e.g. `%a + %b`) is rejected during parsing.
 
 For example:
 
@@ -149,7 +151,7 @@ TEVec(
 )
 ```
 
-Thus dependent types are guaranteed to contain **real SSA references** after parsing.
+Thus dependent types are guaranteed to contain real SSA references after parsing.
 
 ## 5. Printing Dependent Types
 
