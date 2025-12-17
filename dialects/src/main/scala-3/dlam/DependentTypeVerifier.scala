@@ -26,9 +26,7 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
 
     def walkRegion(r: Region): Unit =
       r.blocks.foreach { b =>
-        b.arguments.foreach { arg =>
-          checkTypeAttr(arg.typ, None)
-        }
+        b.arguments.foreach(arg => checkTypeAttr(arg.typ, None))
         b.operations.foreach(walkOp)
       }
 
@@ -49,7 +47,7 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
 
   private def checkTypeAttr(
       t: Attribute,
-      useSite: Option[Operation]
+      useSite: Option[Operation],
   ): Unit =
     t match
       case d: DepType => checkDepType(d, useSite)
@@ -59,21 +57,19 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
 
   private def checkDepType(
       d: DepType,
-      useSite: Option[Operation]
+      useSite: Option[Operation],
   ): Unit =
     // 1) Collect all Value[Attribute]s referred to inside the dependent type.
     val values = DepTypeAnalysis.collectValues(d.expr)
 
     // 2) Dominance checks for each such value.
-    values.foreach { v =>
-      checkValueDominance(v, useSite)
-    }
+    values.foreach(v => checkValueDominance(v, useSite))
 
   // ----------------- DepTypeExpr / NatExprExpr recursion -----------------
 
   private def checkDepTypeExpr(
       e: DepTypeExpr,
-      useSite: Option[Operation]
+      useSite: Option[Operation],
   ): Unit =
     e match
       case TEConst(_) =>
@@ -95,7 +91,7 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
 
   private def checkNatExpr(
       n: NatExprExpr,
-      useSite: Option[Operation]
+      useSite: Option[Operation],
   ): Unit =
     n match
       case NELit(_) =>
@@ -124,33 +120,34 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
     */
   private def checkValueDominance(
       v: Value[Attribute],
-      useSite: Option[Operation]
+      useSite: Option[Operation],
   ): Unit =
     useSite.foreach { user =>
-      (v.owner, user.container_block) match
+      (v.owner, user.containerBlock) match
         case (Some(block: Block), Some(userBlock)) if block eq userBlock =>
           ()
 
         case _ =>
           if !isDominated(v, user) then
             throw new Exception(
-              s"Dependent type use not dominated by its definition: value=$v, user=${user.name}"
+              s"Dependent type use not dominated by its definition: value=$v, user=${user
+                  .name}"
             )
     }
 
   private def isDominated(
       v: Value[Attribute],
-      user: Operation
+      user: Operation,
   ): Boolean =
     val vOwner = v.owner
-    val userBlockOpt = user.container_block
+    val userBlockOpt = user.containerBlock
 
     (vOwner, userBlockOpt) match
       case (Some(defBlock: Block), Some(userBlock)) =>
         true
 
       case (Some(defOp: Operation), Some(userBlock)) =>
-        defOp.container_block match
+        defOp.containerBlock match
           case Some(defBlock) if defBlock eq userBlock =>
             val ops = userBlock.operations.toSeq
             val defIx = ops.indexOf(defOp)

@@ -3,7 +3,7 @@ package scair.dialects.dlam
 import scair.ir.*
 import scair.dialects.builtin.*
 import scair.clair.macros.*
-import scair.AttrParser
+import scair.parse.*
 import fastparse.ParsingRun
 import fastparse.*
 import scair.Printer
@@ -32,7 +32,7 @@ final case class DlamTVarType(var expr: DepTypeExpr)
   override def name = "dlam.tvar"
   override def parameters = Seq()
 
-  override def custom_print(p: Printer): Unit =
+  override def customPrint(p: Printer): Unit =
     p.print("!dlam.tvar<")
     DepTypePrinter.print(expr, p)
     p.print(">")
@@ -40,10 +40,10 @@ final case class DlamTVarType(var expr: DepTypeExpr)
 given AttributeCompanion[DlamTVarType]:
   override def name = "dlam.tvar"
 
-  override def parse[$: P](p: AttrParser): P[DlamTVarType] =
+  override def parse[$: P](using Parser): P[DlamTVarType] =
     import DepTypeParser.*
-    import scair.AttrParser.whitespace
-    P("<" ~ DepTypeExpr(p) ~ ">").map(expr => DlamTVarType(expr))
+    import scair.parse.whitespace
+    P("<" ~ DepTypeExpr ~ ">").map(expr => DlamTVarType(expr))
 
 // !dlam.fun<in -> out> — function type
 final case class DlamFunType(in: TypeAttribute, out: TypeAttribute)
@@ -55,14 +55,13 @@ final case class DlamFunType(in: TypeAttribute, out: TypeAttribute)
 given AttributeCompanion[DlamFunType]:
   override def name = "dlam.fun"
 
-  override def parse[$: P](p: AttrParser): P[DlamFunType] =
-    import scair.AttrParser.whitespace
+  override def parse[$: P](using Parser): P[DlamFunType] =
     P(
-      "<" ~ p.Type ~ "," ~ p.Type ~ ">"
+      "<" ~ typeP ~ "," ~ typeP ~ ">"
     ).map { (in, out) =>
       DlamFunType(
         in.asInstanceOf[TypeAttribute],
-        out.asInstanceOf[TypeAttribute]
+        out.asInstanceOf[TypeAttribute],
       )
     }
 

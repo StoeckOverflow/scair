@@ -2,7 +2,7 @@ package scair
 
 import scair.ir.*
 import scair.Printer
-import scair.Parser
+import scair.parse.*
 import scair.MLContext
 
 import scair.dialects.builtin.*
@@ -31,25 +31,23 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
       context = ctx,
       inputPath = None,
       parsingDiagnostics = true, // so parser.error returns a String
-      allowUnregisteredDialect = false
+      allowUnregisteredDialect = false,
     )
 
-    val parsed = parser.parseThis(
+    val parsed = parser.parse(
       text,
-      (p: fastparse.P[?]) => parser.TopLevel(using p),
-      verboseFailures = true
+      (p: fastparse.P[?]) => topLevelP(using p, parser),
+      verboseFailures = true,
     )
 
     val module: ModuleOp =
       parsed.fold(
-        { (msg, idx, extra) =>
-          fail(s"Parse error:\n$msg\nat index $idx")
-        },
+        (msg, idx, extra) => fail(s"Parse error:\n$msg\nat index $idx"),
         {
           case (m: ModuleOp, _) => m
           case (other, _)       =>
             fail(s"Expected ModuleOp at top level, got: $other")
-        }
+        },
       )
 
     val pass = new DependentTypeVerifierPass(ctx)
@@ -206,9 +204,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
 
       val pass = new DependentTypeVerifierPass(ctx)
 
-      noException should be thrownBy {
-        pass.transform(module)
-      }
+      noException should be thrownBy pass.transform(module)
     }
 
   /*
@@ -249,7 +245,5 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
 
       val pass = new DependentTypeVerifierPass(ctx)
 
-      an[Exception] should be thrownBy {
-        pass.transform(module)
-      }
+      an[Exception] should be thrownBy pass.transform(module)
     }

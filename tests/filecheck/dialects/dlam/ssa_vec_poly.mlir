@@ -9,35 +9,35 @@ builtin.module {
 
     %V = "dlam.vlambda"() <{funAttr =
       !dlam.fun<
-        !dlam.dep<vec<%len, !dlam.tvar<%A>>>,
-        !dlam.dep<vec<%len, !dlam.tvar<%A>>>
+        !dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>,
+        !dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>
       >
     }> ({
-    ^bb1(%x: !dlam.dep<vec<%len, !dlam.tvar<%A>>>):
+    ^bb1(%x: !dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>):
       "dlam.vreturn"(%x)
-        <{expected = !dlam.dep<vec<%len, !dlam.tvar<%A>>>}>
-        : (!dlam.dep<vec<%len, !dlam.tvar<%A>>>) -> ()
+        <{expected = !dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>}>
+        : (!dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>) -> ()
     }) : () -> !dlam.fun<
-           !dlam.dep<vec<%len, !dlam.tvar<%A>>>,
-           !dlam.dep<vec<%len, !dlam.tvar<%A>>>
+           !dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>,
+           !dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>
          >
 
     "dlam.treturn"(%V)
       <{expected =
         !dlam.fun<
-          !dlam.dep<vec<%len, !dlam.tvar<%A>>>,
-          !dlam.dep<vec<%len, !dlam.tvar<%A>>>
+          !dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>,
+          !dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>
         >
       }>
       : (!dlam.fun<
-          !dlam.dep<vec<%len, !dlam.tvar<%A>>>,
-          !dlam.dep<vec<%len, !dlam.tvar<%A>>>
+          !dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>,
+          !dlam.dep<vec<!dlam.tvar<%len>, !dlam.tvar<%A>>>
         >
         ) -> ()
   }) : () -> !dlam.forall<
          !dlam.fun<
-           !dlam.dep<vec<%len, !dlam.bvar<0>>>,
-           !dlam.dep<vec<%len, !dlam.bvar<0>>>
+           !dlam.dep<vec<!dlam.tvar<%len>, !dlam.bvar<0>>>,
+           !dlam.dep<vec<!dlam.tvar<%len>, !dlam.bvar<0>>>
          >
        >
 }

@@ -4,7 +4,6 @@ import scair.Printer
 import scair.exceptions.VerifyException
 import scair.ir.*
 import scair.parse.*
-import scair.dialects.builtin.ModuleOp
 import scair.tools.ScairToolBase
 import scair.utils.OK
 import scopt.OParser

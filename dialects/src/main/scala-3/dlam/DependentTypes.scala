@@ -2,10 +2,9 @@ package scair.dialects.dlam
 
 import scair.ir.*
 import scair.Printer
-import scair.AttrParser
+import scair.parse.*
 import fastparse.ParsingRun
 import fastparse.*
-import scair.Parser
 
 // ---------- NatExprExpr (value-aware naturals) ----------
 
@@ -34,33 +33,32 @@ final case class DepType(var expr: DepTypeExpr)
   override def name = "dlam.dep"
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq()
 
-  override def custom_print(p: Printer): Unit =
+  override def customPrint(p: Printer): Unit =
     given indent: Int = 0
     p.print("!dlam.dep<")
     DepTypePrinter.print(expr, p)
     p.print(">")
 
-  override def custom_verify(): Either[String, Unit] = Right(())
+  override def customVerify(): Either[String, Unit] = Right(())
 
 given AttributeCompanion[DepType]:
   override def name = "dlam.dep"
 
-  override def parse[$: P](p: AttrParser): P[DepType] =
-    import scair.AttrParser.whitespace
+  override def parse[$: P](using Parser): P[DepType] =
     import DepTypeParser.*
-    P("<" ~ DepTypeExpr(p) ~ ">")
-      .map(expr => DepType(expr))
+    P("<" ~ DepTypeExpr ~ ">").map(expr => DepType(expr))
 
 // ---------- Parser helpers ----------
 object DepTypeParser:
-  import scair.AttrParser.whitespace
+  // import scair.parse.whitespace
+  import scair.parse.whitespace
 
   // ---------------------------
   // Parse a %name SSA reference
   // ---------------------------
 
-  def valueRef[$: P](p: AttrParser): P[Value[Attribute]] =
-    Parser.ValueUse.flatMap(p.currentScope.useValue(_, DlamTypeType()))
+  def valueRef[$: P](using Parser): P[Value[Attribute]] =
+    operandNameP.flatMap(operandP(_, DlamTypeType()))
 
   // ---------------------------
   // NatExpr grammar
@@ -85,9 +83,9 @@ object DepTypeParser:
     Add
    */
 
-  def NatExpr[$: P](p: AttrParser): P[NatExprExpr] =
+  def NatExpr[$: P](using Parser): P[NatExprExpr] =
     def Lit: P[NatExprExpr] =
-      Parser.DecimalLiteral.map(n => NELit(n.toLong))
+      decimalLiteralP.map(n => NELit(n.toLong))
 
     def LitAtom: P[NatExprExpr] = P(Lit | "(" ~ LitOnly ~ ")")
 
@@ -102,15 +100,14 @@ object DepTypeParser:
       }
 
     def Val: P[NatExprExpr] =
-      valueRef(p).map(NEFromValue(_))
+      valueRef.map(NEFromValue(_))
 
     // (%v) | (k * %v) | (%v * k)
     def ScaledVal: P[NatExprExpr] =
       P(
         (LitOnly ~ "*" ~ Val).map { case (k, v) => NEMul(k, v) } |
-          (Val ~ "*" ~ LitOnly).map { case (v, k) => NEMul(v, k) } |
-          Val |
-          "(" ~ NatExpr(p) ~ ")"
+          (Val ~ "*" ~ LitOnly).map { case (v, k) => NEMul(v, k) } | Val |
+          "(" ~ NatExpr ~ ")"
       )
 
     // Allow: ScaledVal [+ LitOnly]?  OR  LitOnly + ScaledVal
@@ -118,35 +115,34 @@ object DepTypeParser:
       (ScaledVal ~ ("+" ~ LitOnly).?).map {
         case (base, Some(off)) => NEAdd(base, off)
         case (base, None)      => base
-      } |
-        (LitOnly ~ "+" ~ ScaledVal).map { case (off, base) => NEAdd(off, base) }
+      } | (LitOnly ~ "+" ~ ScaledVal).map { case (off, base) =>
+        NEAdd(off, base)
+      }
     )
 
   // ---------------------------
   // DepTypeExpr grammar
   // ---------------------------
 
-  def DepTypeExpr[$: P](p: AttrParser): P[DepTypeExpr] =
+  def DepTypeExpr[$: P](using Parser): P[DepTypeExpr] =
     P(
       // SSA value reference in type position
-      valueRef(p).map(value => TEValueRef(value))
+      valueRef.map(value => TEValueRef(value))
 
       // Pure underlying MLIR type (delegated to AttrParser.Type)
-        | p.Type.map { t =>
-          TEConst(t.asInstanceOf[TypeAttribute])
-        }
+      | typeP.map(t => TEConst(t.asInstanceOf[TypeAttribute]))
 
-        // Fun type: fun<T1 -> T2>
-        | ("fun" ~ "<" ~ DepTypeExpr(p) ~ "," ~ DepTypeExpr(p) ~ ">")
-          .map { case (a, b) => TEFun(a, b) }
+      // Fun type: fun<T1 -> T2>
+      | ("fun" ~ "<" ~ DepTypeExpr ~ "," ~ DepTypeExpr ~ ">")
+        .map { case (a, b) => TEFun(a, b) }
 
-        // Vec type: vec<N, Elem>
-        | ("vec" ~ "<" ~ NatExpr(p) ~ "," ~ DepTypeExpr(p) ~ ">")
-          .map { case (n, e) => TEVec(n, e) }
+      // Vec type: vec<N, Elem>
+      | ("vec" ~/ "<" ~ NatExpr ~ "," ~ DepTypeExpr ~ ">").map { case (n, e) =>
+        TEVec(n, e)
+      }
 
-        // Forall type: forall<Body>
-        | ("forall" ~ "<" ~ DepTypeExpr(p) ~ ">")
-          .map(body => TEForall(body))
+      // Forall type: forall<Body>
+      | ("forall" ~ "<" ~ DepTypeExpr ~ ">").map(body => TEForall(body))
     )
 
 // ---------- Printer helpers ----------
