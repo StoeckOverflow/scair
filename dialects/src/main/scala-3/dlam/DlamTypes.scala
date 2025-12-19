@@ -25,7 +25,7 @@ final case class DlamBVarType(k: IntegerAttr)
     with DerivedAttribute["dlam.bvar", DlamBVarType]
     derives DerivedAttributeCompanion
 
-// !dlam.tvar<%s> - type refereencing a SSA value %s
+// !dlam.tvar<%s> - type referencing a SSA value %s
 final case class DlamTVarType(var expr: DepTypeExpr)
     extends TypeAttribute,
       ParametrizedAttribute:

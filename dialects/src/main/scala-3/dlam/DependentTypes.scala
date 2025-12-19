@@ -64,61 +64,41 @@ object DepTypeParser:
   // NatExpr grammar
   // ---------------------------
 
-  /*
-  def NatExpr[$: P](p: AttrParser): P[NatExprExpr] =
-    def Atom = P(
-      Parser.DecimalLiteral.map(n => NELit(n.toLong))
-        | valueRef(p).map(NEFromValue(_))
-        | "(" ~ NatExpr(p) ~ ")"
-    )
-
-    def Mul = P(Atom ~ (("*" ~ Atom).rep)).map { case (head, rest) =>
-      rest.foldLeft(head) { case (acc, rhs) => NEMul(acc, rhs) }
-    }
-
-    def Add = P(Mul ~ (("+" ~ Mul).rep)).map { case (head, rest) =>
-      rest.foldLeft(head) { case (acc, rhs) => NEAdd(acc, rhs) }
-    }
-
-    Add
-   */
-
   def NatExpr[$: P](using Parser): P[NatExprExpr] =
     def Lit: P[NatExprExpr] =
       decimalLiteralP.map(n => NELit(n.toLong))
 
-    def LitAtom: P[NatExprExpr] = P(Lit | "(" ~ LitOnly ~ ")")
-
-    def LitMul: P[NatExprExpr] =
-      P(LitAtom ~ (("*" ~ LitAtom).rep)).map { case (head, rest) =>
-        rest.foldLeft(head) { case (acc, rhs) => NEMul(acc, rhs) }
-      }
-
-    def LitOnly: P[NatExprExpr] =
-      P(LitMul ~ (("+" ~ LitMul).rep)).map { case (head, rest) =>
-        rest.foldLeft(head) { case (acc, rhs) => NEAdd(acc, rhs) }
-      }
-
     def Val: P[NatExprExpr] =
       valueRef.map(NEFromValue(_))
 
-    // (%v) | (k * %v) | (%v * k)
-    def ScaledVal: P[NatExprExpr] =
-      P(
-        (LitOnly ~ "*" ~ Val).map { case (k, v) => NEMul(k, v) } |
-          (Val ~ "*" ~ LitOnly).map { case (v, k) => NEMul(v, k) } | Val |
-          "(" ~ NatExpr ~ ")"
-      )
+    def Atom: P[NatExprExpr] =
+      P(Lit | Val | "(" ~ NatExpr ~ ")")
 
-    // Allow: ScaledVal [+ LitOnly]?  OR  LitOnly + ScaledVal
-    P(
-      (ScaledVal ~ ("+" ~ LitOnly).?).map {
-        case (base, Some(off)) => NEAdd(base, off)
-        case (base, None)      => base
-      } | (LitOnly ~ "+" ~ ScaledVal).map { case (off, base) =>
-        NEAdd(off, base)
+    def Mul: P[NatExprExpr] =
+      P(Atom ~ (("*" ~ Atom).rep)).map { case (head, rest) =>
+        rest.foldLeft(head) { case (acc, rhs) => NEMul(acc, rhs) }
       }
-    )
+
+    def Add: P[NatExprExpr] =
+      P(Mul ~ (("+" ~ Mul).rep)).map { case (head, rest) =>
+        rest.foldLeft(head) { case (acc, rhs) => NEAdd(acc, rhs) }
+      }
+
+    // parse first, then validate
+    Add.flatMap { ast =>
+      if isAllowedNatExpr(ast) then Pass(ast)
+      else
+        Fail.opaque("NatExpr may reference at most one SSA value (no %a + %b)")
+    }
+
+  private def countSSA(n: NatExprExpr): Int = n match
+    case NELit(_)       => 0
+    case NEFromValue(_) => 1
+    case NEAdd(a, b)    => countSSA(a) + countSSA(b)
+    case NEMul(a, b)    => countSSA(a) + countSSA(b)
+
+  private def isAllowedNatExpr(n: NatExprExpr): Boolean =
+    countSSA(n) <= 1
 
   // ---------------------------
   // DepTypeExpr grammar
