@@ -39,8 +39,6 @@ final case class DepType(var expr: DepTypeExpr)
     DepTypePrinter.print(expr, p)
     p.print(">")
 
-  override def customVerify(): Either[String, Unit] = Right(())
-
 given AttributeCompanion[DepType]:
   override def name = "dlam.dep"
 

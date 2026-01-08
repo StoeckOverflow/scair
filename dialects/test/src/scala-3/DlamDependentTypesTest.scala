@@ -36,7 +36,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
 
     val parsed = parser.parse(
       text,
-      (p: fastparse.P[?]) => topLevelP(using p, parser),
+      (p: fastparse.P[?]) => moduleP(using p, parser),
       verboseFailures = true,
     )
 
