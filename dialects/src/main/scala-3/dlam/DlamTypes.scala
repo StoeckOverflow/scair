@@ -26,7 +26,7 @@ final case class DlamBVarType(k: IntegerAttr)
     derives DerivedAttributeCompanion
 
 // !dlam.tvar<%s> - type referencing a SSA value %s
-final case class DlamTVarType(var expr: DepTypeExpr)
+final case class DlamTVarType(var tparam: Value[Attribute])
     extends TypeAttribute,
       ParametrizedAttribute:
   override def name = "dlam.tvar"
@@ -34,16 +34,16 @@ final case class DlamTVarType(var expr: DepTypeExpr)
 
   override def customPrint(p: Printer): Unit =
     p.print("!dlam.tvar<")
-    DepTypePrinter.print(expr, p)
+    p.print(tparam)
     p.print(">")
 
 given AttributeCompanion[DlamTVarType]:
   override def name = "dlam.tvar"
 
   override def parse[$: P](using Parser): P[DlamTVarType] =
-    import DepTypeParser.*
     import scair.parse.whitespace
-    P("<" ~ DepTypeExpr ~ ">").map(expr => DlamTVarType(expr))
+    P("<" ~ operandNameP.flatMap(operandP(_, DlamTypeType())) ~ ">")
+      .map(v => DlamTVarType(v))
 
 // !dlam.fun<in -> out> — function type
 final case class DlamFunType(in: TypeAttribute, out: TypeAttribute)

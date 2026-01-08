@@ -1,4 +1,4 @@
-// RUN: scair-opt -p=verify-dependent-types %s | filecheck %s --dump-input=fail --dump-input-filter all
+// RUN: scair-opt -p=verify-type-params %s | filecheck %s --dump-input=fail --dump-input-filter all
 
 builtin.module {
   // F : ΛT. λ(x:T). x

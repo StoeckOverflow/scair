@@ -1,4 +1,4 @@
-// RUN: scair-opt -p=verify-dependent-types %s | filecheck %s --dump-input=fail
+// RUN: scair-opt -p=verify-type-params %s | filecheck %s --dump-input=fail
 
 builtin.module {
   %F = "dlam.tlambda"() ({

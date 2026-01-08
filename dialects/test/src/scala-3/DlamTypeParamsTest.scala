@@ -7,7 +7,7 @@ import scair.MLContext
 
 import scair.dialects.builtin.*
 import scair.dialects.dlam.*
-import scair.passes.DependentTypeVerifierPass
+import scair.passes.TypeParameterVerifierPass
 
 import org.scalatest.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -15,12 +15,12 @@ import org.scalatest.matchers.should.Matchers.*
 
 import java.io.*
 
-class DlamSSATypesRoundTripTests extends AnyFlatSpec:
+class DlamTypeParamsRoundTripTests extends AnyFlatSpec:
 
   given indentLevel: Int = 0
 
-  /** Parse a module, run the dependent-type verifier pass (which also resolves
-    * symbolic DepType refs), then re-print it.
+  /** Parse a module, run the Type params verifier pass (which also resolves
+    * symbolic Type refs), then re-print it.
     */
   private def roundTrip(text: String): String =
     val ctx = MLContext()
@@ -50,7 +50,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
         },
       )
 
-    val pass = new DependentTypeVerifierPass(ctx)
+    val pass = new TypeParameterVerifierPass(ctx)
     pass.transform(module)
 
     val sw = new StringWriter()
@@ -68,7 +68,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
    *
    * Expected:
    * - parses
-   * - DepTypeSymbolicResolver + DependentTypeVerifierPass succeed
+   * - TypeParameterVerifierPass succeed
    * - re-print contains the right dlam ops and !dlam.tvar forms
    */
   "SSA-polymorphic identity (ΛT. λ(x:T). x)" should
@@ -112,7 +112,7 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
    *  - resolution finds the correct defining Values
    */
   "Nested SSA-polymorphic identity (ΛT.ΛU. λ(x:U). x)" should
-    "round-trip and resolve both %T and %U in dependent types" in {
+    "round-trip and resolve both %T and %U" in {
 
       val source =
         """builtin.module {
@@ -163,87 +163,4 @@ class DlamSSATypesRoundTripTests extends AnyFlatSpec:
       printed should not include ("%T")
       printed should not include ("%U")
 
-    }
-
-  /*
-   * Build:
-   *
-   * builtin.module {
-   *   ^bb0:
-   *     %x = "test.def"() : () -> i32
-   *     %y = "test.use"() : () -> !dlam.dep<%x>
-   * }
-   *
-   * Here:
-   *   - %x is defined *before* the dependent type that mentions it,
-   *   - so the dependent-type verifier should accept the module.
-   */
-  "DependentTypeVerifierPass" should
-    "accept dependent types that refer only to dominating definitions" in {
-
-      val defRes: Result[TypeAttribute] = Result(I32)
-      val defOp = UnregisteredOperation("test.def")(
-        results = Seq(defRes)
-      )
-
-      val depExpr: DepTypeExpr =
-        TEValueRef(defRes.asInstanceOf[Value[Attribute]])
-      val depAttr = DepType(depExpr)
-
-      val useRes: Result[TypeAttribute] = Result(depAttr)
-      val useOp = UnregisteredOperation("test.use")(
-        results = Seq(useRes)
-      )
-
-      val block = Block(operations = Seq(defOp, useOp))
-      val module = ModuleOp(body = Region(Seq(block)))
-
-      val ctx = MLContext()
-      ctx.registerDialect(BuiltinDialect)
-      ctx.registerDialect(DlamDialect)
-
-      val pass = new DependentTypeVerifierPass(ctx)
-
-      noException should be thrownBy pass.transform(module)
-    }
-
-  /*
-   * Build:
-   *
-   * builtin.module {
-   *   ^bb0:
-   *     %y = "test.use"() : () -> !dlam.dep<%x>
-   *     %x = "test.def"() : () -> i32
-   * }
-   *
-   * Now %x is defined *after* the dependent type that refers to it, so the
-   * dependent-type verifier must reject with a dominance error.
-   */
-  "DependentTypeVerifierPass" should
-    "reject dependent types that refer to non-dominating SSA values" in {
-
-      val defRes: Result[TypeAttribute] = Result(I32)
-      val defOp = UnregisteredOperation("test.def")(
-        results = Seq(defRes)
-      )
-
-      val depExpr: DepTypeExpr =
-        TEValueRef(defRes.asInstanceOf[Value[Attribute]])
-      val depAttr = DepType(depExpr)
-
-      val useRes: Result[TypeAttribute] = Result(depAttr)
-      val useOp = UnregisteredOperation("test.use")(
-        results = Seq(useRes)
-      )
-
-      val block = Block(operations = Seq(useOp, defOp))
-      val module = ModuleOp(body = Region(Seq(block)))
-
-      val ctx = MLContext()
-      ctx.registerDialect(BuiltinDialect)
-      ctx.registerDialect(DlamDialect)
-
-      val pass = new DependentTypeVerifierPass(ctx)
-
-      an[Exception] should be thrownBy pass.transform(module)
     }
