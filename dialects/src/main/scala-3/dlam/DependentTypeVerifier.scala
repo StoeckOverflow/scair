@@ -82,10 +82,6 @@ class DependentTypeVerifierPass(ctx: MLContext) extends ModulePass(ctx):
       case TEForall(body) =>
         checkDepTypeExpr(body, useSite)
 
-      case TEVec(len, elem) =>
-        checkNatExpr(len, useSite)
-        checkDepTypeExpr(elem, useSite)
-
       case TEValueRef(v) =>
         checkValueDominance(v, useSite)
 

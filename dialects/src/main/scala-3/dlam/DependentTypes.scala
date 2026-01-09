@@ -22,7 +22,6 @@ sealed trait DepTypeExpr
 final case class TEConst(pure: TypeAttribute) extends DepTypeExpr
 final case class TEFun(in: DepTypeExpr, out: DepTypeExpr) extends DepTypeExpr
 final case class TEForall(body: DepTypeExpr) extends DepTypeExpr
-final case class TEVec(len: NatExprExpr, elem: DepTypeExpr) extends DepTypeExpr
 final case class TEValueRef(id: Value[Attribute]) extends DepTypeExpr
 
 // ---------- Bridging attribute ----------
@@ -111,12 +110,8 @@ object DepTypeParser:
       | typeP.map(t => TEConst(t.asInstanceOf[TypeAttribute]))
 
       // Fun type: fun<T1 -> T2>
-      | ("fun" ~ "<" ~ DepTypeExpr ~ "," ~ DepTypeExpr ~ ">")
-        .map { case (a, b) => TEFun(a, b) }
-
-      // Vec type: vec<N, Elem>
-      | ("vec" ~/ "<" ~ NatExpr ~ "," ~ DepTypeExpr ~ ">").map { case (n, e) =>
-        TEVec(n, e)
+      | ("fun" ~ "<" ~ DepTypeExpr ~ "," ~ DepTypeExpr ~ ">").map {
+        case (a, b) => TEFun(a, b)
       }
 
       // Forall type: forall<Body>
@@ -140,13 +135,6 @@ object DepTypePrinter:
       printResolved(i, p)
       p.print(", ")
       printResolved(o, p)
-      p.print(">")
-
-    case TEVec(len, el) =>
-      p.print("vec<")
-      printNat(len, p)
-      p.print(", ")
-      printResolved(el, p)
       p.print(">")
 
     case TEForall(b) =>
@@ -177,11 +165,10 @@ object DepTypeAnalysis:
 
   def collectValues(t: DepTypeExpr): List[Value[Attribute]] =
     t match
-      case TEConst(_)       => Nil
-      case TEValueRef(v)    => v :: Nil
-      case TEFun(i, o)      => collectValues(i) ++ collectValues(o)
-      case TEForall(b)      => collectValues(b)
-      case TEVec(len, elem) => collectValuesNat(len) ++ collectValues(elem)
+      case TEConst(_)    => Nil
+      case TEValueRef(v) => v :: Nil
+      case TEFun(i, o)   => collectValues(i) ++ collectValues(o)
+      case TEForall(b)   => collectValues(b)
 
   def collectValuesNat(n: NatExprExpr): List[Value[Attribute]] =
     n match
