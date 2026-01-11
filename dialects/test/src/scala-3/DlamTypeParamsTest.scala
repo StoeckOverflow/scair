@@ -164,3 +164,43 @@ class DlamTypeParamsRoundTripTests extends AnyFlatSpec:
       printed should not include ("%U")
 
     }
+
+  /*
+   * Negative test: a nested type parameter (introduced as a block argument of an
+   * inner `dlam.tlambda`) must not be usable outside that tlambda's region.
+   */
+  "Nested type parameter escape" should "be rejected by verify-type-params" in {
+
+    val source =
+      """builtin.module {
+          |  %F = "dlam.tlambda"() ({
+          |  ^bb0(%T: !dlam.type):
+          |    // Inner type lambda introduces %U
+          |    %G = "dlam.tlambda"() ({
+          |    ^bb0(%U: !dlam.type):
+          |      %v = "dlam.vlambda"() <{funAttr = !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>}> ({
+          |      ^bb0(%x: !dlam.tvar<%T>):
+          |        "dlam.vreturn"(%x) <{expected = !dlam.tvar<%T>}> : (!dlam.tvar<%T>) -> ()
+          |      }) : () -> (!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>)
+          |      "dlam.treturn"(%v)
+          |        <{expected = !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>}>
+          |        : (!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>) -> ()
+          |    }) : () -> (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>)
+          |
+          |    // ILLEGAL: %U escapes its tlambda region here
+          |    %w = "dlam.vlambda"() <{funAttr = !dlam.fun<!dlam.tvar<%U>, !dlam.tvar<%U>>}> ({
+          |    ^bb0(%y: !dlam.tvar<%U>):
+          |      "dlam.vreturn"(%y) <{expected = !dlam.tvar<%U>}> : (!dlam.tvar<%U>) -> ()
+          |    }) : () -> (!dlam.fun<!dlam.tvar<%U>, !dlam.tvar<%U>>)
+          |
+          |    "dlam.treturn"(%G) <{expected = !dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>}>
+          |      : (!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>) -> ()
+          |  }) : () -> (!dlam.forall<!dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>>)
+          |}""".stripMargin
+
+    val ex = intercept[Exception] {
+      roundTrip(source)
+    }
+
+    ex.getMessage should include("not defined within Scope")
+  }

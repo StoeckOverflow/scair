@@ -68,13 +68,17 @@ class TypeParameterVerifierPass(ctx: MLContext) extends ModulePass(ctx):
     }
 
   private def isDominated(v: Value[Attribute], user: Operation): Boolean =
-    val vOwner = v.owner
+    val vOwnerOpt = v.owner
     val userBlockOpt = user.containerBlock
 
-    (vOwner, userBlockOpt) match
-      case (Some(_: Block), Some(_)) =>
-        true
+    (vOwnerOpt, userBlockOpt) match
+      // Block arguments (e.g., type parameters introduced by tlambda) only
+      // dominate operations that are lexically nested in that block.
+      case (Some(defBlock: Block), Some(_)) =>
+        defBlock.isAncestor(user)
 
+      // Operation-defined values dominate operations nested inside the defining op.
+      // If both are in the same block, also enforce def-before-use ordering.
       case (Some(defOp: Operation), Some(userBlock)) =>
         defOp.containerBlock match
           case Some(defBlock) if defBlock eq userBlock =>
@@ -83,7 +87,8 @@ class TypeParameterVerifierPass(ctx: MLContext) extends ModulePass(ctx):
             val useIx = ops.indexOf(user)
             defIx >= 0 && useIx >= 0 && defIx <= useIx
           case _ =>
-            true
+            defOp.isAncestor(user)
 
+      // If we can't determine ownership / containment, be permissive (Stage 1).
       case _ =>
         true
