@@ -37,11 +37,11 @@ builtin.module {
 // CHECK:     ^bb1(%3: !tlam.type):
 // CHECK:       %4 = "tlam.vlambda"() <{funAttr = !tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>}> ({
 // CHECK:       ^bb2(%5: !tlam.tvar<%3>):
-// CHECK:         "tlam.vreturn"(%5) <{expected = !tlam.tvar<%3>}> : (!tlam.tvar<%3>) -> ()
-// CHECK:       }) : () -> !tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>
-// CHECK:       "tlam.treturn"(%4) <{expected = !tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>}> : (!tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>) -> ()
+// CHECK:         "tlam.vreturn"(%5) <{expected = !tlam.tvar<%3>}> {expected = !tlam.tvar<%3>} : (!tlam.tvar<%3>) -> ()
+// CHECK:       }) {funAttr = !tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>} : () -> !tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>
+// CHECK:       "tlam.treturn"(%4) <{expected = !tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>}> {expected = !tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>} : (!tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>) -> ()
 // CHECK:     }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
-// CHECK:     %3 = "tlam.tapply"(%2) <{argType = !tlam.tvar<%1>}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> !tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>
-// CHECK:     "tlam.treturn"(%3) <{expected = !tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>}> : (!tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>) -> ()
+// CHECK:     %3 = "tlam.tapply"(%2) <{argType = !tlam.tvar<%1>}> {argType = !tlam.tvar<%1>} : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> !tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>
+// CHECK:     "tlam.treturn"(%3) <{expected = !tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>}> {expected = !tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>} : (!tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>) -> ()
 // CHECK:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 // CHECK: }

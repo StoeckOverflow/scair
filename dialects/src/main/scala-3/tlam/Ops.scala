@@ -12,6 +12,9 @@ final case class VLambda(
 ) extends DerivedOperation["tlam.vlambda", VLambda]
     derives DerivedOperationCompanion:
 
+  override val attributes: DictType[String, Attribute] =
+    DictType.from(Map("funAttr" -> funAttr))
+
   override def verify(): OK[Operation] =
     (funAttr, res.typ) match
       case (f @ TlamFunType(in, _), r) if r == f =>
@@ -28,6 +31,9 @@ final case class VReturn(
     expected: TypeAttribute,
 ) extends DerivedOperation["tlam.vreturn", VReturn]
     with IsTerminator derives DerivedOperationCompanion:
+
+  override val attributes: DictType[String, Attribute] =
+    DictType.from(Map("expected" -> expected))
 
   override def verify(): OK[Operation] =
     if value.typ == expected then OK(this)
@@ -57,6 +63,9 @@ final case class TReturn(
 ) extends DerivedOperation["tlam.treturn", TReturn]
     with IsTerminator derives DerivedOperationCompanion:
 
+  override val attributes: DictType[String, Attribute] =
+    DictType.from(Map("expected" -> expected))
+
   override def verify(): OK[Operation] =
     if value.typ == expected then OK(this)
     else Err("treturn: type mismatch")
@@ -67,6 +76,9 @@ final case class TApply(
     res: Result[TypeAttribute],
 ) extends DerivedOperation["tlam.tapply", TApply]
     derives DerivedOperationCompanion:
+
+  override val attributes: DictType[String, Attribute] =
+    DictType.from(Map("argType" -> argType))
 
   override def verify(): OK[Operation] =
     polymorphicFun.typ match

@@ -9,7 +9,7 @@ import scair.dialects.builtin.*
 import scair.dialects.tlam.*
 import scair.passes.TypeParameterVerifierPass
 
-import org.scalatest.*
+import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 
@@ -19,9 +19,7 @@ class TlamTypeParamsRoundTripTests extends AnyFlatSpec:
 
   given indentLevel: Int = 0
 
-  /** Parse a module, run the Type params verifier pass (which also resolves
-    * symbolic Type refs), then re-print it.
-    */
+  // Parse a module, run the Type params verifier pass (which also resolves symbolic Type refs), then reprint it.
   private def roundTrip(text: String): String =
     val ctx = MLContext()
     ctx.registerDialect(BuiltinDialect)
@@ -62,6 +60,137 @@ class TlamTypeParamsRoundTripTests extends AnyFlatSpec:
     printer.printTopLevel(module)
     pw.flush()
     sw.toString
+
+  // Parse only (no verifier), returns (ctx, module)
+  private def parseModule(text: String): (MLContext, ModuleOp) =
+    val ctx = MLContext()
+    ctx.registerDialect(BuiltinDialect)
+    ctx.registerDialect(TlamDialect)
+
+    val parser = new Parser(
+      context = ctx,
+      inputPath = None,
+      parsingDiagnostics = true, // parser.error returns a String
+      allowUnregisteredDialect = false,
+    )
+
+    val parsed = parser.parse(
+      text,
+      (p: fastparse.P[?]) => moduleP(using p, parser),
+      verboseFailures = true,
+    )
+
+    val module: ModuleOp =
+      parsed.fold(
+        (msg, idx, extra) => fail(s"Parse error:\n$msg\nat index $idx"),
+        {
+          case (m: ModuleOp, _) => m
+          case (other, _)       =>
+            fail(s"Expected ModuleOp at top level, got: $other")
+        },
+      )
+
+    (ctx, module)
+
+  private def runVerifyTypeParams(ctx: MLContext, m: ModuleOp): Unit =
+    val pass = new TypeParameterVerifierPass(ctx)
+    pass.transform(m)
+
+  // A small source program that is known-good and already used in your tests
+  private val polyIdSource: String =
+    """builtin.module {
+      |  %F = "tlam.tlambda"() ({
+      |  ^bb0(%T: !tlam.type):
+      |    %v = "tlam.vlambda"() <{funAttr = !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>}> ({
+      |    ^bb0(%x: !tlam.tvar<%T>):
+      |      "tlam.vreturn"(%x) <{expected = !tlam.tvar<%T>}> : (!tlam.tvar<%T>) -> ()
+      |    }) : () -> (!tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>)
+      |    "tlam.treturn"(%v)
+      |      <{expected = !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>}>
+      |      : (!tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>) -> ()
+      |  }) : () -> (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
+      |}
+      |""".stripMargin
+
+  "TypeParameterVerifierPass (structural hardening)" should
+    "fail if an operation use-site has no containerBlock (simulates bad transform wiring)" in {
+
+      val (ctx, m) = parseModule(polyIdSource)
+
+      // Pick some nested operation and deliberately detach it from its block
+      val topBlock = m.regions.head.blocks.head
+      val tlam = topBlock.operations.head
+
+      val tlamEntryBlock = tlam.regions.head.blocks.head
+
+      val vlamIdx = tlamEntryBlock.operations
+        .indexWhere(_.name == "tlam.vlambda")
+      vlamIdx should be >= 0
+      val vlam = tlamEntryBlock.operations(vlamIdx)
+
+      val vlamEntryBlock = vlam.regions.head.blocks.head
+
+      val vreturnIdx = vlamEntryBlock.operations
+        .indexWhere(_.name == "tlam.vreturn")
+      vreturnIdx should be >= 0
+      val vret = vlamEntryBlock.operations(vreturnIdx)
+
+      // Detach the use-site op
+      vret.containerBlock = None
+
+      val ex = intercept[Exception] {
+        runVerifyTypeParams(ctx, m)
+      }
+
+      ex.getMessage should include("IR malformed: use-site operation")
+      ex.getMessage should include("has no containerBlock")
+    }
+
+  it should
+    "fail if a !tlam.tvar references a Value with no owner (simulates bad cloning/remapping)" in {
+
+      val (ctx, m) = parseModule(polyIdSource)
+
+      // Walk down to the vreturn op
+      val topBlock = m.regions.head.blocks.head
+      val tlam = topBlock.operations.head
+
+      val tlamEntryBlock = tlam.regions.head.blocks.head
+      val vlamIdx = tlamEntryBlock.operations
+        .indexWhere(_.name.endsWith(".vlambda"))
+      vlamIdx should be >= 0
+      val vlam = tlamEntryBlock.operations(vlamIdx)
+
+      val vlamEntryBlock = vlam.regions.head.blocks.head
+      val vreturnIdx = vlamEntryBlock.operations
+        .indexWhere(_.name.endsWith(".vreturn"))
+      vreturnIdx should be >= 0
+
+      val vretOp = vlamEntryBlock.operations(vreturnIdx)
+
+      // Structured access instead of attributes("expected")
+      val vret = vretOp match
+        case r: VReturn => r
+        case other      => fail(s"Expected VReturn, got: ${other.name}")
+
+      // Corrupt the expected type's tparam in-place
+      val tv = vret.expected match
+        case t: TlamTVarType => t
+        case other           =>
+          fail(s"Expected DlamTVarType in vreturn.expected, got: $other")
+
+      val bogus: Value[Attribute] =
+        Value[Attribute](TlamTypeType()) // owner=None
+      tv.tparam = bogus
+
+      val ex = intercept[Exception] {
+        runVerifyTypeParams(ctx, m)
+      }
+
+      ex.getMessage should
+        include("IR malformed: value referenced from type has no owner")
+
+    }
 
   /*
    * ΛT. λ(x:T). x, encoded with SSA values in types

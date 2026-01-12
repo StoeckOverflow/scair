@@ -37,15 +37,28 @@ class TypeParameterVerifierPass(ctx: MLContext) extends ModulePass(ctx):
   private def checkOpTypes(o: Operation): Unit =
     o.results.foreach(r => checkTypeAttr(r.typ, Some(o)))
     o.operands.foreach(v => checkTypeAttr(v.typ, Some(o)))
-    o.attributes.values.foreach {
-      case tv: TlamTVarType => checkTVarType(tv, Some(o))
-      case _                => ()
-    }
+    o.attributes.values.foreach(a => checkTypeAttr(a, Some(o)))
 
   private def checkTypeAttr(t: Attribute, useSite: Option[Operation]): Unit =
     t match
-      case tv: TlamTVarType => checkTVarType(tv, useSite)
-      case _                => ()
+      case tv: TlamTVarType => // or TlamTVarType, depending on your dialect
+        checkTVarType(tv, useSite)
+
+      case pa: ParametrizedAttribute =>
+        // Recurse into parameter list (covers fun/forall/etc.)
+        pa.parameters.foreach {
+          case a: Attribute =>
+            checkTypeAttr(a, useSite)
+          case seq: Seq[?] =>
+            seq.foreach {
+              case a: Attribute => checkTypeAttr(a, useSite)
+              case _            => ()
+            }
+          case _ => ()
+        }
+
+      case _ =>
+        ()
 
   private def checkTVarType(
       tv: TlamTVarType,
