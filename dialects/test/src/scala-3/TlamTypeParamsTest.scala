@@ -192,6 +192,57 @@ class TlamTypeParamsRoundTripTests extends AnyFlatSpec:
 
     }
 
+  it should
+    "fail if a transform forgets to remap a nested type parameter (simulates bad clone/inlining)" in {
+
+      // A well-formed nested poly-id (ΛT. ΛU. λ(x:U). x) plus a tapply
+      val nestedPolyIdSource: String =
+        """builtin.module {
+        |  %0 = "tlam.tlambda"() ({
+        |  ^bb0(%1: !tlam.type):
+        |    %2 = "tlam.tlambda"() ({
+        |    ^bb1(%3: !tlam.type):
+        |      %4 = "tlam.vlambda"() <{funAttr = !tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>}> ({
+        |      ^bb2(%5: !tlam.tvar<%3>):
+        |        "tlam.vreturn"(%5) <{expected = !tlam.tvar<%3>}> : (!tlam.tvar<%3>) -> ()
+        |      }) : () -> !tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>
+        |      "tlam.treturn"(%4) <{expected = !tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>}> : (!tlam.fun<!tlam.tvar<%3>, !tlam.tvar<%3>>) -> ()
+        |    }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+        |    %6 = "tlam.tapply"(%2) <{argType = !tlam.tvar<%1>}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> !tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>
+        |    "tlam.treturn"(%6) <{expected = !tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>}> : (!tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>) -> ()
+        |  }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+        |}
+        |""".stripMargin
+
+      val (ctx, m) = parseModule(nestedPolyIdSource)
+
+      // Navigate: module -> outer tlambda -> its entry block
+      val topBlock = m.regions.head.blocks.head
+      val outerTLam = topBlock.operations.find(_.name.endsWith(".tlambda")).get
+      val outerEntryBlock = outerTLam.regions.head.blocks.head
+
+      // Grab the inner tlambda binder argument (%3 in the text)
+      val innerTLam = outerEntryBlock.operations
+        .find(_.name.endsWith(".tlambda")).get
+      val innerBinder: Value[Attribute] =
+        innerTLam.regions.head.blocks.head.arguments.head
+          .asInstanceOf[Value[Attribute]]
+
+      // Find the tapply in the outer block (the use-site)
+      val tapplyOp = outerEntryBlock.operations.find(_.name.endsWith(".tapply"))
+        .get
+
+      // Imagine we cloned/moved something but forgot to remap U -> T or a new binder.
+      // We overwrite argType to refer to the inner binder (%3), which does NOT dominate tapply.
+      tapplyOp.attributes.update("argType", TlamTVarType(innerBinder))
+
+      val ex = intercept[Exception] {
+        runVerifyTypeParams(ctx, m)
+      }
+
+      ex.getMessage should include("Type parameter not dominated")
+    }
+
   /*
    * ΛT. λ(x:T). x, encoded with SSA values in types
    *
