@@ -1,38 +1,38 @@
 // RUN: scair-opt -p=verify-type-params %s | filecheck %s --dump-input=fail
 
 builtin.module {
-  %F = "dlam.tlambda"() ({
-  ^bb0(%T: !dlam.type):
+  %F = "tlam.tlambda"() ({
+  ^bb0(%T: !tlam.type):
 
     // η-shape: λx. x
-    %id = "dlam.vlambda"() <{funAttr =
-      !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>
+    %id = "tlam.vlambda"() <{funAttr =
+      !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>
     }> ({
-    ^bb1(%x: !dlam.tvar<%T>):
-      "dlam.vreturn"(%x)
-        <{expected = !dlam.tvar<%T>}>
-        : (!dlam.tvar<%T>) -> ()
-    }) : () -> !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>
+    ^bb1(%x: !tlam.tvar<%T>):
+      "tlam.vreturn"(%x)
+        <{expected = !tlam.tvar<%T>}>
+        : (!tlam.tvar<%T>) -> ()
+    }) : () -> !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>
 
-    "dlam.treturn"(%id)
-      <{expected = !dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>}>
-      : (!dlam.fun<!dlam.tvar<%T>, !dlam.tvar<%T>>) -> ()
-  }) : () -> !dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>>
+    "tlam.treturn"(%id)
+      <{expected = !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>}>
+      : (!tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>) -> ()
+  }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 }
 
 //CHECK: builtin.module { 
-//CHECK:   %0 = "dlam.tlambda"() ({ 
-//CHECK:   ^bb0(%1: !dlam.type): 
-//CHECK:     %2 = "dlam.vlambda"() <{funAttr = 
-//CHECK:       !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>
+//CHECK:   %0 = "tlam.tlambda"() ({ 
+//CHECK:   ^bb0(%1: !tlam.type): 
+//CHECK:     %2 = "tlam.vlambda"() <{funAttr = 
+//CHECK:       !tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>
 //CHECK:     }> ({ 
-//CHECK:     ^bb1(%3: !dlam.tvar<%1>): 
-//CHECK:       "dlam.vreturn"(%3) 
-//CHECK:         <{expected = !dlam.tvar<%1>}> 
-//CHECK:         : (!dlam.tvar<%1>) -> () 
-//CHECK:      }) : () -> !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>
-//CHECK:      "dlam.treturn"(%2) 
-//CHECK:         <{expected = !dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>}> 
-//CHECK:         : (!dlam.fun<!dlam.tvar<%1>, !dlam.tvar<%1>>) -> () 
-//CHECK:     }) : () -> !dlam.forall<!dlam.fun<!dlam.bvar<0>, !dlam.bvar<0>>> 
+//CHECK:     ^bb1(%3: !tlam.tvar<%1>): 
+//CHECK:       "tlam.vreturn"(%3) 
+//CHECK:         <{expected = !tlam.tvar<%1>}> 
+//CHECK:         : (!tlam.tvar<%1>) -> () 
+//CHECK:      }) : () -> !tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>
+//CHECK:      "tlam.treturn"(%2) 
+//CHECK:         <{expected = !tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>}> 
+//CHECK:         : (!tlam.fun<!tlam.tvar<%1>, !tlam.tvar<%1>>) -> () 
+//CHECK:     }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>> 
 //CHECK: }

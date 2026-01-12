@@ -5,7 +5,7 @@ import scair.dialects.arith.ArithDialect
 import scair.dialects.builtin.BuiltinDialect
 import scair.dialects.cmath.cmath
 import scair.dialects.complex.Complex
-import scair.dialects.dlam.DlamDialect
+import scair.dialects.tlam.TlamDialect
 import scair.dialects.func.FuncDialect
 import scair.dialects.irdl.IRDL
 import scair.dialects.llvm.LLVMDialect
@@ -35,7 +35,7 @@ val allDialects: Seq[Dialect] =
   Seq(
     BuiltinDialect,
     Complex,
-    DlamDialect,
+    TlamDialect,
     MathDialect,
     Test,
     IRDL,

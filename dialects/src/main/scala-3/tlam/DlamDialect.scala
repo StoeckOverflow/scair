@@ -1,11 +1,11 @@
-package scair.dialects.dlam
+package scair.dialects.tlam
 
 import scair.ir.*
 import scair.clair.macros.*
 
-val DlamDialect = summonDialect[
+val TlamDialect = summonDialect[
   // Custom attributes
-  (DlamTypeType, DlamBVarType, DlamForAllType, DlamFunType, DlamTVarType),
+  (TlamTypeType, TlamBVarType, TlamForAllType, TlamFunType, TlamTVarType),
   // Operations
   (VLambda, VReturn, TLambda, TReturn, TApply, VApply),
 ]

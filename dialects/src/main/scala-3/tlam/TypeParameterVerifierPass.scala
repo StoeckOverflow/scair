@@ -4,7 +4,7 @@ import scair.MLContext
 import scair.ir.*
 import scair.dialects.builtin.*
 import scair.transformations.*
-import scair.dialects.dlam.*
+import scair.dialects.tlam.*
 
 class TypeParameterVerifierPass(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "verify-type-params"
@@ -38,17 +38,17 @@ class TypeParameterVerifierPass(ctx: MLContext) extends ModulePass(ctx):
     o.results.foreach(r => checkTypeAttr(r.typ, Some(o)))
     o.operands.foreach(v => checkTypeAttr(v.typ, Some(o)))
     o.attributes.values.foreach {
-      case tv: DlamTVarType => checkTVarType(tv, Some(o))
+      case tv: TlamTVarType => checkTVarType(tv, Some(o))
       case _                => ()
     }
 
   private def checkTypeAttr(t: Attribute, useSite: Option[Operation]): Unit =
     t match
-      case tv: DlamTVarType => checkTVarType(tv, useSite)
+      case tv: TlamTVarType => checkTVarType(tv, useSite)
       case _                => ()
 
   private def checkTVarType(
-      tv: DlamTVarType,
+      tv: TlamTVarType,
       useSite: Option[Operation],
   ): Unit =
     checkValueDominance(tv.tparam, useSite)

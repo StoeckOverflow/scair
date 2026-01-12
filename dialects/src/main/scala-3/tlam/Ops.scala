@@ -1,4 +1,4 @@
-package scair.dialects.dlam
+package scair.dialects.tlam
 
 import scair.ir.*
 import scair.utils.*
@@ -6,15 +6,15 @@ import scair.clair.macros.*
 import scair.clair.codegen.*
 
 final case class VLambda(
-    funAttr: DlamFunType,
+    funAttr: TlamFunType,
     body: Region,
     res: Result[TypeAttribute],
-) extends DerivedOperation["dlam.vlambda", VLambda]
+) extends DerivedOperation["tlam.vlambda", VLambda]
     derives DerivedOperationCompanion:
 
   override def verify(): OK[Operation] =
     (funAttr, res.typ) match
-      case (f @ DlamFunType(in, _), r) if r == f =>
+      case (f @ TlamFunType(in, _), r) if r == f =>
         body.blocks match
           case Block(args, _) :: Nil
               if args.length == 1 && args.head.typ == in =>
@@ -26,7 +26,7 @@ final case class VLambda(
 final case class VReturn(
     value: Value[TypeAttribute],
     expected: TypeAttribute,
-) extends DerivedOperation["dlam.vreturn", VReturn]
+) extends DerivedOperation["tlam.vreturn", VReturn]
     with IsTerminator derives DerivedOperationCompanion:
 
   override def verify(): OK[Operation] =
@@ -35,26 +35,26 @@ final case class VReturn(
 
 final case class TLambda(
     tBody: Region,
-    res: Result[DlamForAllType],
-) extends DerivedOperation["dlam.tlambda", TLambda]
+    res: Result[TlamForAllType],
+) extends DerivedOperation["tlam.tlambda", TLambda]
     derives DerivedOperationCompanion:
 
   override def verify(): OK[Operation] =
     val okBinder = tBody.blocks match
       case Block(args, _) :: Nil =>
-        args.length == 1 && args.head.typ.isInstanceOf[DlamTypeType]
+        args.length == 1 && args.head.typ.isInstanceOf[TlamTypeType]
       case _ => false
-    val okRes = res.typ.isInstanceOf[DlamForAllType]
+    val okRes = res.typ.isInstanceOf[TlamForAllType]
     if okBinder && okRes then OK(this)
     else
       Err(
-        "tlambda: one block with one dlam type arg and forall result required"
+        "tlambda: one block with one tlam type arg and forall result required"
       )
 
 final case class TReturn(
     value: Value[TypeAttribute],
     expected: TypeAttribute,
-) extends DerivedOperation["dlam.treturn", TReturn]
+) extends DerivedOperation["tlam.treturn", TReturn]
     with IsTerminator derives DerivedOperationCompanion:
 
   override def verify(): OK[Operation] =
@@ -62,15 +62,15 @@ final case class TReturn(
     else Err("treturn: type mismatch")
 
 final case class TApply(
-    polymorphicFun: Value[DlamForAllType],
+    polymorphicFun: Value[TlamForAllType],
     argType: TypeAttribute,
     res: Result[TypeAttribute],
-) extends DerivedOperation["dlam.tapply", TApply]
+) extends DerivedOperation["tlam.tapply", TApply]
     derives DerivedOperationCompanion:
 
   override def verify(): OK[Operation] =
     polymorphicFun.typ match
-      case fa @ DlamForAllType(_) =>
+      case fa @ TlamForAllType(_) =>
         val inst =
           DBI.instantiate(fa, argType)
         if res.typ == inst then OK(this)
@@ -80,12 +80,12 @@ final case class VApply(
     fun: Value[TypeAttribute],
     arg: Value[TypeAttribute],
     res: Result[TypeAttribute],
-) extends DerivedOperation["dlam.vapply", VApply]
+) extends DerivedOperation["tlam.vapply", VApply]
     derives DerivedOperationCompanion:
 
   override def verify(): OK[Operation] =
     fun.typ match
-      case DlamFunType(in, out) =>
+      case TlamFunType(in, out) =>
         if arg.typ == in && res.typ == out then OK(this)
         else
           Err(
