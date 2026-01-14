@@ -105,11 +105,11 @@ object DBI:
     case b @ TlamBVarType(_)  => b
     case TlamFunType(i, o)    => fun(subst(c, s, i), subst(c, s, o))
     case TlamForAllType(body) =>
-      forall(subst(c + 1, shift(1, 0, s), body)) // or maybe shift by c?
+      forall(subst(c + 1, shift(1, 0, s), body))
 
     case other => other
 
-  // instantiate ∀.body with arg
+  // instantiate ForAll.body with arg
   def instantiate(fa: TypeAttribute, arg: TypeAttribute): TypeAttribute =
     fa match
       case TlamForAllType(body) => subst(0, arg, body)
