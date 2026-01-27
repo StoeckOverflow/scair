@@ -17,7 +17,9 @@ object TlamTestIR:
   inline def alphaToAlphaAt(idx: Int): TlamFunType = fun(b(idx), b(idx))
   inline def forall1(body: TypeAttribute): TlamForAllType = forall(body)
 
-  // --- common IR building patterns ---
+  inline def tvar(tparam: Value[Attribute]): TlamTVarType =
+    TlamTVarType(tparam)
+
   def module(ops: Operation*): ModuleOp =
     ModuleOp(Region(Seq(Block(operations = ops.toSeq))))
 
@@ -37,15 +39,28 @@ object TlamTestIR:
       )
     VLambda(body = region, res = res)
 
-  def tlam(resTy: TlamForAllType)(ops: Operation*): TLambda =
+  def tlam(resTy: TlamForAllType)(
+      body: Value[Attribute] => Seq[Operation]
+  ): TLambda =
     val res = Result[TlamForAllType](resTy)
-    val region = Region(Seq(Block(operations = ops.toSeq)))
+    val region =
+      Region(
+        Seq(
+          Block(
+            TlamTypeType(),
+            (t: Value[Attribute]) => body(t),
+          )
+        )
+      )
     TLambda(body = region, res = res)
 
   def polyIdDef(): TLambda =
-    val idBodyTy = fun(b0, b0)
-    val idPolyTy: TlamForAllType = forall1(idBodyTy)
+    val forallTy: TlamForAllType = forall1(alphaToAlphaAt(0))
 
-    val vId = vlam(idBodyTy)(b0)(x => Seq(VReturn(x)))
+    tlam(forallTy) { (T: Value[Attribute]) =>
+      val inOut: TypeAttribute = tvar(T)
+      val idBodyTy: TlamFunType = fun(inOut, inOut)
 
-    tlam(idPolyTy)(vId, TReturn(vId.res))
+      val vId = vlam(idBodyTy)(inOut)(x => Seq(VReturn(x)))
+      Seq(vId, TReturn(vId.res))
+    }
