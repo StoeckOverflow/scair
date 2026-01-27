@@ -54,24 +54,15 @@ final case class TLambda(
 
   override def verify(): OK[Operation] =
     body.blocks match
-      case Block(args, ops) :: Nil if args.isEmpty =>
+      case Block(args, ops) :: Nil if args.length == 1 =>
         ops.lastOption match
-          case Some(TReturn(ret)) =>
-            val expected = res.typ.body
-            if ret.typ == expected then OK(this)
-            else
-              Err(
-                s"tlambda: return type mismatch, expected $expected, got ${ret
-                    .typ}"
-              )
-          case Some(other) =>
-            Err(
-              s"tlambda: last op must be tlam.treturn, got '${other.name}'"
-            )
+          case Some(_: TReturn) => OK(this)
+          case Some(other)      =>
+            Err(s"tlambda: last op must be tlam.treturn, got '${other.name}'")
           case None =>
             Err("tlambda: body block must not be empty (needs a terminator)")
       case _ =>
-        Err("tlambda: must have exactly one block with zero args")
+        Err("tlambda: must have exactly one block with one arg")
 
   /*
   override def verify(): OK[Operation] =

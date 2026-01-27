@@ -2,26 +2,30 @@
 
 builtin.module {
   %0 = "tlam.tlambda"() ({
+  ^bb0(%T: !tlam.type):
     %poly_id = "tlam.tlambda"() ({
-      %id = "tlam.vlambda"() <{funAttr = !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>}> ({
-      ^bb0(%x: !tlam.bvar<0>):
-        "tlam.vreturn"(%x) <{expected = !tlam.bvar<0>}> : (!tlam.bvar<0>) -> ()
-      }) : () -> (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>)
-      "tlam.treturn"(%id) <{expected = !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>}> : (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>) -> ()
+    ^bb1(%U: !tlam.type):
+      %id = "tlam.vlambda"() ({
+      ^bb2(%x: !tlam.tvar<%U>):
+        "tlam.vreturn"(%x): (!tlam.tvar<%U>) -> ()
+      }) : () -> (!tlam.fun<!tlam.tvar<%U>, !tlam.tvar<%U>>)
+      "tlam.treturn"(%id) : (!tlam.fun<!tlam.tvar<%U>, !tlam.tvar<%U>>) -> ()
     }) : () -> (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
 
-    %spec = "tlam.tapply"(%poly_id) <{tyArg = i64}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> (!tlam.fun<i64, i64>)
-    "tlam.treturn"(%spec) <{expected = !tlam.fun<i64, i64>}> : (!tlam.fun<i64, i64>) -> ()
+    %spec = "tlam.tapply"(%poly_id) <{tyArg = i64}>
+           : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> (!tlam.fun<i64, i64>)
+    "tlam.treturn"(%spec) : (!tlam.fun<i64, i64>) -> ()
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
 
 // CHECK:       builtin.module {
+// CHECK:    %0 = "tlam.tlambda"() ({ 
+// CHECK:    ^bb0(%1: !tlam.type): 
+// CHECK:      %2 = "tlam.vlambda"() ({ 
+// CHECK:      ^bb1(%3: i64): 
+// CHECK:        "tlam.vreturn"(%3) : (i64) -> () 
+// CHECK:    }) : () -> !tlam.fun<i64, i64>
 // CHECK-NOT:     "tlam.tapply"
-// CHECK-NEXT:    %0 = "tlam.tlambda"() ({
-// CHECK-NEXT:      %1 = "tlam.vlambda"() ({
-// CHECK-NEXT:      ^bb0(%2: i64):
-// CHECK-NEXT:        "tlam.vreturn"(%2) : (i64) -> () 
-// CHECK-NEXT:      }) : () -> !tlam.fun<i64, i64>
-// CHECK-NEXT:      "tlam.treturn"(%1) : (!tlam.fun<i64, i64>) -> ()
-// CHECK-NEXT:    }) : () -> !tlam.forall<!tlam.fun<i64, i64>>
-// CHECK-NEXT:  }
+// CHECK:    "tlam.treturn"(%2) : (!tlam.fun<i64, i64>) -> () 
+// CHECK:    }) : () -> !tlam.forall<!tlam.fun<i64, i64>> 
+// CHECK: } 

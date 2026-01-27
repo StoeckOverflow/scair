@@ -9,8 +9,42 @@ import scala.collection.mutable
 
 object Monomorphize:
 
-  private def inst(t: TypeAttribute, tyArg: TypeAttribute): TypeAttribute =
-    DBI.subst(0, tyArg, t)
+  /** Substitute both:
+    *   - de Bruijn bvar(0) (for forall bodies) via DBI.subst
+    *   - SSA type vars !tlam.tvar<%binder> (new encoding) via substTVar
+    */
+  private def inst(
+      t: TypeAttribute,
+      binderOpt: Option[Value[Attribute]],
+      tyArg: TypeAttribute,
+  ): TypeAttribute =
+    val t1 = DBI.subst(0, tyArg, t)
+    binderOpt match
+      case None         => t1
+      case Some(binder) => substTVar(t1, binder, tyArg)
+
+  /** Replace occurrences of !tlam.tvar<%binder> inside a TypeAttribute. */
+  private def substTVar(
+      t: TypeAttribute,
+      binder: Value[Attribute],
+      tyArg: TypeAttribute,
+  ): TypeAttribute =
+    t match
+      case tv: TlamTVarType if tv.tparam == binder =>
+        tyArg
+
+      case TlamFunType(in, out) =>
+        TlamFunType(
+          substTVar(in, binder, tyArg),
+          substTVar(out, binder, tyArg),
+        )
+
+      case TlamForAllType(body) =>
+        // forall binds de Bruijn indices, not SSA binder values
+        TlamForAllType(substTVar(body, binder, tyArg))
+
+      case other =>
+        other
 
   private def replaceAllUsesWith(
       from: Value[Attribute],
@@ -79,19 +113,21 @@ object Monomorphize:
     mod.regions.foreach(walkRegion)
     out.toSeq
 
-  /** Clone a region, specializing all TypeAttributes by inst(..., tyArg), while
+  /** Clone a region, specializing all TypeAttributes by inst(...), while
     * remapping SSA values so operands inside the clone refer to cloned defs.
     */
   private def cloneRegionSpec(
       r: Region,
+      binderOpt: Option[Value[Attribute]],
       tyArg: TypeAttribute,
   )(using
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
   ): Region =
-    Region(r.blocks.map(b => cloneBlockSpec(b, tyArg)))
+    Region(r.blocks.map(b => cloneBlockSpec(b, binderOpt, tyArg)))
 
   private def cloneBlockSpec(
       b: Block,
+      binderOpt: Option[Value[Attribute]],
       tyArg: TypeAttribute,
   )(using
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
@@ -99,7 +135,7 @@ object Monomorphize:
     val newArgTypes: Seq[Attribute] =
       b.arguments.iterator.map { a =>
         a.typ match
-          case t: TypeAttribute => inst(t, tyArg)
+          case t: TypeAttribute => inst(t, binderOpt, tyArg)
           case other            => other
       }.toSeq
 
@@ -107,7 +143,7 @@ object Monomorphize:
       argumentsTypes = newArgTypes,
       (newArgs: Iterable[Value[Attribute]]) =>
         valueMapper.addAll(b.arguments.zip(newArgs))
-        b.operations.map(op => cloneOpSpec(op, tyArg)),
+        b.operations.map(op => cloneOpSpec(op, binderOpt, tyArg)),
     )
 
   private def mapOperand(
@@ -119,13 +155,14 @@ object Monomorphize:
 
   private def cloneOpSpec(
       op: Operation,
+      binderOpt: Option[Value[Attribute]],
       tyArg: TypeAttribute,
   )(using
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
   ): Operation =
     op match
       case v: VLambda =>
-        val newFunTyTA = inst(v.res.typ, tyArg)
+        val newFunTyTA = inst(v.res.typ, binderOpt, tyArg)
         val newFunTy = newFunTyTA match
           case f: TlamFunType => f
           case other          =>
@@ -137,7 +174,7 @@ object Monomorphize:
         val newRes = Result[TlamFunType](newFunTy)
         valueMapper += (v.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
-        val newBody = cloneRegionSpec(v.body, tyArg)
+        val newBody = cloneRegionSpec(v.body, binderOpt, tyArg)
         VLambda(newBody, newRes)
 
       case vr: VReturn =>
@@ -148,14 +185,14 @@ object Monomorphize:
         val newFun = mapOperand(va.fun).asInstanceOf[Value[TlamFunType]]
         val newArg = mapOperand(va.arg).asInstanceOf[Value[TypeAttribute]]
 
-        val newResTy = inst(va.res.typ, tyArg)
+        val newResTy = inst(va.res.typ, binderOpt, tyArg)
         val newRes = Result[TypeAttribute](newResTy)
         valueMapper += (va.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
         VApply(newFun, newArg, newRes)
 
       case tl: TLambda =>
-        val newForAllTA = inst(tl.res.typ, tyArg)
+        val newForAllTA = inst(tl.res.typ, binderOpt, tyArg)
         val newForAll = newForAllTA match
           case fa: TlamForAllType => fa
           case other              =>
@@ -167,7 +204,7 @@ object Monomorphize:
         val newRes = Result[TlamForAllType](newForAll)
         valueMapper += (tl.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
-        val newBody = cloneRegionSpec(tl.body, tyArg)
+        val newBody = cloneRegionSpec(tl.body, binderOpt, tyArg)
         TLambda(newBody, newRes)
 
       case tr: TReturn =>
@@ -176,9 +213,9 @@ object Monomorphize:
 
       case ta: TApply =>
         val newFun = mapOperand(ta.fun).asInstanceOf[Value[TlamForAllType]]
-        val newTyArg = inst(ta.tyArg, tyArg)
+        val newTyArg = inst(ta.tyArg, binderOpt, tyArg)
 
-        val newResTy = inst(ta.res.typ, tyArg)
+        val newResTy = inst(ta.res.typ, binderOpt, tyArg)
         val newRes = Result[TypeAttribute](newResTy)
         valueMapper += (ta.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
@@ -186,12 +223,13 @@ object Monomorphize:
 
       case other =>
         val newOperands = other.operands.map(mapOperand)
-        val newRegions = other.regions.map(r => cloneRegionSpec(r, tyArg))
+        val newRegions = other.regions
+          .map(r => cloneRegionSpec(r, binderOpt, tyArg))
 
         val newResults: Seq[Result[Attribute]] =
           other.results.map { r =>
             val newTy: Attribute = r.typ match
-              case t: TypeAttribute => inst(t, tyArg)
+              case t: TypeAttribute => inst(t, binderOpt, tyArg)
               case a                => a
             val nr = Result(newTy)
             valueMapper += (r: Value[Attribute]) -> (nr: Value[Attribute])
@@ -225,6 +263,11 @@ object Monomorphize:
           sys.error("monomorphize: tlambda has no blocks")
         }
 
+    // NEW: SSA binder (e.g. %T : !tlam.type) for !tlam.tvar<%T> substitution.
+    // If older IR exists without a binder arg, this gracefully disables SSA substitution.
+    val binderOpt: Option[Value[Attribute]] =
+      origBlock.arguments.headOption
+
     val origOps = origBlock.operations
     if origOps.isEmpty then
       sys.error("monomorphize: tlambda body block is empty")
@@ -247,7 +290,7 @@ object Monomorphize:
       mutable.Map.empty
 
     val clonedOpsUnattached: Seq[Operation] =
-      origOps.toSeq.dropRight(1).map(op => cloneOpSpec(op, ta.tyArg))
+      origOps.toSeq.dropRight(1).map(op => cloneOpSpec(op, binderOpt, ta.tyArg))
 
     clonedOpsUnattached.foreach(op => useBlock.insertOpBefore(ta, op))
 
@@ -268,7 +311,6 @@ object Monomorphize:
     )
 
     useBlock.eraseOp(ta)
-
     newRet
 
   def run(mod: ModuleOp): ModuleOp =
@@ -288,7 +330,9 @@ object Monomorphize:
       tapplies.foreach { ta =>
         val blk =
           ta.containerBlock
-            .getOrElse(sys.error("monomorphize: tapply has no container block"))
+            .getOrElse(
+              sys.error("monomorphize: tapply has no container block")
+            )
 
         cache.get((blk, ta.fun, ta.tyArg)) match
           case Some(existing) =>

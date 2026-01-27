@@ -56,7 +56,7 @@ object DeBruijnIndicesCheck extends VerifierCheck:
                 case _      => ()
 
             case ta: TApply =>
-              checkType(ta.tyArg, depth) match
+              checkMaybeType(ta.tyArg, depth) match
                 case e: Err => break(e)
                 case _      => ()
 
