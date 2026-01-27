@@ -53,13 +53,31 @@ trait IntegerEnumAttr extends Attribute:
 
 abstract trait ParametrizedAttribute() extends Attribute:
 
-  def parameters: Seq[Attribute | Seq[Attribute]]
+  def parameters: Seq[
+    Attribute | Value[Attribute] | Seq[Attribute] | Seq[Value[Attribute]]
+  ]
 
   override def printParameters(p: Printer): Unit =
-    if parameters.size > 0 then
+    if parameters.nonEmpty then
       p.printListF(
         parameters,
-        p.print,
+        {
+          case a: Attribute        => p.print(a)
+          case v: Value[Attribute] => p.print(v)
+          case xs: Seq[?]          =>
+            p.printListF(
+              xs,
+              {
+                case a: Attribute        => p.print(a)
+                case v: Value[Attribute] => p.print(v)
+                case other               => p.print(other.toString)
+              },
+              "[",
+              ", ",
+              "]",
+            )
+          case other => p.print(other.toString)
+        },
         "<",
         ", ",
         ">",

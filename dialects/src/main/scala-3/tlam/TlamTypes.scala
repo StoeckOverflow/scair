@@ -26,6 +26,7 @@ final case class TlamBVarType(k: IntegerAttr)
     derives DerivedAttributeCompanion
 
 // !tlam.tvar<%s> - type referencing a SSA value %s
+/*
 final case class TlamTVarType(var tparam: Value[Attribute])
     extends TypeAttribute,
       ParametrizedAttribute:
@@ -44,6 +45,22 @@ given AttributeCompanion[TlamTVarType]:
     import scair.parse.whitespace
     P("<" ~ operandNameP.flatMap(operandP(_, TlamTypeType())) ~ ">")
       .map(v => TlamTVarType(v))
+ */
+
+// !tlam.tvar<%x> - type referencing an SSA value %x
+final case class TlamTVarType(var tparam: Value[Attribute])
+    extends TypeAttribute,
+      ParametrizedAttribute:
+
+  override def name: String = "tlam.tvar"
+
+  override def parameters = Seq(tparam)
+
+given AttributeCompanion[TlamTVarType]:
+  override def name: String = "tlam.tvar"
+
+  override def parse[$: P](using p: Parser): P[TlamTVarType] =
+    valueRefInAnglesP(TlamTypeType()).map(TlamTVarType(_))
 
 // !tlam.fun<in -> out> — function type
 final case class TlamFunType(in: TypeAttribute, out: TypeAttribute)
@@ -73,18 +90,21 @@ final case class TlamForAllType(body: TypeAttribute)
 
 object TlamTy:
   inline def `type`: TlamType = TlamTypeType()
-  inline def bvar(k: IntData): TlamType = TlamBVarType(IntegerAttr(k, I64))
+  inline def bvar(k: IntData): TlamBVarType = TlamBVarType(IntegerAttr(k, I64))
 
-  inline def fun(in: TypeAttribute, out: TypeAttribute): TlamType =
+  inline def fun(in: TypeAttribute, out: TypeAttribute): TlamFunType =
     TlamFunType(in, out)
 
-  inline def forall(body: TypeAttribute): TlamType = TlamForAllType(body)
+  inline def forall(body: TypeAttribute): TlamForAllType =
+    TlamForAllType(body)
 
 /** \========================= de Bruijn utilities \=========================
   *   - shift(d, c, t) — increase indices >= c by d (used when entering/leaving
   *     binders)
   *   - subst(c, s, t) — substitute BVar(c) in t with s (capture-avoiding)
   */
+
+/*
 object DBI:
   import TlamTy.*
 
@@ -114,3 +134,31 @@ object DBI:
     fa match
       case TlamForAllType(body) => subst(0, arg, body)
       case other                => other
+ */
+
+object DBI:
+  import TlamTy.*
+
+  // shift(d, c, t): increase all indices >= c by d
+  def shift(d: Int, c: Int, t: TypeAttribute): TypeAttribute = t match
+    case TlamBVarType(IntegerAttr(k, t)) if k.data >= c =>
+      bvar(IntData(k.data + d))
+    case b @ TlamBVarType(_)  => b
+    case TlamFunType(i, o)    => fun(shift(d, c, i), shift(d, c, o))
+    case TlamForAllType(body) => forall(shift(d, c + 1, body))
+    case other                => other
+
+  // subst(c, s, t): substitute bvar(c) := s
+  def subst(c: Int, s: TypeAttribute, t: TypeAttribute): TypeAttribute = t match
+    case TlamBVarType(IntegerAttr(k, t)) if k.data == c => s
+    case TlamBVarType(IntegerAttr(k, t)) if k.data > c  =>
+      bvar(IntData(k.data - 1))
+    case b @ TlamBVarType(_)  => b
+    case TlamFunType(i, o)    => fun(subst(c, s, i), subst(c, s, o))
+    case TlamForAllType(body) =>
+      forall(subst(c + 1, shift(1, 0, s), body))
+    case other => other
+
+  // instantiate forAll.body with arg
+  def instantiate(fa: TlamForAllType, arg: TypeAttribute): TypeAttribute =
+    subst(0, arg, fa.body)
