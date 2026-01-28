@@ -79,17 +79,6 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
     "reject bvar<1> inside a forall body at top-level" in {
       // bad forall: inside its body depth=1 => only b0 allowed; b1 invalid
       val badPoly: tlamForAllType = forall1(fun(b1, b0))
-
-      // a well-formed polymorphic function value: ∀. (#0 -> #0)
-      // val poly: tlamForAllType = forall1(fun(b0, b0))
-      // val polyVal = Result[tlamForAllType](poly)
-      /*
-      val polyFunTy = forall1(fun(b0, b0))
-      val polyProducer =
-        tlam(polyFunTy)( /* body that returns a value of type fun(b0,b0) */ )
-      val polyVal = polyProducer.res.asInstanceOf[Value[tlamForAllType]]
-      
-       */
       val polyDef = polyIdDef()
       // Instantiate: (∀. #0->#0)[badPoly] == (badPoly -> badPoly)
       // (Structurally well-formed; rejected by the de Bruijn scoping pass.)
@@ -105,12 +94,13 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
       intercept[Exception](runDeBruijnVerify(m))
     }
 
+  // Needs to be corrected
   // Lambda notation (de Bruijn):
   //   Λ.  (∀. (#0 -> #0)) [ ∀. (#1 -> #0) ]
   // This TApply happens under an outer TLambda (depth=1).
   // The tyArg is ∀. (#1 -> #0); inside that forall body depth becomes 2 => #1 is valid.
   "DeBruijn verifier" should
-    "accept bvar<1> inside forall when checked under an outer TLambda binder" in {
+    "accept bvar<1> inside forall when checked under an outer TLambda binder (TODO)" in {
 
       val goodPoly: tlamForAllType = forall1(fun(b1, b0))
       val polyDef = polyIdDef()
@@ -122,7 +112,6 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
       )
       tapp.verify().shouldBeOK("verify failed for tapply")
 
-      // Ensure polyDef dominates tapp by placing it before in the same block.
       val tl = tlam(forall1(tapp.res.typ))(
         polyDef,
         tapp,
@@ -131,6 +120,41 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
       tl.shouldVerify()
 
       val m = module(tl)
+      val printedIR = printIR(m)
+      println(printedIR)
+
+      runDeBruijnVerify(m)
+    }
+
+  // Λ. (∀. (#0 -> #0)) [ #0 ]
+  // Under the outer TLambda body, #0 refers to the TLambda binder,
+  // so instantiating ∀α. α->α with #0 yields (#0 -> #0).
+  "DeBruijn verifier" should
+    "accept instantiating with the outer TLambda binder (tyArg = bvar<0>)" in {
+
+      val polyDef = polyIdDef()
+      polyDef.shouldVerify()
+
+      val tapp = TApply(
+        fun = polyDef.res,
+        tyArg = b0, // b0 = the TLambda binder in this block
+        res =
+          Result[TypeAttribute](fun(b0, b0)), // instantiated type = (b0 -> b0)
+      )
+      tapp.verify().shouldBeOK("verify failed for tapply")
+
+      val outerSchema: tlamForAllType = forall1(fun(b0, b0))
+
+      val tl = tlam(outerSchema)(
+        polyDef,
+        tapp,
+        TReturn(tapp.res),
+      )
+      tl.shouldVerify()
+
+      val m = module(tl)
+      println(printIR(m))
+
       runDeBruijnVerify(m)
     }
 
