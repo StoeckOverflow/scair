@@ -11,18 +11,6 @@ final case class VLambda(
 ) extends DerivedOperation["tlam.vlambda", VLambda]
     derives DerivedOperationCompanion:
 
-  /*
-  override def verify(): OK[Operation] =
-    (funAttr, res.typ) match
-      case (f @ TlamFunType(in, _), r) if r == f =>
-        body.blocks match
-          case Block(args, _) :: Nil
-              if args.length == 1 && args.head.typ == in =>
-            OK(this)
-          case _ =>
-            Err("vlambda: one block with one arg of input type required")
-      case _ => Err("vlambda: result type must equal function type")
-   */
   override def verify(): OK[Operation] =
     val funTy = res.typ
     body.blocks match
@@ -55,28 +43,25 @@ final case class TLambda(
   override def verify(): OK[Operation] =
     body.blocks match
       case Block(args, ops) :: Nil if args.length == 1 =>
+        val tparam = args.head
+
+        // Binder arg must be a type value: %T : !tlam.type
+        tparam.typ match
+          case _: TlamTypeType => ()
+          case other           =>
+            return Err(
+              s"tlambda: binder block argument must have type !tlam.type, got $other"
+            )
+
         ops.lastOption match
           case Some(_: TReturn) => OK(this)
           case Some(other)      =>
             Err(s"tlambda: last op must be tlam.treturn, got '${other.name}'")
           case None =>
             Err("tlambda: body block must not be empty (needs a terminator)")
+
       case _ =>
         Err("tlambda: must have exactly one block with one arg")
-
-  /*
-  override def verify(): OK[Operation] =
-    val okBinder = tBody.blocks match
-      case Block(args, _) :: Nil =>
-        args.length == 1 && args.head.typ.isInstanceOf[TlamTypeType]
-      case _ => false
-    val okRes = res.typ.isInstanceOf[TlamForAllType]
-    if okBinder && okRes then OK(this)
-    else
-      Err(
-        "tlambda: one block with one tlam type arg and forall result required"
-      )
-   */
 
 final case class TReturn(
     value: Value[TypeAttribute]
@@ -95,16 +80,6 @@ final case class TApply(
     if res.typ == inst then OK(this)
     else Err(s"tapply: result ${res.typ} != instantiated $inst")
 
-  /*
-  override def verify(): OK[Operation] =
-    polymorphicFun.typ match
-      case fa @ TlamForAllType(_) =>
-        val inst =
-          DBI.instantiate(fa, argType)
-        if res.typ == inst then OK(this)
-        else Err(s"tapply: result ${res.typ} != instantiated $inst")
-   */
-
 final case class VApply(
     fun: Value[TlamFunType],
     arg: Value[TypeAttribute],
@@ -119,16 +94,3 @@ final case class VApply(
       Err(
         s"vapply: expected arg $in and result $out, got ${arg.typ} and ${res.typ}"
       )
-
-  /*
-  override def verify(): OK[Operation] =
-    fun.typ match
-      case TlamFunType(in, out) =>
-        if arg.typ == in && res.typ == out then OK(this)
-        else
-          Err(
-            s"vapply: expected arg $in and result $out, got ${arg.typ} and ${res
-                .typ}"
-          )
-      case other => Err(s"vapply: fun not a function type: $other")
-   */

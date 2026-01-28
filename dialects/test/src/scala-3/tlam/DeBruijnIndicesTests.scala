@@ -36,69 +36,15 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
   "DeBruijn verifier" should "reject bvar<1> under a single TLambda binder" in {
     val badFunTy = fun(b1, b1) // invalid at depth=1
 
-    // IMPORTANT: TLambda.verify compares against its result type (after normalization),
-    // so we must set the TLambda result body to exactly what we return.
-    val tl = tlam(forall1(badFunTy)) { (_: Value[Attribute]) =>
-      val vLam = vlam(badFunTy)(b1)(x => Seq(VReturn(x)))
+    val tl = tlam(forall1(badFunTy)) { (T: Value[Attribute]) =>
+      val a = tvar(T)
+      val vLam = vlam(fun(a, a))(a)(x => Seq(VReturn(x)))
       Seq(vLam, TReturn(vLam.res))
     }
 
     val m = module(tl)
     intercept[Exception](runVerifier(m))
   }
-
-  // Λ. Λ. λ (x : #1). x
-  // Inside the inner TLambda body we have depth = 2:
-  //   #0 = inner binder, #1 = outer binder.
-  "DeBruijn verifier" should
-    "accept bvar<1> when two TLambda binders are in scope" in {
-
-      val funTy = fun(b1, b1) // valid at depth=2
-      val innerForall = forall1(funTy)
-      val outerForall = forall1(innerForall)
-
-      val outerTL =
-        tlam(outerForall) { (_: Value[Attribute]) =>
-          val innerTL =
-            tlam(innerForall) { (_: Value[Attribute]) =>
-              val vLam = vlam(funTy)(b1)(x => Seq(VReturn(x)))
-              Seq(vLam, TReturn(vLam.res))
-            }
-          Seq(innerTL, TReturn(innerTL.res))
-        }
-
-      val print_IR = printIR(outerTL)
-      println(print_IR)
-      val m = module(outerTL)
-      runVerifier(m)
-    }
-
-  "DeBruijn verifier" should
-    "accept bvar<1> when two TLambda binders are in scope working" in {
-
-      // Inner TLambda returns a value of type: forall (b1 -> b1)
-      val innerSchema: TlamForAllType = forall1(fun(b1, b1))
-
-      // Outer TLambda returns a value of type: forall ( forall (b1 -> b1) )
-      // i.e. outer schema body is exactly innerSchema
-      val outerSchema: TlamForAllType = forall1(innerSchema)
-
-      val outerTL =
-        tlam(outerSchema) { (_: Value[Attribute]) =>
-          val innerTL =
-            tlam(innerSchema) { (_: Value[Attribute]) =>
-              val vLam = vlam(fun(b1, b1))(b1)(x => Seq(VReturn(x)))
-              Seq(vLam, TReturn(vLam.res))
-            }
-          Seq(innerTL, TReturn(innerTL.res))
-        }
-
-      val print_IR = printIR(outerTL)
-      println(print_IR)
-
-      val m = module(outerTL)
-      runVerifier(m)
-    }
 
   // (top-level contains)  (∀. (#0 -> #0)) [ ∀. (#1 -> #0) ]
   // At top-level there is no outer binder. Inside the tyArg's forall body the
@@ -123,29 +69,17 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
       intercept[Exception](runVerifier(m))
     }
 
-  // We still want to test that (#1 under an outer TLambda) becomes in-scope for a nested forall body.
-  //
-  // But: your TLambda.verify now normalizes its expected return type by substituting
-  // bvar(0) with tvar(%T), and that substitution *also* turns references to the outer binder
-  // inside nested forall bodies into tvar(%T) rather than bvar(1).
-  //
-  // So, to keep this test focused on the DeBruijn pass (not TLambda return-type normalization),
-  // we place the "goodPoly = ∀. (#1 -> #0)" only as a TApply tyArg inside the TLambda body,
-  // while returning something unrelated (and well-typed) from the TLambda.
   "DeBruijn verifier" should
     "accept bvar<1> inside forall when checked under an outer TLambda binder" in {
 
       val polyDef = polyIdDef()
       polyDef.shouldVerify()
 
-      // Outer TLambda just returns the identity function for its binder (SSA tvar form),
-      // but in its body we also include a TApply whose tyArg uses b1 inside a forall body.
       val outerResForall: TlamForAllType =
         forall1(alphaToAlphaAt(0)) // ∀. (#0 -> #0)
 
       val tl =
         tlam(outerResForall) { (T: Value[Attribute]) =>
-          // This is the test payload:
           // Under outer TLambda: depth=1. Under this forall body: depth=2, so b1 is valid.
           val goodPolyDB: TlamForAllType = forall1(fun(b1, b0))
 

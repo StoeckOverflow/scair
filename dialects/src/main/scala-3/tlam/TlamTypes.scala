@@ -104,38 +104,6 @@ object TlamTy:
   *   - subst(c, s, t) — substitute BVar(c) in t with s (capture-avoiding)
   */
 
-/*
-object DBI:
-  import TlamTy.*
-
-  // shift(d, c, t): increase all indices >= c by d
-  def shift(d: Int, c: Int, t: TypeAttribute): TypeAttribute = t match
-    case TlamBVarType(IntegerAttr(k, t)) if k.data >= c =>
-      bvar(IntData(k.data + d))
-    case b @ TlamBVarType(_)  => b
-    case TlamFunType(i, o)    => fun(shift(d, c, i), shift(d, c, o))
-    case TlamForAllType(body) => forall(shift(d, c + 1, body))
-    case other                => other
-
-  // subst(c, s, t): substitute bvar(c) := s
-  def subst(c: Int, s: TypeAttribute, t: TypeAttribute): TypeAttribute = t match
-    case TlamBVarType(IntegerAttr(k, t)) if k.data == c => s
-    case TlamBVarType(IntegerAttr(k, t)) if k.data > c  =>
-      bvar(IntData(k.data - 1))
-    case b @ TlamBVarType(_)  => b
-    case TlamFunType(i, o)    => fun(subst(c, s, i), subst(c, s, o))
-    case TlamForAllType(body) =>
-      forall(subst(c + 1, shift(1, 0, s), body))
-
-    case other => other
-
-  // instantiate ForAll.body with arg
-  def instantiate(fa: TypeAttribute, arg: TypeAttribute): TypeAttribute =
-    fa match
-      case TlamForAllType(body) => subst(0, arg, body)
-      case other                => other
- */
-
 object DBI:
   import TlamTy.*
 

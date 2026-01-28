@@ -40,7 +40,6 @@ final class TlamTypeParamsTest extends AnyFlatSpec:
       m.shouldVerify()
 
       val printed = printIR(m)
-      println(printed)
       assertPrinted(
         printed,
         includes = Seq(
@@ -100,7 +99,6 @@ final class TlamTypeParamsTest extends AnyFlatSpec:
       m.shouldVerify()
 
       val printed = printIR(m)
-      println(printed)
       assertPrinted(
         printed,
         includes = Seq(
@@ -257,7 +255,7 @@ final class TlamTypeParamsTest extends AnyFlatSpec:
       countOps[TLambda](after) shouldBe 1
 
       val out = printIR(after)
-      println(out)
+
       out should include("tlam.vlambda")
       out should not include ("tlam.tapply")
     }
@@ -309,7 +307,7 @@ final class TlamTypeParamsTest extends AnyFlatSpec:
       afterLower.shouldVerify()
 
       val out = printIR(afterLower)
-      println(out)
+
       assertPrinted(
         out,
         includes = Seq("func.func", "func.return"),
@@ -350,6 +348,6 @@ final class TlamTypeParamsTest extends AnyFlatSpec:
     after.shouldVerify()
 
     val out = printIR(after)
-    println(out)
+
     assertPrinted(out, includes = Seq("func.func", "func.call", "func.return"))
   }
