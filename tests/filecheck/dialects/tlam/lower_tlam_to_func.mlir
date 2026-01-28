@@ -23,5 +23,5 @@ builtin.module {
 // CHECK:         func.func @lifted_1(%0: i64) -> i64 {
 // CHECK-NEXT:      func.return %0 : i64 
 // CHECK-NEXT:    }
-// CHECK:         %0 = "func.constant"() <{callee = @lifted_1}> : () -> (i64) -> i64 
+// CHECK:         %0 = func.constant @lifted_1 : (i64) -> i64
 // CHECK:       }
