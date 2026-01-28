@@ -6,7 +6,6 @@ import scair.clair.macros.*
 import scair.parse.*
 import fastparse.ParsingRun
 import fastparse.*
-import scair.Printer
 
 // ========================= Types (with de Bruijn) =========================
 
