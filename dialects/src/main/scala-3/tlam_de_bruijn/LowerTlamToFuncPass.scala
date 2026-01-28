@@ -69,7 +69,7 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
               // Materialize a first-class function value
               val fnValTy = FunctionType(Seq(inTy), Seq(outTy))
               val cst = Constant(
-                callee = SymbolRefAttr(name),
+                value = SymbolRefAttr(name),
                 res = Result(fnValTy),
               )
 

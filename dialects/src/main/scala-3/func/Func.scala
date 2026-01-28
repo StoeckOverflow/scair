@@ -103,6 +103,7 @@ case class Func(
     if attributes.nonEmpty then
       lprinter.print(" attributes")
       lprinter.printOptionalAttrDict(attributes.toMap)
+    // TODO: Should that simply be a region print?
     body.blocks match
       case Seq()           => ()
       case entry :: others =>
@@ -119,10 +120,27 @@ case class Return(
     with IsTerminator derives DerivedOperationCompanion
 
 case class Constant(
-    callee: SymbolRefAttr,
+    value: SymbolRefAttr,
     res: Result[FunctionType],
 ) extends DerivedOperation["func.constant", Constant]
-    derives DerivedOperationCompanion
+    with NoMemoryEffect derives DerivedOperationCompanion:
+
+  override def customPrint(p: Printer)(using indentLevel: Int): Unit =
+    p.print("func.constant ")
+    p.print(value)
+    p.print(" : ")
+    p.print(res.typ)
+
+given OperationCustomParser[Constant]:
+
+  def parse[$: P](resNames: Seq[String])(using Parser): P[Constant] =
+    (symbolRefAttrP ~ (":" ~ typeP)).flatMap { case (sym, tyAttr) =>
+      tyAttr match
+        case ft: FunctionType =>
+          Pass(Constant(value = sym, res = Result(ft)))
+        case other =>
+          Fail
+    }
 
 case class CallIndirect(
     _operands: Seq[Operand[Attribute]],
