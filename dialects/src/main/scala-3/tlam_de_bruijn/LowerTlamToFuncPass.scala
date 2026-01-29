@@ -22,6 +22,11 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
     var counter = 0
     val top = m.regions.head.blocks.head
 
+    /** Lower a TLam function type to a builtin FunctionType. */
+    def lowerFunType(ft: tlamFunType): FunctionType =
+      // Note: inputs/outputs can still be TLam types (or builtin types). That's fine.
+      FunctionType(inputs = Seq(ft.in), outputs = Seq(ft.out))
+
     /** Replace all uses of `oldV` with `newV` by rebuilding each user operation
       * and replacing it via RewriteMethods (so parent pointers stay valid).
       */
@@ -51,14 +56,16 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
             case vl: VLambda =>
               counter += 1
               val name = s"lifted_$counter"
-              val (inTy, outTy) = extractFun(vl.res.typ)
+
+              val tlamFT: tlamFunType = vl.res.typ
+              val fnTy: FunctionType = lowerFunType(tlamFT)
 
               // Move body into func.func (safe because we erase vl immediately).
               val bodyMoved: Region = vl.body.detached
 
               val fn = Func(
                 sym_name = StringData(name),
-                function_type = FunctionType(Seq(inTy), Seq(outTy)),
+                function_type = fnTy,
                 sym_visibility = None,
                 body = bodyMoved,
               )
@@ -66,23 +73,24 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
               // Insert the function at module top
               RewriteMethods.insertOpsAt(InsertPoint.atStartOf(top), fn)
 
-              // Materialize a first-class function value
-              val fnValTy = FunctionType(Seq(inTy), Seq(outTy))
+              // Materialize a first-class function value (builtin FunctionType)
               val cst = Constant(
                 value = SymbolRefAttr(name),
-                res = Result(fnValTy),
+                res = Result(fnTy),
               )
 
               // Insert constant right before the original VLambda
               b.operations.insert(vl, cst)
 
               // Replace all uses of the lambda value with the constant value
+              // (upcast to Attribute to match helper signature)
               replaceAllUses(vl.res, cst.res)
 
               // Erase the original VLambda
               RewriteMethods.eraseOp(vl)
 
             case _ => ()
+
           op.regions.foreach(walkRegion)
         }
       }
@@ -91,18 +99,29 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
 
     // ---------------------------
     // Phase 2: rewrite remaining tlam value-level ops
-    //   - vapply -> func.call_indirect
+    //   - vapply  -> func.call_indirect
     //   - vreturn -> func.return
     // ---------------------------
     val p = GreedyRewritePatternApplier(
       Seq(
         pattern { case app: VApply =>
-          // app.fun is now a Value[tlamFunType] in tlam, but we replaced all
-          // VLambda results with func.constant whose result type is FunctionType,
-          // which is what call_indirect expects.
+          // IMPORTANT:
+          // app.fun is statically Value[TlamFunType], but after Phase 1 its *runtime*
+          // Value.typ can be builtin FunctionType (because we replaced uses with func.constant).
+          val funV: Value[Attribute] = app.fun // widen for runtime inspection
+          val ft: FunctionType =
+            funV.typ match
+              case f: FunctionType => f
+              case other           =>
+                throw new Exception(
+                  s"lower-tlam-to-func: expected callee of call_indirect to have builtin.function_type, got $other"
+                )
+
           CallIndirect(
-            _operands = Seq(app.fun, app.arg),
-            _results = Seq(Result(app.res.typ)),
+            callee = funV.asInstanceOf[Operand[FunctionType]],
+            callee_operands = Seq(app.arg), // arguments only
+            _results = ft.outputs
+              .map(Result(_)), // result types from function type
           )
         },
         pattern { case vr: VReturn =>
@@ -112,8 +131,3 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
     )
 
     PatternRewriteWalker(p).rewrite(m)
-
-private def extractFun(t: TypeAttribute): (TypeAttribute, TypeAttribute) =
-  t match
-    case tlamFunType(in, out) => (in, out)
-    case other => throw new Exception(s"expected tlam.fun, got $other")
