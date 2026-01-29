@@ -10,6 +10,7 @@ import scair.ir.*
 import scair.parse.*
 import scair.parse.Parser
 import scair.utils.*
+import scair.utils.*
 
 //
 // ███████╗ ██╗░░░██╗ ███╗░░██╗ ░█████╗░
@@ -123,53 +124,32 @@ case class Constant(
     value: SymbolRefAttr,
     res: Result[FunctionType],
 ) extends DerivedOperation["func.constant", Constant]
-    with NoMemoryEffect derives DerivedOperationCompanion:
-
-  override def customPrint(p: Printer)(using indentLevel: Int): Unit =
-    p.print("func.constant ")
-    p.print(value)
-    p.print(" : ")
-    p.print(res.typ)
-
-given OperationCustomParser[Constant]:
-
-  def parse[$: P](resNames: Seq[String])(using Parser): P[Constant] =
-    (symbolRefAttrP ~ (":" ~ typeP)).flatMap { case (sym, tyAttr) =>
-      tyAttr match
-        case ft: FunctionType =>
-          Pass(Constant(value = sym, res = Result(ft)))
-        case other =>
-          Fail
-    }
+    with AssemblyFormat["attr-dict $value `:` type($res)"]
+    with NoMemoryEffect derives DerivedOperationCompanion
 
 case class CallIndirect(
-    _operands: Seq[Operand[Attribute]],
+    callee: Operand[FunctionType],
+    callee_operands: Seq[Operand[Attribute]],
     _results: Seq[Result[Attribute]],
 ) extends DerivedOperation["func.call_indirect", CallIndirect]
     derives DerivedOperationCompanion:
 
   override def verify(): OK[Operation] =
-    _operands match
-      case Seq() =>
-        Err("func.call_indirect: missing callee operand")
-      case callee +: args =>
-        callee.typ match
-          case ft: FunctionType =>
-            val inTys = ft.inputs
-            val outTys = ft.outputs
-            if args.map(_.typ) != inTys then
-              Err(
-                s"func.call_indirect: argument types ${args.map(_.typ)} do not match callee input types $inTys"
-              )
-            else if _results.map(_.typ) != outTys then
-              Err(
-                s"func.call_indirect: result types ${_results.map(_.typ)} do not match callee output types $outTys"
-              )
-            else OK(this)
-          case other =>
-            Err(
-              s"func.call_indirect: callee must have builtin.function_type, got $other"
-            )
+    callee.typ match
+      case FunctionType(inTys, outTys) =>
+        if callee_operands.map(_.typ) != inTys then
+          Err(
+            s"func.call_indirect: argument types ${callee_operands.map(_.typ)} do not match callee input types $inTys"
+          )
+        else if _results.map(_.typ) != outTys then
+          Err(
+            s"func.call_indirect: result types ${_results.map(_.typ)} do not match callee output types $outTys"
+          )
+        else OK(this)
+      case other =>
+        Err(
+          s"func.call_indirect: callee must have builtin.function_type, got $other"
+        )
 
 val FuncDialect =
   summonDialect[EmptyTuple, (Call, CallIndirect, Constant, Func, Return)]
