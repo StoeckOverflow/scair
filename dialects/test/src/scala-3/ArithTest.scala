@@ -19,7 +19,7 @@ final class ArithRewriteInfraSpec extends AnyFlatSpec with BeforeAndAfter:
 
   given indentLevel: Int = 0
 
-  "RewriteMethods" should "replace and erase ops while keeping IR consistent" in {
+  "Such real ADT manipulation" should "flex how working it is" in {
     val zero = scair.dialects.arith.Constant(
       IntegerAttr(IntData(0), I32),
       Result(I32),
