@@ -12,6 +12,7 @@ import scair.dialects.tlam.*
 import scair.dialects.tlam.TlamTy.*
 import scair.testutils.tlam.TlamTestIR.*
 import org.scalatest.flatspec.AnyFlatSpec
+import scair.dialects.tlam.verify.DeBruijnIndicesCheck
 
 final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
 
@@ -25,7 +26,8 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
 
   private def runVerifier(m: ModuleOp): Unit =
     m.shouldVerify()
-    Verifier.verify(m, ctx) match
+    val checks = Verifier.defaultChecks :+ DeBruijnIndicesCheck
+    Verifier.verify(m, checks = checks) match
       case e: Err => throw new Exception(e.msg)
       case _      => ()
 
