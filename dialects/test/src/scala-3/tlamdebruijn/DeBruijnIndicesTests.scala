@@ -11,6 +11,7 @@ import scair.dialects.tlam_de_bruijn.tlamTy.*
 import scair.testutils.tlamdebruijn.TlamTestIR.*
 import scair.verify.Verifier
 import scair.utils.Err
+import scair.dialects.tlam_de_bruijn.verify.DeBruijnIndicesCheck
 
 import org.scalatest.flatspec.AnyFlatSpec
 
@@ -24,9 +25,11 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
     c.registerDialect(TlamDeBruijnDialect)
     c
 
-  private def runDeBruijnVerify(m: ModuleOp): Unit =
+  private def runVerifier(m: ModuleOp): Unit =
     m.shouldVerify()
-    Verifier.verify(m, ctx) match
+
+    val checks = Verifier.defaultChecks :+ DeBruijnIndicesCheck
+    Verifier.verify(m, checks = checks) match
       case e: Err => throw new Exception(e.msg)
       case _      => ()
 
@@ -45,7 +48,7 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
     tl.shouldVerify()
 
     val m = module(tl)
-    intercept[Exception](runDeBruijnVerify(m))
+    intercept[Exception](runVerifier(m))
   }
 
   // Lambda notation (de Bruijn):
@@ -68,7 +71,7 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
       outerTL.shouldVerify()
 
       val m = module(outerTL)
-      runDeBruijnVerify(m)
+      runVerifier(m)
     }
 
   // Type/lambda notation (de Bruijn):
@@ -91,7 +94,7 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
       tapp.verify().shouldBeOK("verify failed for tapply")
 
       val m = module(tapp)
-      intercept[Exception](runDeBruijnVerify(m))
+      intercept[Exception](runVerifier(m))
     }
 
   // Needs to be corrected
@@ -123,7 +126,7 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
       val printedIR = printIR(m)
       println(printedIR)
 
-      runDeBruijnVerify(m)
+      runVerifier(m)
     }
 
   // Λ. (∀. (#0 -> #0)) [ #0 ]
@@ -155,7 +158,7 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
       val m = module(tl)
       println(printIR(m))
 
-      runDeBruijnVerify(m)
+      runVerifier(m)
     }
 
   // Lambda notation (de Bruijn):
@@ -175,5 +178,5 @@ final class DeBruijnIndicesCheckTest extends AnyFlatSpec:
       bad.verify().shouldBeOK("verify failed for tapply")
 
       val m = module(polyDef, bad)
-      intercept[Exception](runDeBruijnVerify(m))
+      intercept[Exception](runVerifier(m))
     }

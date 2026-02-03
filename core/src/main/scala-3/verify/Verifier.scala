@@ -1,28 +1,25 @@
 package scair.verify
 
-import scair.MLContext
 import scair.ir.*
-import scair.utils.{Err, OK}
+import scair.utils.Err
+import scair.utils.OK
+
 import scala.util.boundary
 import scala.util.boundary.break
 
 object Verifier:
 
-  final case class Config(
-      genericChecks: Seq[VerifierCheck] = Seq(SSADominanceCheck)
-  )
+  val defaultChecks: Seq[VerifierCheck] = Seq(SSADominanceCheck)
 
   def verify(
       root: Operation,
-      ctx: MLContext,
-      cfg: Config = Config(),
+      checks: Seq[VerifierCheck] = defaultChecks,
   ): OK[Operation] =
     root.verify() match
       case e: Err => e
       case _      =>
         boundary[OK[Operation]] {
-          val allChecks = cfg.genericChecks ++ ctx.verifierRegistry.all
-          for chk <- allChecks do
+          for chk <- checks do
             chk.run(root) match
               case e: Err => break(Err(s"${chk.name}: ${e.msg}"): OK[Operation])
               case _      => ()

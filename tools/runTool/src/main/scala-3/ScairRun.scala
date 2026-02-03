@@ -8,12 +8,12 @@ import scair.ir.*
 import scair.parse.*
 import scair.tools.ScairToolBase
 import scair.utils.*
+import scair.verify.Verifier
 import scopt.OParser
 
 import scala.collection.mutable
 import scala.io.BufferedSource
 import scala.io.Source
-import scair.verify.Verifier
 
 //
 // ░██████╗ ░█████╗░ ░█████╗░ ██╗ ██████╗░
@@ -88,7 +88,7 @@ trait ScairRunBase extends ScairToolBase[ScairRunArgs]:
     val module = parse(parsedArgs)(input).head.get.asInstanceOf[ModuleOp]
 
     if !parsedArgs.skipVerify then
-      Verifier.verify(module, ctx) match
+      Verifier.verify(module) match
         case e: scair.utils.Err => throw new Exception(e.msg)
         case _                  => ()
 

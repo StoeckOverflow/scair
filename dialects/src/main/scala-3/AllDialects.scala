@@ -35,8 +35,8 @@ val allDialects: Seq[Dialect] =
   Seq(
     BuiltinDialect,
     Complex,
-    TlamDeBruijnDialect,
     MathDialect,
+    TlamDeBruijnDialect,
     Test,
     IRDL,
     ArithDialect,

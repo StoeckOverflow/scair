@@ -4,7 +4,6 @@ import scair.utils.*
 
 import scala.annotation.targetName
 import scala.collection.mutable
-import scair.ir.RegionKind.*
 //
 // ██████╗░ ███████╗ ░██████╗░ ██╗ ░█████╗░ ███╗░░██╗
 // ██╔══██╗ ██╔════╝ ██╔════╝░ ██║ ██╔══██╗ ████╗░██║
@@ -33,8 +32,6 @@ object Region:
 case class Region(
     blocks: Block*
 ) extends IRNode:
-
-  var kind: RegionKind = SSACFG
 
   final override def deepCopy(using
       blockMapper: mutable.Map[Block, Block] = mutable.Map.empty,
