@@ -50,6 +50,14 @@ object Monomorphize:
       from: Value[Attribute],
       to: Value[Attribute],
   ): Unit =
+    val typeUsesSnapshot = from.typeUses.toList
+    typeUsesSnapshot.foreach { tu =>
+      from.typeUses -= tu
+      tu.attribute.replaceValue(from, to)
+      val v = tu.attribute.getVal()
+      v.typeUses += TypeUse(tu.owner, tu.attribute)
+    }
+
     val usesSnapshot = from.uses.toList
 
     val byOp: Map[Operation, List[Int]] =

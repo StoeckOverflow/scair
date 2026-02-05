@@ -31,6 +31,14 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
       * and replacing it via RewriteMethods (so parent pointers stay valid).
       */
     def replaceAllUses(oldV: Value[Attribute], newV: Value[Attribute]): Unit =
+      val typeUsesSnapshot = oldV.typeUses.toList
+      typeUsesSnapshot.foreach { tu =>
+        oldV.typeUses -= tu
+        tu.attribute.replaceValue(oldV, newV)
+        val v = tu.attribute.getVal()
+        v.typeUses += TypeUse(tu.owner, tu.attribute)
+      }
+
       val usesSnapshot = oldV.uses.toList
       usesSnapshot.foreach { use =>
         val userOp = use.operation

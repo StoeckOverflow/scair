@@ -21,43 +21,16 @@ object SSADominanceCheck extends VerifierCheck:
       else fail(s"value $v does not dominate its use in op `${user.name}`")
 
     def walkAttr(a: Attribute, user: Operation): OK[Unit] =
-      a match
+      boundary[OK[Unit]] {
+        AttributeWalker.foreachValueAttribute(a) { va =>
+          checkValue(va.getVal(), user) match
+            case e: Err => break(e: OK[Unit])
+            case _      => ()
+        }
+        OK(())
+      }
 
-        case pa: ParametrizedAttribute =>
-          boundary[OK[Unit]] {
-            pa.parameters.foreach {
-              case x: Attribute =>
-                walkAttr(x, user) match
-                  case e: Err => break(e: OK[Unit])
-                  case _      => ()
-
-              case v: Value[?] =>
-                // parameters may contain SSA values now
-                checkValue(v.asInstanceOf[Value[Attribute]], user) match
-                  case e: Err => break(e: OK[Unit])
-                  case _      => ()
-
-              case xs: Seq[?] =>
-                xs.foreach {
-                  case x: Attribute =>
-                    walkAttr(x, user) match
-                      case e: Err => break(e: OK[Unit])
-                      case _      => ()
-                  case v: Value[?] =>
-                    checkValue(v.asInstanceOf[Value[Attribute]], user) match
-                      case e: Err => break(e: OK[Unit])
-                      case _      => ()
-                  case _ => ()
-                }
-              case _ => ()
-            }
-            OK(())
-          }
-
-        case _ =>
-          OK(())
-
-    def checkOpTypePositions(op: Operation): OK[Unit] =
+    def checkOpTypeAndAttrUses(op: Operation): OK[Unit] =
       boundary[OK[Unit]] {
         // result types
         op.results.foreach { r =>
@@ -89,13 +62,15 @@ object SSADominanceCheck extends VerifierCheck:
           b.operations.foreach { op =>
             // Check operand dominance at this use site
             op.operands.foreach { v =>
-              if !dom.valueDominates(v, op) then
-                break(
-                  Err(
-                    s"value $v does not dominate its use in op `${op.name}`"
-                  ): OK[Unit]
-                )
+              checkValue(v, op) match
+                case e: Err => break(e: OK[Unit])
+                case _      => ()
             }
+
+            // Check dominance for type uses in types/attributes
+            checkOpTypeAndAttrUses(op) match
+              case e: Err => break(e: OK[Unit])
+              case _      => ()
 
             // Recurse into nested regions
             op.regions.foreach { rr =>
