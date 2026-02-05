@@ -41,6 +41,17 @@ final case class TLambda(
     derives DerivedOperationCompanion:
 
   override def verify(): OK[Operation] =
+    def isWithinTLambdaBody(op: Operation): Boolean =
+      var curRegion = op.containerBlock.flatMap(_.containerRegion)
+      var curParent = curRegion.flatMap(_.containerOperation)
+      while curParent.isDefined do
+        curParent.get match
+          case _: TLambda => return true
+          case parent     =>
+            curRegion = parent.containerBlock.flatMap(_.containerRegion)
+            curParent = curRegion.flatMap(_.containerOperation)
+      false
+
     body.blocks match
       case Block(args, ops) :: Nil if args.length == 1 =>
         val tparam = args.head
@@ -54,8 +65,24 @@ final case class TLambda(
             )
 
         ops.lastOption match
-          case Some(_: TReturn) => OK(this)
-          case Some(other)      =>
+          case Some(TReturn(ret)) =>
+            // Close the SSA-bound type variable into a de Bruijn body to compare
+            // with the stored forall type.
+            val closed = TlamTypeUtil.closeUnder(tparam, ret.typ)
+            if closed != res.typ.body then
+              Err(
+                s"tlambda: result body ${res.typ.body} != return type closed over binder $closed"
+              )
+            else if !isWithinTLambdaBody(this) && TlamTypeUtil.containsTVar(
+                res.typ.body
+              )
+            then
+              // Outside any tlambda body, forall types must not reference SSA tvars.
+              Err(
+                "tlambda: forall body contains free tvar outside any tlambda body"
+              )
+            else OK(this)
+          case Some(other) =>
             Err(s"tlambda: last op must be tlam.treturn, got '${other.name}'")
           case None =>
             Err("tlambda: body block must not be empty (needs a terminator)")

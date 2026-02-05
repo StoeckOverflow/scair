@@ -2,6 +2,7 @@ package scair.dialects.tlam
 
 import scair.ir.*
 import scair.dialects.builtin.*
+import scair.Printer
 import scair.clair.macros.*
 import scair.parse.*
 import fastparse.ParsingRun
@@ -24,42 +25,22 @@ final case class TlamBVarType(k: IntegerAttr)
     with DerivedAttribute["tlam.bvar", TlamBVarType]
     derives DerivedAttributeCompanion
 
-// !tlam.tvar<%s> - type referencing a SSA value %s
-/*
-final case class TlamTVarType(var tparam: Value[Attribute])
-    extends TypeAttribute,
-      ParametrizedAttribute:
-  override def name = "tlam.tvar"
-  override def parameters = Seq()
-
-  override def customPrint(p: Printer): Unit =
-    p.print("!tlam.tvar<")
-    p.print(tparam)
-    p.print(">")
-
-given AttributeCompanion[TlamTVarType]:
-  override def name = "tlam.tvar"
-
-  override def parse[$: P](using Parser): P[TlamTVarType] =
-    import scair.parse.whitespace
-    P("<" ~ operandNameP.flatMap(operandP(_, TlamTypeType())) ~ ">")
-      .map(v => TlamTVarType(v))
- */
-
 // !tlam.tvar<%x> - type referencing an SSA value %x
-final case class TlamTVarType(var tparam: Value[Attribute])
-    extends TypeAttribute,
-      ParametrizedAttribute:
+final case class TlamTVarType(ref: ValueAttribute)
+    extends TypeAttribute
+    with ParametrizedAttribute:
 
   override def name: String = "tlam.tvar"
 
-  override def parameters = Seq(tparam)
+  def tparam: Value[Attribute] = ref.getVal()
+
+  override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(ref)
 
 given AttributeCompanion[TlamTVarType]:
   override def name: String = "tlam.tvar"
 
   override def parse[$: P](using p: Parser): P[TlamTVarType] =
-    valueRefInAnglesP(TlamTypeType()).map(TlamTVarType(_))
+    valueRefInAnglesP(TlamTypeType()).map(v => TlamTVarType(ValueAttribute(v)))
 
 // !tlam.fun<in -> out> — function type
 final case class TlamFunType(in: TypeAttribute, out: TypeAttribute)
@@ -129,3 +110,30 @@ object DBI:
   // instantiate forAll.body with arg
   def instantiate(fa: TlamForAllType, arg: TypeAttribute): TypeAttribute =
     subst(0, arg, fa.body)
+
+object TlamTypeUtil:
+  import TlamTy.*
+
+  def containsTVar(t: TypeAttribute): Boolean = t match
+    case _: TlamTVarType   => true
+    case TlamFunType(i, o) => containsTVar(i) || containsTVar(o)
+    case TlamForAllType(b) => containsTVar(b)
+    case _                 => false
+
+  def closeUnder(
+      binder: Value[Attribute],
+      t: TypeAttribute,
+  ): TypeAttribute =
+    def loop(depth: Int, cur: TypeAttribute): TypeAttribute = cur match
+      case tv: TlamTVarType if tv.tparam eq binder =>
+        // Convert SSA binder reference to a de Bruijn index at the current depth.
+        bvar(IntData(depth))
+      case TlamFunType(i, o) =>
+        fun(loop(depth, i), loop(depth, o))
+      case TlamForAllType(body) =>
+        // Entering a binder increases the de Bruijn depth.
+        forall(loop(depth + 1, body))
+      case other =>
+        other
+
+    loop(0, t)
