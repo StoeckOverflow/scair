@@ -18,7 +18,7 @@ object TlamTestIR:
   inline def forall1(body: TypeAttribute): TlamForAllType = forall(body)
 
   inline def tvar(tparam: Value[Attribute]): TlamTVarType =
-    TlamTVarType(tparam)
+    TlamTVarType(ValueAttribute(tparam))
 
   def module(ops: Operation*): ModuleOp =
     ModuleOp(Region(Seq(Block(operations = ops.toSeq))))

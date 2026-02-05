@@ -40,17 +40,21 @@ final class DominanceInfoSpec extends AnyFlatSpec:
     def singleBlockModule(ops: Operation*): ModuleOp =
       ModuleOp(Region(Seq(Block(operations = ops.toSeq))))
 
-    final case class TestTVar(var v: Value[Attribute])
+    final case class TestTVar(ref: ValueAttribute)
         extends TypeAttribute
         with ParametrizedAttribute:
       override val name: String = "test.TestTVar"
-      override def parameters = Seq(v)
+
+      override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(ref)
+      def v: Value[Attribute] = ref.getVal()
 
     def typeUseOp(
         v: Value[Attribute],
         name: String = "test.type_use",
     ): Operation =
-      UnregisteredOperation(name)(results = Seq(Result(TestTVar(v))))
+      UnregisteredOperation(name)(
+        results = Seq(Result(TestTVar(ValueAttribute(v))))
+      )
 
     /** Helper to get the single SSA result of a def op. */
     extension (o: Operation)
