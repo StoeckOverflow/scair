@@ -7,6 +7,7 @@ import scair.parse.*
 import scair.tools.ScairToolBase
 import scair.utils.*
 import scair.verify.Verifier
+import scair.dialects.tlam.verify.DeBruijnIndicesCheck
 import scopt.OParser
 
 import scala.io.BufferedSource
@@ -74,6 +75,10 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
       parsed
     )
 
+  private def verifyWithChecks(op: Operation): OK[Operation] =
+    val checks = Verifier.defaultChecks :+ DeBruijnIndicesCheck
+    Verifier.verify(op, checks)
+
   override def parseArgs(args: Array[String]): ScairOptArgs =
     // Define CLI args
     val argbuilder = OParser.builder[ScairOptArgs]
@@ -128,7 +133,7 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
           val processedModule: OK[Operation] =
             var module =
               if parsedArgs.skipVerify then OK(inputModule)
-              else inputModule.structured.flatMap(op => Verifier.verify(op))
+              else inputModule.structured.flatMap(op => verifyWithChecks(op))
             // verify parsed content
             module match
               case OK(op) =>
@@ -148,7 +153,7 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
                     val out = pass.transform(op)
 
                     if !parsedArgs.skipVerify then
-                      Verifier.verify(out) match
+                      verifyWithChecks(out) match
                         case Err(errorMsg) =>
                           if parsedArgs.verifyDiagnostics then
                             Err(errorMsg + "\n")
