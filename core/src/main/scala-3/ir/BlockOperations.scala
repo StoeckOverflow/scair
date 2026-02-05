@@ -36,12 +36,44 @@ object BlockOperations:
 
 class BlockOperations extends IntrusiveList[Operation]:
 
+  private inline def registerTypeUses(
+      owner: Operation | Block,
+      a: Attribute,
+  ): Unit =
+    AttributeWalker.foreachValueAttribute(a) { va =>
+      val v = va.getVal()
+      v.typeUses += TypeUse(owner, va)
+    }
+
+  private inline def unregisterTypeUses(
+      owner: Operation | Block,
+      a: Attribute,
+  ): Unit =
+    AttributeWalker.foreachValueAttribute(a) { va =>
+      val v = va.getVal()
+      v.typeUses -= TypeUse(owner, va)
+    }
+
+  private inline def registerOperationTypeUses(op: Operation): Unit =
+    op.results.foreach(r => registerTypeUses(op, r.typ))
+    op.operands.foreach(v => registerTypeUses(op, v.typ))
+    op.attributes.values.foreach(a => registerTypeUses(op, a))
+    op.properties.values.foreach(a => registerTypeUses(op, a))
+
+  private inline def unregisterOperationTypeUses(op: Operation): Unit =
+    op.results.foreach(r => unregisterTypeUses(op, r.typ))
+    op.operands.foreach(v => unregisterTypeUses(op, v.typ))
+    op.attributes.values.foreach(a => unregisterTypeUses(op, a))
+    op.properties.values.foreach(a => unregisterTypeUses(op, a))
+
   private inline def handleOperationInsertion(op: Operation) =
     op.operands.foreachWithIndex((o, i) => o.uses += Use(op, i))
+    registerOperationTypeUses(op)
 
   private inline def handleOperationRemoval(op: Operation) =
     op.operands
       .foreachWithIndex((o, i) => o.uses.filterInPlace(_.operation != op))
+    unregisterOperationTypeUses(op)
 
   override final def addOne(elem: Operation): this.type =
     handleOperationInsertion(elem)

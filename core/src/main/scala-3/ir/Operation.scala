@@ -6,7 +6,6 @@ import scair.parse.Parser
 import scair.transformations.RewritePattern
 import scair.utils.*
 import scair.utils.IntrusiveNode
-
 import scala.collection.mutable
 import scala.collection.mutable.LinkedHashMap
 
@@ -49,13 +48,21 @@ trait Operation extends IRNode with IntrusiveNode[Operation]:
   ): Operation =
     val newResults = results.map(_.copy())
     valueMapper addAll (results zip newResults)
-    updated(
+    val newOp = updated(
       results = newResults.asInstanceOf[Seq[Result[Attribute]]],
       operands = operands.map(o => valueMapper.getOrElse(o, o)),
       successors = successors.map(b => blockMapper.getOrElseUpdate(b, b)),
       regions = regions.map(_.deepCopy),
       attributes = LinkedHashMap.from(attributes),
     )
+    // Remap type uses inside attributes to cloned SSA values.
+    newOp.results.foreach(r => AttributeWalker.remapTypeUsesInPlace(r.typ))
+    newOp.operands.foreach(v => AttributeWalker.remapTypeUsesInPlace(v.typ))
+    newOp.attributes.values
+      .foreach(a => AttributeWalker.remapTypeUsesInPlace(a))
+    newOp.properties.values
+      .foreach(a => AttributeWalker.remapTypeUsesInPlace(a))
+    newOp
 
   regions.foreach(attachRegion)
 

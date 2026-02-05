@@ -148,6 +148,14 @@ trait Rewriter:
       newValue: Value[Attribute],
   ): Unit =
     if !(newValue eq value) then
+      val typeUsesSnapshot = value.typeUses.toList
+      typeUsesSnapshot.foreach { tu =>
+        value.typeUses -= tu
+        tu.attribute.replaceValue(value, newValue)
+        val v = tu.attribute.getVal()
+        v.typeUses += TypeUse(tu.owner, tu.attribute)
+      }
+
       for (op, uses) <- value.uses.groupBy(_.operation) do
         // TODO: This should be enforced by a nicer design!
         if op.containerBlock.nonEmpty then

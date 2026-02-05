@@ -20,15 +20,24 @@ import scair.utils.OK
 //        for faster use retrieval and index update
 final case class Use(val operation: Operation, val index: Int)
 
+final case class TypeUse(
+    val owner: Operation | Block,
+    val attribute: ValueAttribute,
+)
+
 final case class Value[+T <: Attribute](
     val typ: T
 ):
 
   val uses: collection.mutable.Set[Use] = collection.mutable.Set.empty[Use]
+
+  val typeUses: collection.mutable.Set[TypeUse] =
+    collection.mutable.Set.empty[TypeUse]
+
   var owner: Option[Operation | Block] = None
 
   def erase(): Unit =
-    if uses.nonEmpty then
+    if uses.nonEmpty || typeUses.nonEmpty then
       throw new Exception(
         "Attempting to erase a Value that has uses in other operations."
       )
