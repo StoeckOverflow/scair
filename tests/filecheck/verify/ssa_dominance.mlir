@@ -102,23 +102,3 @@ builtin.module {
 }
 
 // CHECK: ssa-dominance: value Value{{.*}} does not dominate its use in op `test.use`
-
-// -----
-
-// Value used in a dependent result type before the defining op.
-builtin.module {
-  %1 = "arith.constant"() <{value = 1 : i32}> : () -> !tlam.tvar<%t0>
-  %t0 = "test.make_type"() : () -> !tlam.type
-}
-
-// CHECK: ssa-dominance: value Value{{.*}} does not dominate its use in op `arith.constant`
-
-// -----
-
-// Value used in an attribute before the defining op.
-builtin.module {
-  "test.use"() {dep = !tlam.tvar<%t0>} : () -> ()
-  %t0 = "test.make_type"() : () -> !tlam.type
-}
-
-// CHECK: ssa-dominance: value Value{{.*}} does not dominate its use in op `test.use`

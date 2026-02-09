@@ -418,6 +418,18 @@ def operandP[$: P, A <: Attribute](name: String, typ: A)(using
       p.scopes.top.forwardValues += name
       Pass(forwardValue)
 
+def existingOperandP[$: P](name: String)(using
+    p: Parser
+): P[Value[Attribute]] =
+  p.scopes.collectFirst {
+    case scope if scope.valueMap.contains(name) =>
+      scope.valueMap(name)
+  } match
+    case Some(value) =>
+      Pass(value)
+    case None =>
+      Fail(s"Value %$name must be defined before use in this context.")
+
 def valueRefInAnglesP[$: P](expected: Attribute)(using
     p: Parser
 ): P[Value[Attribute]] =
