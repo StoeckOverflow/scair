@@ -9,7 +9,6 @@ import scair.Printer
 import scair.parse.*
 import fastparse.ParsingRun
 import fastparse.*
-import scair.dialects.tlam_de_bruijn.verify.DeBruijnIndicesCheck
 
 // ========================= Types (with de Bruijn) \=========================
 
@@ -239,9 +238,13 @@ final case class TApply(
     derives DerivedOperationCompanion:
 
   override def verify(): OK[Operation] =
-    val inst = DBI.instantiate(fun.typ, tyArg)
-    if res.typ == inst then OK(this)
-    else Err(s"tapply: result ${res.typ} != instantiated $inst")
+    fun.typ match
+      case fa: tlamForAllType =>
+        val inst = DBI.instantiate(fa, tyArg)
+        if res.typ == inst then OK(this)
+        else Err(s"tapply: result ${res.typ} != instantiated $inst")
+      case other =>
+        Err(s"tapply: expected operand of type tlam.forall, got $other")
 
 /** tlam.vapply — value-level function application.
   *

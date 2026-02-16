@@ -9,8 +9,15 @@ import scala.collection.mutable
 
 object Monomorphize:
 
-  private def inst(t: TypeAttribute, tyArg: TypeAttribute): TypeAttribute =
-    DBI.subst(0, tyArg, t)
+  private def instAt(
+      t: TypeAttribute,
+      tyArg: TypeAttribute,
+      depth: Int,
+  ): TypeAttribute =
+    val shiftedArg =
+      if depth == 0 then tyArg
+      else DBI.shift(depth, 0, tyArg)
+    DBI.subst(depth, shiftedArg, t)
 
   private def replaceAllUsesWith(
       from: Value[Attribute],
@@ -85,21 +92,23 @@ object Monomorphize:
   private def cloneRegionSpec(
       r: Region,
       tyArg: TypeAttribute,
+      depth: Int,
   )(using
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
   ): Region =
-    Region(r.blocks.map(b => cloneBlockSpec(b, tyArg)))
+    Region(r.blocks.map(b => cloneBlockSpec(b, tyArg, depth)))
 
   private def cloneBlockSpec(
       b: Block,
       tyArg: TypeAttribute,
+      depth: Int,
   )(using
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
   ): Block =
     val newArgTypes: Seq[Attribute] =
       b.arguments.iterator.map { a =>
         a.typ match
-          case t: TypeAttribute => inst(t, tyArg)
+          case t: TypeAttribute => instAt(t, tyArg, depth)
           case other            => other
       }.toSeq
 
@@ -107,7 +116,7 @@ object Monomorphize:
       argumentsTypes = newArgTypes,
       (newArgs: Iterable[Value[Attribute]]) =>
         valueMapper.addAll(b.arguments.zip(newArgs))
-        b.operations.map(op => cloneOpSpec(op, tyArg)),
+        b.operations.map(op => cloneOpSpec(op, tyArg, depth)),
     )
 
   private def mapOperand(
@@ -120,12 +129,13 @@ object Monomorphize:
   private def cloneOpSpec(
       op: Operation,
       tyArg: TypeAttribute,
+      depth: Int,
   )(using
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
   ): Operation =
     op match
       case v: VLambda =>
-        val newFunTyTA = inst(v.res.typ, tyArg)
+        val newFunTyTA = instAt(v.res.typ, tyArg, depth)
         val newFunTy = newFunTyTA match
           case f: tlamFunType => f
           case other          =>
@@ -137,7 +147,7 @@ object Monomorphize:
         val newRes = Result[tlamFunType](newFunTy)
         valueMapper += (v.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
-        val newBody = cloneRegionSpec(v.body, tyArg)
+        val newBody = cloneRegionSpec(v.body, tyArg, depth)
         VLambda(newBody, newRes)
 
       case vr: VReturn =>
@@ -148,14 +158,14 @@ object Monomorphize:
         val newFun = mapOperand(va.fun).asInstanceOf[Value[tlamFunType]]
         val newArg = mapOperand(va.arg).asInstanceOf[Value[TypeAttribute]]
 
-        val newResTy = inst(va.res.typ, tyArg)
+        val newResTy = instAt(va.res.typ, tyArg, depth)
         val newRes = Result[TypeAttribute](newResTy)
         valueMapper += (va.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
         VApply(newFun, newArg, newRes)
 
       case tl: TLambda =>
-        val newForAllTA = inst(tl.res.typ, tyArg)
+        val newForAllTA = instAt(tl.res.typ, tyArg, depth)
         val newForAll = newForAllTA match
           case fa: tlamForAllType => fa
           case other              =>
@@ -167,7 +177,7 @@ object Monomorphize:
         val newRes = Result[tlamForAllType](newForAll)
         valueMapper += (tl.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
-        val newBody = cloneRegionSpec(tl.body, tyArg)
+        val newBody = cloneRegionSpec(tl.body, tyArg, depth + 1)
         TLambda(newBody, newRes)
 
       case tr: TReturn =>
@@ -176,9 +186,9 @@ object Monomorphize:
 
       case ta: TApply =>
         val newFun = mapOperand(ta.fun).asInstanceOf[Value[tlamForAllType]]
-        val newTyArg = inst(ta.tyArg, tyArg)
+        val newTyArg = instAt(ta.tyArg, tyArg, depth)
 
-        val newResTy = inst(ta.res.typ, tyArg)
+        val newResTy = instAt(ta.res.typ, tyArg, depth)
         val newRes = Result[TypeAttribute](newResTy)
         valueMapper += (ta.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
@@ -186,12 +196,12 @@ object Monomorphize:
 
       case other =>
         val newOperands = other.operands.map(mapOperand)
-        val newRegions = other.regions.map(r => cloneRegionSpec(r, tyArg))
+        val newRegions = other.regions.map(r => cloneRegionSpec(r, tyArg, depth))
 
         val newResults: Seq[Result[Attribute]] =
           other.results.map { r =>
             val newTy: Attribute = r.typ match
-              case t: TypeAttribute => inst(t, tyArg)
+              case t: TypeAttribute => instAt(t, tyArg, depth)
               case a                => a
             val nr = Result(newTy)
             valueMapper += (r: Value[Attribute]) -> (nr: Value[Attribute])
@@ -247,7 +257,7 @@ object Monomorphize:
       mutable.Map.empty
 
     val clonedOpsUnattached: Seq[Operation] =
-      origOps.toSeq.dropRight(1).map(op => cloneOpSpec(op, ta.tyArg))
+      origOps.toSeq.dropRight(1).map(op => cloneOpSpec(op, ta.tyArg, depth = 0))
 
     clonedOpsUnattached.foreach(op => useBlock.insertOpBefore(ta, op))
 
