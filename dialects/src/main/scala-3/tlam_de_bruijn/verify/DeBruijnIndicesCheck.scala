@@ -62,9 +62,12 @@ object DeBruijnIndicesCheck extends VerifierCheck:
                 case _      => ()
 
             case ta: TApply =>
-              checkType(ta.tyArg, depth) match
-                case e: Err => break(e)
-                case _      => ()
+              ta.tyArg match
+                case t: TypeAttribute =>
+                  checkType(t, depth) match
+                    case e: Err => break(e)
+                    case _      => ()
+                case _ => ()
 
             case vl: VLambda =>
               checkType(vl.res.typ, depth) match

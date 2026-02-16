@@ -54,14 +54,14 @@ object Monomorphize:
 
   private def collectTLambdas(
       mod: ModuleOp
-  ): Map[Value[tlamForAllType], TLambda] =
-    val buf = mutable.Map.empty[Value[tlamForAllType], TLambda]
+  ): Map[Value[TypeAttribute], TLambda] =
+    val buf = mutable.Map.empty[Value[TypeAttribute], TLambda]
 
     def walkRegion(r: Region): Unit =
       r.blocks.foreach { b =>
         b.operations.foreach { op =>
           op match
-            case tl: TLambda => buf += (tl.res: Value[tlamForAllType]) -> tl
+            case tl: TLambda => buf += (tl.res: Value[TypeAttribute]) -> tl
             case _           => ()
           op.regions.foreach(walkRegion)
         }
@@ -155,7 +155,7 @@ object Monomorphize:
         VReturn(newV)
 
       case va: VApply =>
-        val newFun = mapOperand(va.fun).asInstanceOf[Value[tlamFunType]]
+        val newFun = mapOperand(va.fun).asInstanceOf[Value[TypeAttribute]]
         val newArg = mapOperand(va.arg).asInstanceOf[Value[TypeAttribute]]
 
         val newResTy = instAt(va.res.typ, tyArg, depth)
@@ -185,8 +185,10 @@ object Monomorphize:
         TReturn(newV)
 
       case ta: TApply =>
-        val newFun = mapOperand(ta.fun).asInstanceOf[Value[tlamForAllType]]
-        val newTyArg = instAt(ta.tyArg, tyArg, depth)
+        val newFun = mapOperand(ta.fun).asInstanceOf[Value[TypeAttribute]]
+        val newTyArg = ta.tyArg match
+          case t: TypeAttribute => instAt(t, tyArg, depth)
+          case other            => other
 
         val newResTy = instAt(ta.res.typ, tyArg, depth)
         val newRes = Result[TypeAttribute](newResTy)
@@ -257,7 +259,14 @@ object Monomorphize:
       mutable.Map.empty
 
     val clonedOpsUnattached: Seq[Operation] =
-      origOps.toSeq.dropRight(1).map(op => cloneOpSpec(op, ta.tyArg, depth = 0))
+      origOps.toSeq.dropRight(1).map(op =>
+        ta.tyArg match
+          case t: TypeAttribute => cloneOpSpec(op, t, depth = 0)
+          case other            =>
+            sys.error(
+              s"monomorphize: expected tapply type argument to be a TypeAttribute, got $other"
+            )
+      )
 
     clonedOpsUnattached.foreach(op => useBlock.insertOpBefore(ta, op))
 
@@ -284,7 +293,7 @@ object Monomorphize:
   def run(mod: ModuleOp): ModuleOp =
     val cache =
       mutable.Map
-        .empty[(Block, Value[tlamForAllType], TypeAttribute), Value[
+        .empty[(Block, Value[TypeAttribute], TypeAttribute), Value[
           TypeAttribute
         ]]
 
@@ -300,26 +309,30 @@ object Monomorphize:
           ta.containerBlock
             .getOrElse(sys.error("monomorphize: tapply has no container block"))
 
-        cache.get((blk, ta.fun, ta.tyArg)) match
-          case Some(existing) =>
-            replaceAllUsesWith(
-              ta.res.asInstanceOf[Value[Attribute]],
-              existing.asInstanceOf[Value[Attribute]],
-            )
-            blk.eraseOp(ta)
-            changed = true
-
-          case None =>
-            tlByValue.get(ta.fun) match
-              case Some(tl) =>
-                val repl = rewriteOneTApply(ta, tl)
-                cache += (blk, ta.fun, ta.tyArg) -> repl
+        ta.tyArg match
+          case tyArg: TypeAttribute =>
+            cache.get((blk, ta.fun, tyArg)) match
+              case Some(existing) =>
+                replaceAllUsesWith(
+                  ta.res.asInstanceOf[Value[Attribute]],
+                  existing.asInstanceOf[Value[Attribute]],
+                )
+                blk.eraseOp(ta)
                 changed = true
 
-                if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
-
               case None =>
-                ()
+                tlByValue.get(ta.fun) match
+                  case Some(tl) =>
+                    val repl = rewriteOneTApply(ta, tl)
+                    cache += (blk, ta.fun, tyArg) -> repl
+                    changed = true
+
+                    if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
+
+                  case None =>
+                    ()
+          case _ =>
+            ()
       }
     mod
 
