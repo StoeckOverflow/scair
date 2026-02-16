@@ -2,9 +2,9 @@ package scair.dialects.tlam
 
 import scair.ir.*
 import scair.dialects.builtin.*
-import scair.Printer
 import scair.clair.macros.*
 import scair.parse.*
+import scair.utils.*
 import fastparse.ParsingRun
 import fastparse.*
 
@@ -27,7 +27,7 @@ final case class TlamBVarType(k: IntegerAttr)
 
 // !tlam.tvar<%x> - type referencing an SSA value %x
 final case class TlamTVarType(ref: ValueAttribute)
-    extends TypeAttribute
+    extends TlamType
     with ParametrizedAttribute:
 
   override def name: String = "tlam.tvar"
@@ -35,6 +35,12 @@ final case class TlamTVarType(ref: ValueAttribute)
   def tparam: Value[Attribute] = ref.getVal()
 
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(ref)
+
+  override def customVerify(): OK[Unit] =
+    tparam.typ match
+      case _: TlamTypeType => OK(())
+      case other           =>
+        Err(s"tvar: referenced SSA value must have type !tlam.type, got $other")
 
 given AttributeCompanion[TlamTVarType]:
   override def name: String = "tlam.tvar"

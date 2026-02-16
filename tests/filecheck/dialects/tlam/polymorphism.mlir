@@ -1,4 +1,4 @@
-// RUN: scair-opt %s --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s
 
 // F : ΛT. λ(x:T). x
 builtin.module {
@@ -136,3 +136,47 @@ builtin.module {
 }
 
 // CHECK: vapply: expected arg i32 and result i32, got i64 and i32
+
+// -----
+
+// Invalid vlambda body (missing vreturn terminator).
+builtin.module {
+  %f = "tlam.vlambda"() ({
+  ^bb0(%x: i32):
+    %y = "arith.constant"() <{value = 0 : i32}> : () -> i32
+  }) : () -> !tlam.fun<i32, i32>
+}
+
+// CHECK: vlambda: last op must be tlam.vreturn, got 'arith.constant'
+
+// -----
+
+// Invalid treturn placement (outside any tlambda body).
+builtin.module {
+  %v = "arith.constant"() <{value = 0 : i64}> : () -> i64
+  "tlam.treturn"(%v) : (i64) -> ()
+}
+
+// CHECK: treturn: must appear inside a tlam.tlambda body
+
+// -----
+
+// Invalid vreturn placement (outside any vlambda body).
+builtin.module {
+  %v = "arith.constant"() <{value = 0 : i32}> : () -> i32
+  "tlam.vreturn"(%v) : (i32) -> ()
+}
+
+// CHECK: vreturn: must appear inside a tlam.vlambda body
+
+// -----
+
+// Invalid: vlambda block arg type must match function input type.
+builtin.module {
+  %f = "tlam.vlambda"() ({
+  ^bb0(%x: i32):
+    "tlam.vreturn"(%x) : (i32) -> ()
+  }) : () -> !tlam.fun<i64, i64>
+}
+
+// CHECK: vreturn: expected value type i64 from enclosing vlambda, got i32

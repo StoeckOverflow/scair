@@ -11,7 +11,7 @@ final case class VLambda(
 ) extends DerivedOperation["tlam.vlambda", VLambda]
     derives DerivedOperationCompanion:
 
-  override def verify(): OK[Operation] =
+  override def customVerify(): OK[Operation] =
     val funTy = res.typ
     body.blocks match
       case Block(args, ops) :: Nil
@@ -32,7 +32,29 @@ final case class VLambda(
 final case class VReturn(
     value: Value[TypeAttribute]
 ) extends DerivedOperation["tlam.vreturn", VReturn]
-    with IsTerminator derives DerivedOperationCompanion
+    with IsTerminator derives DerivedOperationCompanion:
+  override def customVerify(): OK[Operation] =
+    def enclosingVLambda(op: Operation): Option[VLambda] =
+      var curRegion = op.containerBlock.flatMap(_.containerRegion)
+      var curParent = curRegion.flatMap(_.containerOperation)
+      while curParent.isDefined do
+        curParent.get match
+          case vl: VLambda => return Some(vl)
+          case parent      =>
+            curRegion = parent.containerBlock.flatMap(_.containerRegion)
+            curParent = curRegion.flatMap(_.containerOperation)
+      None
+
+    enclosingVLambda(this) match
+      case Some(vl) =>
+        val expected = vl.res.typ.out
+        if value.typ == expected then OK(this)
+        else
+          Err(
+            s"vreturn: expected value type $expected from enclosing vlambda, got ${value.typ}"
+          )
+      case None =>
+        Err("vreturn: must appear inside a tlam.vlambda body")
 
 final case class TLambda(
     body: Region,
@@ -40,7 +62,7 @@ final case class TLambda(
 ) extends DerivedOperation["tlam.tlambda", TLambda]
     derives DerivedOperationCompanion:
 
-  override def verify(): OK[Operation] =
+  override def customVerify(): OK[Operation] =
     def isWithinTLambdaBody(op: Operation): Boolean =
       var curRegion = op.containerBlock.flatMap(_.containerRegion)
       var curParent = curRegion.flatMap(_.containerOperation)
@@ -93,7 +115,22 @@ final case class TLambda(
 final case class TReturn(
     value: Value[TypeAttribute]
 ) extends DerivedOperation["tlam.treturn", TReturn]
-    with IsTerminator derives DerivedOperationCompanion
+    with IsTerminator derives DerivedOperationCompanion:
+  override def customVerify(): OK[Operation] =
+    def enclosingTLambda(op: Operation): Option[TLambda] =
+      var curRegion = op.containerBlock.flatMap(_.containerRegion)
+      var curParent = curRegion.flatMap(_.containerOperation)
+      while curParent.isDefined do
+        curParent.get match
+          case tl: TLambda => return Some(tl)
+          case parent      =>
+            curRegion = parent.containerBlock.flatMap(_.containerRegion)
+            curParent = curRegion.flatMap(_.containerOperation)
+      None
+
+    enclosingTLambda(this) match
+      case Some(_) => OK(this)
+      case None    => Err("treturn: must appear inside a tlam.tlambda body")
 
 final case class TApply(
     fun: Value[TlamForAllType],
@@ -102,10 +139,15 @@ final case class TApply(
 ) extends DerivedOperation["tlam.tapply", TApply]
     derives DerivedOperationCompanion:
 
-  override def verify(): OK[Operation] =
-    val inst = DBI.instantiate(fun.typ, tyArg)
-    if res.typ == inst then OK(this)
-    else Err(s"tapply: result ${res.typ} != instantiated $inst")
+  override def customVerify(): OK[Operation] =
+    val funAny: Value[Attribute] = fun
+    funAny.typ match
+      case fa: TlamForAllType =>
+        val inst = DBI.instantiate(fa, tyArg)
+        if res.typ == inst then OK(this)
+        else Err(s"tapply: result ${res.typ} != instantiated $inst")
+      case other =>
+        Err(s"tapply: operand must have !tlam.forall type, got $other")
 
 final case class VApply(
     fun: Value[TlamFunType],
@@ -114,10 +156,14 @@ final case class VApply(
 ) extends DerivedOperation["tlam.vapply", VApply]
     derives DerivedOperationCompanion:
 
-  override def verify(): OK[Operation] =
-    val TlamFunType(in, out) = fun.typ
-    if arg.typ == in && res.typ == out then OK(this)
-    else
-      Err(
-        s"vapply: expected arg $in and result $out, got ${arg.typ} and ${res.typ}"
-      )
+  override def customVerify(): OK[Operation] =
+    val funAny: Value[Attribute] = fun
+    funAny.typ match
+      case TlamFunType(in, out) =>
+        if arg.typ == in && res.typ == out then OK(this)
+        else
+          Err(
+            s"vapply: expected arg $in and result $out, got ${arg.typ} and ${res.typ}"
+          )
+      case other =>
+        Err(s"vapply: first operand must have !tlam.fun type, got $other")

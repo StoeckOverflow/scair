@@ -21,10 +21,9 @@ builtin.module {
 
 // CHECK-LABEL: builtin.module {
 // CHECK-NOT: "tlam."
-// CHECK: func.func @lifted_{{[0-9]+}}(%0: i64) -> i64 {
-// CHECK-NEXT: func.return %0 : i64
-// CHECK-NEXT: }
-// CHECK: %{{[0-9]+}} = func.constant @lifted_{{[0-9]+}} : (i64) -> i64
+// CHECK-DAG: %{{[0-9]+}} = func.constant @lifted_{{[0-9]+}} : (i64) -> i64
+// CHECK-DAG: func.func @lifted_{{[0-9]+}}([[ARG64:%[0-9]+]]: i64) -> i64 {
+// CHECK-DAG: func.return [[ARG64]] : i64
 // CHECK: }
 
 // -----
@@ -48,8 +47,10 @@ builtin.module {
 
 // CHECK-LABEL: builtin.module {
 // CHECK-NOT: "tlam."
-// CHECK-DAG: func.func @lifted_{{[0-9]+}}(%0: i64) -> i64 {
-// CHECK-DAG: func.func @lifted_{{[0-9]+}}(%0: i32) -> i32 {
+// CHECK-DAG: func.func @lifted_{{[0-9]+}}([[ARG64:%[0-9]+]]: i64) -> i64 {
+// CHECK-DAG: func.return [[ARG64]] : i64
+// CHECK-DAG: func.func @lifted_{{[0-9]+}}([[ARG32:%[0-9]+]]: i32) -> i32 {
+// CHECK-DAG: func.return [[ARG32]] : i32
 // CHECK-DAG: func.constant @lifted_{{[0-9]+}} : (i64) -> i64
 // CHECK-DAG: func.constant @lifted_{{[0-9]+}} : (i32) -> i32
 // CHECK: }

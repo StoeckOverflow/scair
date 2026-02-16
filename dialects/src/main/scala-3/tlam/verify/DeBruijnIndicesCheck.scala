@@ -41,6 +41,16 @@ object DeBruijnIndicesCheck extends VerifierCheck:
               case e: Err => break(e)
               case _      => ()
           }
+          op.properties.values.foreach { a =>
+            checkMaybeType(a, depth) match
+              case e: Err => break(e)
+              case _      => ()
+          }
+          op.attributes.values.foreach { a =>
+            checkMaybeType(a, depth) match
+              case e: Err => break(e)
+              case _      => ()
+          }
 
           // binder-aware recursion
           op match

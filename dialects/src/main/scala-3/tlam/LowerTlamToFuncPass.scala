@@ -87,8 +87,9 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
                 res = Result(fnTy),
               )
 
-              // Insert constant right before the original VLambda
-              b.operations.insert(vl, cst)
+              // Keep the function value definition before any potential nested uses
+              // (hierarchical dominance against uses inside lifted function bodies).
+              RewriteMethods.insertOpsAt(InsertPoint.atStartOf(top), cst)
 
               // Replace all uses of the lambda value with the constant value
               // (upcast to Attribute to match helper signature)

@@ -52,3 +52,34 @@ builtin.module {
 }
 
 // CHECK: ssa-dominance: value Value{{.*}} does not dominate its use in op `tlam.tapply`
+
+// -----
+
+// Passing case: tvar may reference any dominating !tlam.type value (not only a tlambda binder).
+builtin.module {
+  %T = "test.make_type"() : () -> !tlam.type
+  "test.use"() {dep = !tlam.tvar<%T>} : () -> ()
+}
+
+// CHECK-LABEL: builtin.module {
+// CHECK: "test.make_type"()
+// CHECK: "test.use"() {dep = !tlam.tvar
+// CHECK: }
+
+// -----
+
+// Use-before-def only in tapply.tyArg property (result type has no tvar).
+builtin.module {
+  %G = "tlam.tlambda"() ({
+  ^bb0(%U: !tlam.type):
+    %v = "test.make_i64"() : () -> i64
+    "tlam.treturn"(%v) : (i64) -> ()
+  }) : () -> !tlam.forall<i64>
+
+  %h = "tlam.tapply"(%G) <{tyArg = !tlam.tvar<%T>}>
+       : (!tlam.forall<i64>) -> i64
+
+  %T = "test.make_type"() : () -> !tlam.type
+}
+
+// CHECK: ssa-dominance: value Value{{.*}} does not dominate its use in op `tlam.tapply`
