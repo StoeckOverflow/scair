@@ -6,7 +6,6 @@ import scair.clair.macros.*
 import scair.dialects.builtin.*
 import scair.ir.*
 import scair.parse.*
-import scair.parse.given
 import scair.utils.*
 
 sealed trait TensorType extends TypeAttribute
@@ -62,9 +61,8 @@ final case class TensorTensorType(params: Seq[DimParam], elem: TypeAttribute)
 
 object TensorTypeUtil:
 
-  /** Canonical tensor view for lowering/passes.
-    * vector -> rank-1 tensor
-    * matrix -> rank-2 tensor
+  /** Canonical tensor view for lowering/passes. vector -> rank-1 tensor matrix
+    * -> rank-2 tensor
     */
   def asTensor(t: TensorType): TensorTensorType =
     t match
@@ -88,8 +86,8 @@ private object TensorTypeVerify:
     param match
       case va: ValueAttribute =>
         va.getVal().typ match
-          case _: TensorNatType           => OK(())
-          case other                      =>
+          case _: TensorNatType => OK(())
+          case other            =>
             Err(
               s"shape SSA parameter must have type !tensor.nat, got ${renderAttr(other)}"
             )
