@@ -3,14 +3,21 @@ package scair
 import scair.dialects.builtin.*
 import scair.dialects.tlam.*
 import scair.dialects.tlam.TlamTy.*
-import scair.testutils.tlam.TlamTestIR.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
+import scair.ir.*
 
 /** Keep only direct DBI helper tests here. Verifier diagnostics and textual IR
   * behavior are covered by FileCheck.
   */
 final class TlamTypeParamsTest extends AnyFlatSpec:
+  private inline def i(n: Int): IntData = IntData(n)
+  private inline def b(n: Int): TlamBVarType = bvar(i(n))
+  private inline def b0: TlamBVarType = b(0)
+  private inline def b1: TlamBVarType = b(1)
+  private inline def b2: TlamBVarType = b(2)
+  private inline def alphaToAlphaAt(idx: Int): TlamFunType = fun(b(idx), b(idx))
+  private inline def forall1(body: TypeAttribute): TlamForAllType = forall(body)
 
   "DBI.instantiate" should "compute (forall a. a->a)[i32] == i32->i32" in {
     val poly = forall1(alphaToAlphaAt(0))
