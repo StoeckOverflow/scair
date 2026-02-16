@@ -18,6 +18,10 @@ object TensorTypeWellFormednessCheck extends VerifierCheck:
   private def walkAttribute(a: Attribute): OK[Unit] =
     boundary[OK[Unit]]:
       a match
+        case t: TensorNatType =>
+          t.customVerify() match
+            case e: Err => break(e: OK[Unit])
+            case _      => ()
         case t: TensorVectorType =>
           t.customVerify() match
             case e: Err => break(e: OK[Unit])

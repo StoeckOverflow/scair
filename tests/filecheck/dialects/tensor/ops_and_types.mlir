@@ -1,103 +1,91 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s
 
-// Valid types and add/mul operations.
+// Valid types and tensor ops.
 builtin.module {
-  %m = "arith.constant"() <{value = 4 : index}> : () -> index
-  %n = "arith.constant"() <{value = 8 : index}> : () -> index
-  %k = "arith.constant"() <{value = 3 : index}> : () -> index
+  %m = "tensor.nat.const"() <{value = 4 : i32}> : () -> !tensor.nat
+  %n = "tensor.nat.const"() <{value = 8 : i32}> : () -> !tensor.nat
+  %k = "tensor.nat.const"() <{value = 3 : i32}> : () -> !tensor.nat
 
-  %v0 = "test.v0"() : () -> !tensor.vector<%m, f32>
-  %v1 = "test.v1"() : () -> !tensor.vector<%m, f32>
-  %v2 = "tensor.vadd"(%v0, %v1)
-    : (!tensor.vector<%m, f32>, !tensor.vector<%m, f32>) -> !tensor.vector<%m, f32>
-  %v3 = "tensor.vmul"(%v0, %v1)
-    : (!tensor.vector<%m, f32>, !tensor.vector<%m, f32>) -> !tensor.vector<%m, f32>
+  %e = "tensor.empty"() : () -> !tensor.tensor<[%m, %n], f32>
+  %c = "test.c"() : () -> f32
+  %f = "tensor.fill"(%c) : (f32) -> !tensor.tensor<[%k, %k], f32>
 
-  %m0 = "test.m0"() : () -> !tensor.matrix<%m, %n, f32>
-  %m1 = "test.m1"() : () -> !tensor.matrix<%m, %n, f32>
-  %m2 = "tensor.madd"(%m0, %m1)
-    : (!tensor.matrix<%m, %n, f32>, !tensor.matrix<%m, %n, f32>) -> !tensor.matrix<%m, %n, f32>
+  %a = "test.a"() : () -> !tensor.tensor<[%m, %n], f32>
+  %b = "test.b"() : () -> !tensor.tensor<[%m, %n], f32>
+  %sum = "tensor.add"(%a, %b)
+    : (!tensor.tensor<[%m, %n], f32>, !tensor.tensor<[%m, %n], f32>) -> !tensor.tensor<[%m, %n], f32>
+  %prod = "tensor.mul"(%a, %b)
+    : (!tensor.tensor<[%m, %n], f32>, !tensor.tensor<[%m, %n], f32>) -> !tensor.tensor<[%m, %n], f32>
 
-  %ma = "test.ma"() : () -> !tensor.matrix<%m, %n, f32>
-  %mb = "test.mb"() : () -> !tensor.matrix<%n, %k, f32>
-  %m3 = "tensor.mmul"(%ma, %mb)
-    : (!tensor.matrix<%m, %n, f32>, !tensor.matrix<%n, %k, f32>) -> !tensor.matrix<%m, %k, f32>
+  %lhs = "test.lhs"() : () -> !tensor.tensor<[%m, %k], f32>
+  %rhs = "test.rhs"() : () -> !tensor.tensor<[%k, %n], f32>
+  %mm = "tensor.matmul"(%lhs, %rhs)
+    : (!tensor.tensor<[%m, %k], f32>, !tensor.tensor<[%k, %n], f32>) -> !tensor.tensor<[%m, %n], f32>
 
-  %t0 = "test.t0"() : () -> !tensor.tensor<[2, %k], f32>
-  %t1 = "test.t1"() : () -> !tensor.tensor<[2, %k], f32>
-  %t2 = "tensor.tadd"(%t0, %t1)
-    : (!tensor.tensor<[2, %k], f32>, !tensor.tensor<[2, %k], f32>) -> !tensor.tensor<[2, %k], f32>
-  %t3 = "tensor.tmul"(%t0, %t1)
-    : (!tensor.tensor<[2, %k], f32>, !tensor.tensor<[2, %k], f32>) -> !tensor.tensor<[2, %k], f32>
+  %d0 = "tensor.dim"(%a) <{axis = 0 : i32}>
+    : (!tensor.tensor<[%m, %n], f32>) -> !tensor.nat
+
+  %cast = "tensor.cast"(%a)
+    : (!tensor.tensor<[%m, %n], f32>) -> !tensor.tensor<[%m, %n], f32>
 }
 
 // CHECK-LABEL: builtin.module {
-// CHECK: "tensor.vadd"
-// CHECK: "tensor.vmul"
-// CHECK: "tensor.madd"
-// CHECK: "tensor.mmul"
-// CHECK: "tensor.tadd"
-// CHECK: "tensor.tmul"
+// CHECK: "tensor.nat.const"
+// CHECK: "tensor.empty"
+// CHECK: "tensor.fill"
+// CHECK: "tensor.add"
+// CHECK: "tensor.mul"
+// CHECK: "tensor.matmul"
+// CHECK: "tensor.dim"
+// CHECK: "tensor.cast"
 // CHECK: }
-
-// -----
-
-// Invalid shape literal.
-builtin.module {
-  %v = "test.bad_vec"() : () -> !tensor.vector<-1, f32>
-}
-
-// CHECK: shape Nat literal must be >= 0, got -1
 
 // -----
 
 // Invalid shape SSA sort.
 builtin.module {
   %x = "arith.constant"() <{value = 1 : i32}> : () -> i32
-  %v = "test.bad_vec"() : () -> !tensor.vector<%x, f32>
+  %t = "test.bad"() : () -> !tensor.tensor<[%x], f32>
 }
 
-// CHECK: shape SSA parameter must have type index (or i64), got i32
+// CHECK: shape SSA parameter must have type !tensor.nat, got i32
 
 // -----
 
 // Invalid element type.
 builtin.module {
-  %k = "arith.constant"() <{value = 5 : index}> : () -> index
-  %t = "test.bad_ten"() : () -> !tensor.tensor<[2, %k], tensor<1xf32>>
+  %m = "tensor.nat.const"() <{value = 5 : i32}> : () -> !tensor.nat
+  %t = "test.bad_ten"() : () -> !tensor.tensor<[%m], tensor<1xf32>>
 }
 
 // CHECK: invalid tensor element type
 
 // -----
 
-// Invalid empty tensor rank.
+// Invalid op invariant: add requires pairwise SSA-identical dims.
 builtin.module {
-  %t = "test.empty_rank"() : () -> !tensor.tensor<[], f32>
+  %m0 = "tensor.nat.const"() <{value = 4 : i32}> : () -> !tensor.nat
+  %m1 = "tensor.nat.const"() <{value = 4 : i32}> : () -> !tensor.nat
+  %a = "test.a"() : () -> !tensor.tensor<[%m0], f32>
+  %b = "test.b"() : () -> !tensor.tensor<[%m1], f32>
+  %c = "tensor.add"(%a, %b)
+    : (!tensor.tensor<[%m0], f32>, !tensor.tensor<[%m1], f32>) -> !tensor.tensor<[%m0], f32>
 }
 
-// CHECK: tensor shape rank must be >= 1
+// CHECK: tensor.add: expected pairwise SSA-identical dims for lhs/rhs
 
 // -----
 
-// Invalid op invariant: mismatched result type for vadd.
+// Invalid matmul: inner dimensions must be SSA-identical.
 builtin.module {
-  %v0 = "test.v0"() : () -> !tensor.vector<4, f32>
-  %v1 = "test.v1"() : () -> !tensor.vector<4, f32>
-  %v2 = "tensor.vadd"(%v0, %v1)
-    : (!tensor.vector<4, f32>, !tensor.vector<4, f32>) -> !tensor.vector<8, f32>
+  %m = "tensor.nat.const"() <{value = 2 : i32}> : () -> !tensor.nat
+  %k0 = "tensor.nat.const"() <{value = 3 : i32}> : () -> !tensor.nat
+  %k1 = "tensor.nat.const"() <{value = 3 : i32}> : () -> !tensor.nat
+  %n = "tensor.nat.const"() <{value = 5 : i32}> : () -> !tensor.nat
+  %a = "test.a"() : () -> !tensor.tensor<[%m, %k0], f32>
+  %b = "test.b"() : () -> !tensor.tensor<[%k1, %n], f32>
+  %c = "tensor.matmul"(%a, %b)
+    : (!tensor.tensor<[%m, %k0], f32>, !tensor.tensor<[%k1, %n], f32>) -> !tensor.tensor<[%m, %n], f32>
 }
 
-// CHECK: vadd: expected lhs/rhs/res to have the same vector type
-
-// -----
-
-// Invalid mmul: inner dimensions do not match.
-builtin.module {
-  %a = "test.a"() : () -> !tensor.matrix<2, 3, f32>
-  %b = "test.b"() : () -> !tensor.matrix<4, 5, f32>
-  %c = "tensor.mmul"(%a, %b)
-    : (!tensor.matrix<2, 3, f32>, !tensor.matrix<4, 5, f32>) -> !tensor.matrix<2, 5, f32>
-}
-
-// CHECK: mmul: expected (r x k, k x c) -> (r x c) with same element type
+// CHECK: tensor.matmul: expected SSA-identical inner dims

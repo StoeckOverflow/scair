@@ -2,7 +2,7 @@
 
 // Valid: SSA shape param is defined earlier.
 builtin.module {
-  %n = "arith.constant"() <{value = 7 : index}> : () -> index
+  %n = "tensor.nat.const"() <{value = 7 : i32}> : () -> !tensor.nat
   %v = "test.ok"() : () -> !tensor.vector<%n, f32>
 }
 

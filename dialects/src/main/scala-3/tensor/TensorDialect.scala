@@ -4,6 +4,6 @@ import scair.clair.macros.*
 import scair.ir.*
 
 val TensorDialect = summonDialect[
-  (TensorVectorType, TensorMatrixType, TensorTensorType),
-  (VAdd, MAdd, TAdd, VMul, MMul, TMul),
+  (TensorNatType, TensorVectorType, TensorMatrixType, TensorTensorType),
+  (NatConst, NatAdd, NatMul, Empty, Fill, Dim, Add, Mul, Matmul, Cast),
 ]

@@ -2,6 +2,7 @@ package scair.dialects.tensor
 
 import fastparse.*
 import scair.Printer
+import scair.clair.macros.*
 import scair.dialects.builtin.*
 import scair.ir.*
 import scair.parse.*
@@ -9,7 +10,12 @@ import scair.parse.given
 import scair.utils.*
 
 sealed trait TensorType extends TypeAttribute
-type ShapeParam = IntegerAttr | ValueAttribute
+type DimParam = ValueAttribute
+
+final case class TensorNatType()
+    extends TypeAttribute
+    with DerivedAttribute["tensor.nat", TensorNatType]
+    derives DerivedAttributeCompanion
 
 /** Surface-shape aliases:
   *   - vector is tensor rank-1
@@ -19,7 +25,7 @@ type ShapeParam = IntegerAttr | ValueAttribute
   * SIMD-friendly vector lowering) while still allowing canonical tensor-based
   * handling in shared passes.
   */
-final case class TensorVectorType(param: ShapeParam, elem: TypeAttribute)
+final case class TensorVectorType(param: DimParam, elem: TypeAttribute)
     extends TensorType
     with ParametrizedAttribute:
   override def name: String = "tensor.vector"
@@ -27,8 +33,8 @@ final case class TensorVectorType(param: ShapeParam, elem: TypeAttribute)
   override def customVerify(): OK[Unit] = TensorTypeVerify.checkVector(this)
 
 final case class TensorMatrixType(
-    rows: ShapeParam,
-    cols: ShapeParam,
+    rows: DimParam,
+    cols: DimParam,
     elem: TypeAttribute,
 ) extends TensorType
     with ParametrizedAttribute:
@@ -39,13 +45,18 @@ final case class TensorMatrixType(
 
   override def customVerify(): OK[Unit] = TensorTypeVerify.checkMatrix(this)
 
-final case class TensorTensorType(params: Seq[ShapeParam], elem: TypeAttribute)
+final case class TensorTensorType(params: Seq[DimParam], elem: TypeAttribute)
     extends TensorType
     with ParametrizedAttribute:
   override def name: String = "tensor.tensor"
 
   override def parameters: Seq[Attribute | Seq[Attribute]] =
     Seq(params, elem)
+
+  override def printParameters(p: Printer): Unit =
+    p.print("<[")
+    p.printListF(params, p.print, sep = ", ")
+    p.print("], ", elem, ">")(using indentLevel = 0)
 
   override def customVerify(): OK[Unit] = TensorTypeVerify.checkTensor(this)
 
@@ -73,25 +84,20 @@ private object TensorTypeVerify:
     printer.flush()
     out.toString
 
-  private def checkParam(param: ShapeParam): OK[Unit] =
+  private def checkParam(param: DimParam): OK[Unit] =
     param match
-      case IntegerAttr(IntData(value), _) if value >= 0 => OK(())
-      case IntegerAttr(IntData(value), _)               =>
-        Err(s"shape Nat literal must be >= 0, got $value")
       case va: ValueAttribute =>
         va.getVal().typ match
-          case _: IndexType               => OK(())
-          case t: IntegerType if t == I64 => OK(())
+          case _: TensorNatType           => OK(())
           case other                      =>
             Err(
-              s"shape SSA parameter must have type index (or i64), got ${renderAttr(other)}"
+              s"shape SSA parameter must have type !tensor.nat, got ${renderAttr(other)}"
             )
 
   private def elemOK(elem: TypeAttribute): Boolean =
     elem match
       case _: IntegerType => true
       case _: FloatType   => true
-      case _: IndexType   => true
       case _              => false
 
   def checkVector(t: TensorVectorType): OK[Unit] =
@@ -107,25 +113,22 @@ private object TensorTypeVerify:
     )
 
   def checkTensor(t: TensorTensorType): OK[Unit] =
-    if t.params.isEmpty then Err("tensor shape rank must be >= 1")
-    else
-      t.params
-        .foldLeft[OK[Unit]](OK(()))((acc, p) => acc.flatMap(_ => checkParam(p)))
-        .flatMap(_ =>
-          if elemOK(t.elem) then OK(())
-          else Err(s"invalid tensor element type `${renderAttr(t.elem)}`")
-        )
+    t.params
+      .foldLeft[OK[Unit]](OK(()))((acc, p) => acc.flatMap(_ => checkParam(p)))
+      .flatMap(_ =>
+        if elemOK(t.elem) then OK(())
+        else Err(s"invalid tensor element type `${renderAttr(t.elem)}`")
+      )
 
-private def shapeParamP[$: P](using p: Parser): P[ShapeParam] = P(
-  operandNameP.flatMap(existingOperandP).map(v => ValueAttribute(v)) |
-    integerLiteralP.map(v => IntegerAttr(IntData(v), I64))
+private def dimParamP[$: P](using p: Parser): P[DimParam] = P(
+  operandNameP.flatMap(existingOperandP).map(v => ValueAttribute(v))
 )
 
 given AttributeCompanion[TensorVectorType]:
   override def name: String = "tensor.vector"
 
   override def parse[$: P](using Parser): P[TensorVectorType] =
-    P("<" ~ shapeParamP ~ "," ~ typeP ~ ">").map((param, elem) =>
+    P("<" ~ dimParamP ~ "," ~ typeP ~ ">").map((param, elem) =>
       TensorVectorType(param, elem.asInstanceOf[TypeAttribute])
     )
 
@@ -133,7 +136,7 @@ given AttributeCompanion[TensorMatrixType]:
   override def name: String = "tensor.matrix"
 
   override def parse[$: P](using Parser): P[TensorMatrixType] =
-    P("<" ~ shapeParamP ~ "," ~ shapeParamP ~ "," ~ typeP ~ ">")
+    P("<" ~ dimParamP ~ "," ~ dimParamP ~ "," ~ typeP ~ ">")
       .map((rows, cols, elem) =>
         TensorMatrixType(rows, cols, elem.asInstanceOf[TypeAttribute])
       )
@@ -142,7 +145,7 @@ given AttributeCompanion[TensorTensorType]:
   override def name: String = "tensor.tensor"
 
   override def parse[$: P](using Parser): P[TensorTensorType] =
-    P("<" ~ "[" ~ shapeParamP.rep(sep = ",") ~ "]" ~ "," ~ typeP ~ ">")
+    P("<" ~ "[" ~ dimParamP.rep(sep = ",") ~ "]" ~ "," ~ typeP ~ ">")
       .map((params, elem) =>
         TensorTensorType(params, elem.asInstanceOf[TypeAttribute])
       )
