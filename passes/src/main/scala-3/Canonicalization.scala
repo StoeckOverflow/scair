@@ -23,6 +23,9 @@ import scair.transformations.patterns.*
 // TODO: Move out
 val RemoveUnusedOperations = pattern {
   case _: IsTerminator => PatternAction.Abort
+  case op: NoMemoryEffect if op.containerBlock.isEmpty =>
+    // Greedy rewriter worklists can hold stale detached ops; skip safely.
+    PatternAction.Abort
   case op: NoMemoryEffect if op.results.forall(_.uses.isEmpty) =>
     PatternAction.Erase
   case op: NoMemoryEffect => PatternAction.Abort
