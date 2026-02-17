@@ -544,7 +544,9 @@ case class UnrealizedConversionCastOp(
 ) extends DerivedOperation[
       "builtin.unrealized_conversion_cast",
       UnrealizedConversionCastOp,
-    ] derives DerivedOperationCompanion
+    ]
+    with NoMemoryEffect
+    derives DerivedOperationCompanion
 
 val BuiltinDialect =
   summonDialect[EmptyTuple, (ModuleOp, UnrealizedConversionCastOp)]
