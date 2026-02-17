@@ -22,6 +22,9 @@ final class EraseTLamPass(ctx: MLContext) extends ModulePass(ctx):
         val ops = b.operations.toSeq
         ops.foreach {
           case tl: TLambda =>
+            // Erase nested TLambda ops first, then erase this one.
+            walkRegion(tl.body)
+
             val bodyBlock = tl.body.blocks.head
             val bodyOps = bodyBlock.operations.toSeq
 
