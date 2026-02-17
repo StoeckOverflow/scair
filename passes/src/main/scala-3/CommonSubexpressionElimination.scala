@@ -75,7 +75,12 @@ case class CSE(
       op.regions.foreach(region => driver.simplify(region))
       simplify(op)
     }
-    toErase.foreach(rewriter.eraseOp(_))
+    // Erase only ops whose results are now truly dead; this avoids
+    // order-dependent crashes when multiple candidates reference each other.
+    val eraseNow = toErase.filter(op =>
+      op.results.forall(r => r.uses.isEmpty && r.typeUses.isEmpty)
+    )
+    eraseNow.foreach(rewriter.eraseOp(_))
     toErase.clear()
 
   def simplify(region: Region): Unit =
