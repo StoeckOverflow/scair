@@ -71,8 +71,17 @@ given AttributeCompanion[TlamFunType]:
 // !tlam.forall<body> — polymorphic type (body may reference bvar(0))
 final case class TlamForAllType(body: TypeAttribute)
     extends TlamType
-    with DerivedAttribute["tlam.forall", TlamForAllType]
-    derives DerivedAttributeCompanion
+    with ParametrizedAttribute:
+  override def name: String = "tlam.forall"
+  override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(body)
+
+given AttributeCompanion[TlamForAllType]:
+  override def name = "tlam.forall"
+
+  override def parse[$: P](using Parser): P[TlamForAllType] =
+    P("<" ~ typeP ~ ">").map { body =>
+      TlamForAllType(body.asInstanceOf[TypeAttribute])
+    }
 
 object TlamTy:
   inline def `type`: TlamType = TlamTypeType()
