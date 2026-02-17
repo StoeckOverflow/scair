@@ -68,7 +68,7 @@ final case class TReturn(
 
 /** tlam.tapply — type application (forall elimination). */
 final case class TApply(
-    fun: Value[TypeAttribute], // ForAllType
+    fun: Value[TypeAttribute],
     tyArg: Attribute,
     res: Result[TypeAttribute],
 ) extends DerivedOperation["tlam.tapply", TApply]
@@ -87,7 +87,7 @@ final case class TApply(
 
 /** tlam.vapply — value-level function application. */
 final case class VApply(
-    fun: Value[TypeAttribute], // FunType
+    fun: Value[TypeAttribute],
     arg: Value[TypeAttribute],
     res: Result[TypeAttribute],
 ) extends DerivedOperation["tlam.vapply", VApply]
