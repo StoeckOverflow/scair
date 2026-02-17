@@ -1,4 +1,8 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p monomorphize,erase-tlam,lower-tlam-to-func --split-input-file | filecheck %s -DFILE=%s -dump-input=always
+// RUN: scair-opt %s --allow-unregistered-dialect -p monomorphize,erase-tlam,lower-tlam-to-func --split-input-file --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=LOWER
+// RUN: scair-opt %s --allow-unregistered-dialect -p beta-reduce-tlam,monomorphize,erase-tlam,lower-tlam-to-func --split-input-file --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETA
+
+// Targets: DB-style TLam full pipeline lowering, including beta placement and
+// invalid-input verifier diagnostics in pass pipelines.
 
 // Simple polymorphic identity through full pipeline.
 builtin.module {
@@ -19,12 +23,18 @@ builtin.module {
   }) : () -> !tlam.forall<!tlam.fun<i64, i64>>
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK-NOT: "tlam."
-// CHECK-DAG: %{{[0-9]+}} = func.constant @lifted_{{[0-9]+}} : (i64) -> i64
-// CHECK-DAG: func.func @lifted_{{[0-9]+}}([[ARG64:%[0-9]+]]: i64) -> i64 {
-// CHECK-DAG: func.return [[ARG64]] : i64
-// CHECK: }
+// LOWER-LABEL: builtin.module {
+// LOWER-NOT: "tlam."
+// LOWER-DAG: %{{[0-9]+}} = func.constant @lifted_{{[0-9]+}} : (i64) -> i64
+// LOWER-DAG: func.func @lifted_{{[0-9]+}}([[ARG64:%[0-9]+]]: i64) -> i64 {
+// LOWER-DAG: func.return [[ARG64]] : i64
+// LOWER: }
+// BETA-LABEL: builtin.module {
+// BETA-NOT: "tlam."
+// BETA-DAG: %{{[0-9]+}} = func.constant @lifted_{{[0-9]+}} : (i64) -> i64
+// BETA-DAG: func.func @lifted_{{[0-9]+}}([[ARG64:%[0-9]+]]: i64) -> i64 {
+// BETA-DAG: func.return [[ARG64]] : i64
+// BETA: }
 
 // -----
 
@@ -45,12 +55,34 @@ builtin.module {
            : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> (!tlam.fun<i32, i32>)
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK-NOT: "tlam."
-// CHECK-DAG: func.func @lifted_{{[0-9]+}}([[ARG64:%[0-9]+]]: i64) -> i64 {
-// CHECK-DAG: func.return [[ARG64]] : i64
-// CHECK-DAG: func.func @lifted_{{[0-9]+}}([[ARG32:%[0-9]+]]: i32) -> i32 {
-// CHECK-DAG: func.return [[ARG32]] : i32
-// CHECK-DAG: func.constant @lifted_{{[0-9]+}} : (i64) -> i64
-// CHECK-DAG: func.constant @lifted_{{[0-9]+}} : (i32) -> i32
-// CHECK: }
+// LOWER-LABEL: builtin.module {
+// LOWER-NOT: "tlam."
+// LOWER-DAG: func.func @lifted_{{[0-9]+}}([[ARG64:%[0-9]+]]: i64) -> i64 {
+// LOWER-DAG: func.return [[ARG64]] : i64
+// LOWER-DAG: func.func @lifted_{{[0-9]+}}([[ARG32:%[0-9]+]]: i32) -> i32 {
+// LOWER-DAG: func.return [[ARG32]] : i32
+// LOWER-DAG: func.constant @lifted_{{[0-9]+}} : (i64) -> i64
+// LOWER-DAG: func.constant @lifted_{{[0-9]+}} : (i32) -> i32
+// LOWER: }
+// BETA-LABEL: builtin.module {
+// BETA-NOT: "tlam."
+// BETA-DAG: func.func @lifted_{{[0-9]+}}([[ARG64:%[0-9]+]]: i64) -> i64 {
+// BETA-DAG: func.return [[ARG64]] : i64
+// BETA-DAG: func.func @lifted_{{[0-9]+}}([[ARG32:%[0-9]+]]: i32) -> i32 {
+// BETA-DAG: func.return [[ARG32]] : i32
+// BETA-DAG: func.constant @lifted_{{[0-9]+}} : (i64) -> i64
+// BETA-DAG: func.constant @lifted_{{[0-9]+}} : (i32) -> i32
+// BETA: }
+
+// -----
+
+// Negative pipeline: invalid DBI should fail verification but not crash.
+builtin.module {
+  %f = "tlam.vlambda"() ({
+  ^bb0(%x: !tlam.bvar<0>):
+    "tlam.vreturn"(%x) : (!tlam.bvar<0>) -> ()
+  }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+}
+
+// LOWER: debruijn: bvar<0> out of scope at depth=0
+// BETA: debruijn: bvar<0> out of scope at depth=0
