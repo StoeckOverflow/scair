@@ -78,6 +78,7 @@ final case class NatConst(
     value: IntegerAttr,
     res: Result[TensorNatType],
 ) extends DerivedOperation["tensor.nat.const", NatConst]
+    with NoMemoryEffect
     derives DerivedOperationCompanion:
   override def customVerify(): OK[Operation] =
     if value.value.value >= 0 then OK(this)
@@ -88,6 +89,7 @@ final case class NatAdd(
     rhs: Operand[TensorNatType],
     res: Result[TensorNatType],
 ) extends DerivedOperation["tensor.nat.add", NatAdd]
+    with NoMemoryEffect
     derives DerivedOperationCompanion
 
 final case class NatMul(
@@ -95,17 +97,20 @@ final case class NatMul(
     rhs: Operand[TensorNatType],
     res: Result[TensorNatType],
 ) extends DerivedOperation["tensor.nat.mul", NatMul]
+    with NoMemoryEffect
     derives DerivedOperationCompanion
 
 final case class Empty(
     res: Result[TensorTensorType],
 ) extends DerivedOperation["tensor.empty", Empty]
+    with NoMemoryEffect
     derives DerivedOperationCompanion
 
 final case class Fill(
     v: Operand[TypeAttribute],
     res: Result[TensorTensorType],
 ) extends DerivedOperation["tensor.fill", Fill]
+    with NoMemoryEffect
     derives DerivedOperationCompanion:
   override def customVerify(): OK[Operation] =
     if v.typ == res.typ.elem then OK(this)
@@ -119,6 +124,7 @@ final case class Dim(
     axis: IntegerAttr,
     res: Result[TensorNatType],
 ) extends DerivedOperation["tensor.dim", Dim]
+    with NoMemoryEffect
     derives DerivedOperationCompanion:
   def selectedDimValue: OK[Value[Attribute]] =
     val idx = axis.value.value
@@ -139,6 +145,7 @@ final case class Add(
     rhs: Operand[TensorTensorType],
     res: Result[TensorTensorType],
 ) extends DerivedOperation["tensor.add", Add]
+    with NoMemoryEffect
     derives DerivedOperationCompanion:
   override def customVerify(): OK[Operation] =
     TensorOpVerify
@@ -150,6 +157,7 @@ final case class Mul(
     rhs: Operand[TensorTensorType],
     res: Result[TensorTensorType],
 ) extends DerivedOperation["tensor.mul", Mul]
+    with NoMemoryEffect
     derives DerivedOperationCompanion:
   override def customVerify(): OK[Operation] =
     TensorOpVerify
@@ -161,6 +169,7 @@ final case class Matmul(
     rhs: Operand[TensorTensorType],
     res: Result[TensorTensorType],
 ) extends DerivedOperation["tensor.matmul", Matmul]
+    with NoMemoryEffect
     derives DerivedOperationCompanion:
   override def customVerify(): OK[Operation] =
     TensorOpVerify.checkMatmul(lhs.typ, rhs.typ, res.typ).map(_ => this)
@@ -169,6 +178,7 @@ final case class Cast(
     src: Operand[TensorTensorType],
     res: Result[TensorTensorType],
 ) extends DerivedOperation["tensor.cast", Cast]
+    with NoMemoryEffect
     derives DerivedOperationCompanion:
   override def customVerify(): OK[Operation] =
     if src.typ.elem != res.typ.elem then
