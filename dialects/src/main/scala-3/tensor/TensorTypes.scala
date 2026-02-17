@@ -6,6 +6,7 @@ import scair.clair.macros.*
 import scair.dialects.builtin.*
 import scair.ir.*
 import scair.parse.*
+import scair.parse.given
 import scair.utils.*
 
 sealed trait TensorType extends TypeAttribute
