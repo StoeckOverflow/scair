@@ -2,52 +2,52 @@
 
 // add(x, 0) -> x with deep RAUW into type-embedded dims.
 builtin.module {
-  %m = "tensor.nat.const"() <{value = 4 : i32}> : () -> !tensor.nat
-  %z = "tensor.nat.const"() <{value = 0 : i32}> : () -> !tensor.nat
-  %s = "tensor.nat.add"(%m, %z) : (!tensor.nat, !tensor.nat) -> !tensor.nat
-  %u = "test.use"() : () -> !tensor.tensor<[%s], f32>
+  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+  %z = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+  %s = "dtensor.nat.add"(%m, %z) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %u = "test.use"() : () -> !dtensor.tensor<[%s], f32>
 }
 
 // CHECK-LABEL: builtin.module {
-// CHECK: [[M:%[0-9]+]] = "tensor.nat.const"() <{value = 4 : i32}> : () -> !tensor.nat
-// CHECK-NOT: "tensor.nat.add"
-// CHECK: "test.use"() : () -> !tensor.tensor<[[[M]]], f32>
+// CHECK: [[M:%[0-9]+]] = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+// CHECK-NOT: "dtensor.nat.add"
+// CHECK: "test.use"() : () -> !dtensor.tensor<[[[M]]], f32>
 // CHECK: }
 
 // -----
 
 // mul(x, 1) -> x and mul(x, 0) -> 0.
 builtin.module {
-  %x = "tensor.nat.const"() <{value = 7 : i32}> : () -> !tensor.nat
-  %one = "tensor.nat.const"() <{value = 1 : i32}> : () -> !tensor.nat
-  %zero = "tensor.nat.const"() <{value = 0 : i32}> : () -> !tensor.nat
-  %m1 = "tensor.nat.mul"(%x, %one) : (!tensor.nat, !tensor.nat) -> !tensor.nat
-  %m0 = "tensor.nat.mul"(%m1, %zero) : (!tensor.nat, !tensor.nat) -> !tensor.nat
-  %u = "test.use"() : () -> !tensor.tensor<[%m0], f32>
+  %x = "dtensor.nat.const"() <{value = 7 : i32}> : () -> !dtensor.nat
+  %one = "dtensor.nat.const"() <{value = 1 : i32}> : () -> !dtensor.nat
+  %zero = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+  %m1 = "dtensor.nat.mul"(%x, %one) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %m0 = "dtensor.nat.mul"(%m1, %zero) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %u = "test.use"() : () -> !dtensor.tensor<[%m0], f32>
 }
 
 // CHECK-LABEL: builtin.module {
-// CHECK: [[ZERO:%[0-9]+]] = "tensor.nat.const"() <{value = 0 : i32}> : () -> !tensor.nat
-// CHECK-NOT: "tensor.nat.mul"
-// CHECK: "test.use"() : () -> !tensor.tensor<[[[ZERO]]], f32>
+// CHECK: [[ZERO:%[0-9]+]] = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+// CHECK-NOT: "dtensor.nat.mul"
+// CHECK: "test.use"() : () -> !dtensor.tensor<[[[ZERO]]], f32>
 // CHECK: }
 
 // -----
 
 // Constant-fold nat.add/nat.mul.
 builtin.module {
-  %a = "tensor.nat.const"() <{value = 2 : i32}> : () -> !tensor.nat
-  %b = "tensor.nat.const"() <{value = 3 : i32}> : () -> !tensor.nat
-  %c = "tensor.nat.const"() <{value = 4 : i32}> : () -> !tensor.nat
-  %s = "tensor.nat.add"(%a, %b) : (!tensor.nat, !tensor.nat) -> !tensor.nat
-  %p = "tensor.nat.mul"(%s, %c) : (!tensor.nat, !tensor.nat) -> !tensor.nat
-  %u = "test.use"() : () -> !tensor.tensor<[%p], f32>
+  %a = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
+  %b = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
+  %c = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+  %s = "dtensor.nat.add"(%a, %b) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %p = "dtensor.nat.mul"(%s, %c) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %u = "test.use"() : () -> !dtensor.tensor<[%p], f32>
 }
 
 // CHECK-LABEL: builtin.module {
-// CHECK: "tensor.nat.const"() <{value = 20 : i32}> : () -> !tensor.nat
-// CHECK-NOT: "tensor.nat.add"
-// CHECK-NOT: "tensor.nat.mul"
+// CHECK: "dtensor.nat.const"() <{value = 20 : i32}> : () -> !dtensor.nat
+// CHECK-NOT: "dtensor.nat.add"
+// CHECK-NOT: "dtensor.nat.mul"
 // CHECK: "test.use"()
 // CHECK: }
 
@@ -55,31 +55,31 @@ builtin.module {
 
 // dim fold to exact embedded dim SSA value.
 builtin.module {
-  %m = "tensor.nat.const"() <{value = 6 : i32}> : () -> !tensor.nat
-  %n = "tensor.nat.const"() <{value = 9 : i32}> : () -> !tensor.nat
-  %A = "test.A"() : () -> !tensor.tensor<[%m, %n], f32>
-  %d0 = "tensor.dim"(%A) <{axis = 0 : i32}>
-    : (!tensor.tensor<[%m, %n], f32>) -> !tensor.nat
-  %E = "tensor.empty"() : () -> !tensor.tensor<[%d0], f32>
+  %m = "dtensor.nat.const"() <{value = 6 : i32}> : () -> !dtensor.nat
+  %n = "dtensor.nat.const"() <{value = 9 : i32}> : () -> !dtensor.nat
+  %A = "test.A"() : () -> !dtensor.tensor<[%m, %n], f32>
+  %d0 = "dtensor.dim"(%A) <{axis = 0 : i32}>
+    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+  %E = "dtensor.empty"() : () -> !dtensor.tensor<[%d0], f32>
 }
 
 // CHECK-LABEL: builtin.module {
-// CHECK: [[M:%[0-9]+]] = "tensor.nat.const"() <{value = 6 : i32}> : () -> !tensor.nat
-// CHECK-NOT: "tensor.dim"
-// CHECK: "tensor.empty"() : () -> !tensor.tensor<[[[M]]], f32>
+// CHECK: [[M:%[0-9]+]] = "dtensor.nat.const"() <{value = 6 : i32}> : () -> !dtensor.nat
+// CHECK-NOT: "dtensor.dim"
+// CHECK: "dtensor.empty"() : () -> !dtensor.tensor<[[[M]]], f32>
 // CHECK: }
 
 // -----
 
 // Must-not-fold: no neutral/constant identities present.
 builtin.module {
-  %x = "test.nat"() : () -> !tensor.nat
-  %n = "tensor.nat.const"() <{value = 7 : i32}> : () -> !tensor.nat
-  %s = "tensor.nat.add"(%x, %n) : (!tensor.nat, !tensor.nat) -> !tensor.nat
-  %u = "test.use"() : () -> !tensor.tensor<[%s], f32>
+  %x = "dtensor.nat.param"() : () -> !dtensor.nat
+  %n = "dtensor.nat.const"() <{value = 7 : i32}> : () -> !dtensor.nat
+  %s = "dtensor.nat.add"(%x, %n) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %u = "test.use"() : () -> !dtensor.tensor<[%s], f32>
 }
 
 // CHECK-LABEL: builtin.module {
-// CHECK: "tensor.nat.add"(%0, %1)
-// CHECK: "test.use"() : () -> !tensor.tensor<[%2], f32>
+// CHECK: "dtensor.nat.add"(%0, %1)
+// CHECK: "test.use"() : () -> !dtensor.tensor<[%2], f32>
 // CHECK: }

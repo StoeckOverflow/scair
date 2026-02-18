@@ -4,7 +4,7 @@ import fastparse.parse
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import scair.dialects.builtin.*
-import scair.dialects.tensor.*
+import scair.dialects.dTensor.*
 import scair.ir.*
 import scair.parse.*
 import scair.utils.Err
@@ -33,37 +33,37 @@ final class TensorOpsSpec extends AnyFlatSpec:
     "round-trip tensor/vector/matrix with SSA dims" in {
       val ctx = MLContext()
       ctx.registerDialect(BuiltinDialect)
-      ctx.registerDialect(TensorDialect)
+      ctx.registerDialect(dTensorDialect)
       val parser = Parser(ctx, allowUnregisteredDialect = true)
 
       val text =
         """builtin.module {
-        |  %d0 = "tensor.nat.const"() <{value = 3 : i32}> : () -> !tensor.nat
-        |  %d1 = "tensor.nat.const"() <{value = 7 : i32}> : () -> !tensor.nat
-        |  %v = "test.v"() : () -> !tensor.vector<%d0, f32>
-        |  %m = "test.m"() : () -> !tensor.matrix<%d0, %d1, f32>
-        |  %t = "test.t"() : () -> !tensor.tensor<[%d0, %d1], f32>
+        |  %d0 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
+        |  %d1 = "dtensor.nat.const"() <{value = 7 : i32}> : () -> !dtensor.nat
+        |  %v = "test.v"() : () -> !dtensor.vector<%d0, f32>
+        |  %m = "test.m"() : () -> !dtensor.matrix<%d0, %d1, f32>
+        |  %t = "test.t"() : () -> !dtensor.tensor<[%d0, %d1], f32>
         |}
         |""".stripMargin
       val parsed = parse(text, moduleP(using _, parser)).get.value
       val printed = parsed.toString
-      printed should include("!tensor.vector<%0, f32>")
-      printed should include("!tensor.matrix<%0, %1, f32>")
-      printed should include("!tensor.tensor<[%0, %1], f32>")
+      printed should include("!dtensor.vector<%0, f32>")
+      printed should include("!dtensor.matrix<%0, %1, f32>")
+      printed should include("!dtensor.tensor<[%0, %1], f32>")
     }
 
   "tensor.add" should
     "reject shape mismatch when dims are semantically equal but not SSA-identical" in {
-      val c4a = NatConst(IntegerAttr(IntData(4), I32), Result(TensorNatType()))
-      val c4b = NatConst(IntegerAttr(IntData(4), I32), Result(TensorNatType()))
-      val s0 = NatAdd(c4a.res, c4b.res, Result(TensorNatType()))
-      val s1 = NatAdd(c4a.res, c4b.res, Result(TensorNatType()))
+      val c4a = NatConst(IntegerAttr(IntData(4), I32), Result(dTensorNatType()))
+      val c4b = NatConst(IntegerAttr(IntData(4), I32), Result(dTensorNatType()))
+      val s0 = NatAdd(c4a.res, c4b.res, Result(dTensorNatType()))
+      val s1 = NatAdd(c4a.res, c4b.res, Result(dTensorNatType()))
 
-      val lhs = Value[TensorTensorType](
-        TensorTensorType(Seq(ValueAttribute(s0.res)), Float32Type())
+      val lhs = Value[dTensorTensorType](
+        dTensorTensorType(Seq(ValueAttribute(s0.res)), Float32Type())
       )
-      val rhs = Value[TensorTensorType](
-        TensorTensorType(Seq(ValueAttribute(s1.res)), Float32Type())
+      val rhs = Value[dTensorTensorType](
+        dTensorTensorType(Seq(ValueAttribute(s1.res)), Float32Type())
       )
       val add = Add(lhs, rhs, Result(lhs.typ))
 
@@ -73,25 +73,28 @@ final class TensorOpsSpec extends AnyFlatSpec:
     }
 
   "tensor.matmul" should "enforce shared inner dim SSA identity" in {
-    val m = NatConst(IntegerAttr(IntData(2), I32), Result(TensorNatType()))
-    val k0 = NatConst(IntegerAttr(IntData(3), I32), Result(TensorNatType()))
-    val k1 = NatConst(IntegerAttr(IntData(3), I32), Result(TensorNatType()))
-    val n = NatConst(IntegerAttr(IntData(5), I32), Result(TensorNatType()))
+    val m = NatConst(
+      IntegerAttr(IntData(2), I32),
+      Result(dTensorNatType()),
+    )
+    val k0 = NatConst(IntegerAttr(IntData(3), I32), Result(dTensorNatType()))
+    val k1 = NatConst(IntegerAttr(IntData(3), I32), Result(dTensorNatType()))
+    val n = NatConst(IntegerAttr(IntData(5), I32), Result(dTensorNatType()))
 
-    val lhs = Value[TensorTensorType](
-      TensorTensorType(
+    val lhs = Value[dTensorTensorType](
+      dTensorTensorType(
         Seq(ValueAttribute(m.res), ValueAttribute(k0.res)),
         Float32Type(),
       )
     )
-    val rhs = Value[TensorTensorType](
-      TensorTensorType(
+    val rhs = Value[dTensorTensorType](
+      dTensorTensorType(
         Seq(ValueAttribute(k1.res), ValueAttribute(n.res)),
         Float32Type(),
       )
     )
     val res = Result(
-      TensorTensorType(
+      dTensorTensorType(
         Seq(ValueAttribute(m.res), ValueAttribute(n.res)),
         Float32Type(),
       )
@@ -105,16 +108,16 @@ final class TensorOpsSpec extends AnyFlatSpec:
 
   "tensor.dim" should
     "return the embedded dim SSA value for the selected axis" in {
-      val d0 = Value[Attribute](TensorNatType())
-      val d1 = Value[Attribute](TensorNatType())
-      val tensor = Value[TensorTensorType](
-        TensorTensorType(
+      val d0 = Value[Attribute](dTensorNatType())
+      val d1 = Value[Attribute](dTensorNatType())
+      val tensor = Value[dTensorTensorType](
+        dTensorTensorType(
           Seq(ValueAttribute(d0), ValueAttribute(d1)),
           Float32Type(),
         )
       )
       val dim =
-        Dim(tensor, IntegerAttr(IntData(1), I32), Result(TensorNatType()))
+        Dim(tensor, IntegerAttr(IntData(1), I32), Result(dTensorNatType()))
 
       dim.verify().shouldBeOK()
       dim.selectedDimValue shouldBe OK(d1)

@@ -3,10 +3,10 @@
 builtin.module {
   %dead = "arith.constant"() <{value = 0 : index}> : () -> index
   %used = "arith.constant"() <{value = 1 : index}> : () -> index
-  "test.use"() {dep = !tensor.vector<%used, f32>} : () -> ()
+  "test.use"() {dep = !dtensor.vector<%used, f32>} : () -> ()
 }
 
 // CHECK: builtin.module {
 // CHECK: %0 = "arith.constant"() <{value = 1 : index}> : () -> index
-// CHECK: "test.use"() {dep = !tensor.vector<%0, f32>} : () -> ()
+// CHECK: "test.use"() {dep = !dtensor.vector<%0, f32>} : () -> ()
 // CHECK: }

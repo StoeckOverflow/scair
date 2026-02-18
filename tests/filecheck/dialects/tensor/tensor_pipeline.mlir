@@ -2,22 +2,22 @@
 
 // End-to-end: shape-canon + canonicalize + cse + dce preserves WF and reduces nat ops.
 builtin.module {
-  %m = "tensor.nat.const"() <{value = 4 : i32}> : () -> !tensor.nat
-  %z = "tensor.nat.const"() <{value = 0 : i32}> : () -> !tensor.nat
-  %o = "tensor.nat.const"() <{value = 1 : i32}> : () -> !tensor.nat
-  %s0 = "tensor.nat.add"(%m, %z) : (!tensor.nat, !tensor.nat) -> !tensor.nat
-  %s1 = "tensor.nat.mul"(%s0, %o) : (!tensor.nat, !tensor.nat) -> !tensor.nat
-  %s2 = "tensor.nat.add"(%m, %z) : (!tensor.nat, !tensor.nat) -> !tensor.nat
-  %u0 = "test.keep"() : () -> !tensor.tensor<[%s1], f32>
-  %u1 = "test.keep"() : () -> !tensor.tensor<[%s2], f32>
+  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+  %z = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+  %o = "dtensor.nat.const"() <{value = 1 : i32}> : () -> !dtensor.nat
+  %s0 = "dtensor.nat.add"(%m, %z) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %s1 = "dtensor.nat.mul"(%s0, %o) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %s2 = "dtensor.nat.add"(%m, %z) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %u0 = "test.keep"() : () -> !dtensor.tensor<[%s1], f32>
+  %u1 = "test.keep"() : () -> !dtensor.tensor<[%s2], f32>
 }
 
 // PIPE-LABEL: builtin.module {
-// PIPE: [[M:%[0-9]+]] = "tensor.nat.const"() <{value = 4 : i32}> : () -> !tensor.nat
-// PIPE-NOT: "tensor.nat.add"
-// PIPE-NOT: "tensor.nat.mul"
-// PIPE: "test.keep"() : () -> !tensor.tensor<[[[M]]], f32>
-// PIPE: "test.keep"() : () -> !tensor.tensor<[[[M]]], f32>
+// PIPE: [[M:%[0-9]+]] = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+// PIPE-NOT: "dtensor.nat.add"
+// PIPE-NOT: "dtensor.nat.mul"
+// PIPE: "test.keep"() : () -> !dtensor.tensor<[[[M]]], f32>
+// PIPE: "test.keep"() : () -> !dtensor.tensor<[[[M]]], f32>
 // PIPE: }
 
 // -----
@@ -29,10 +29,10 @@ builtin.module {
     %c = "arith.constant"() <{value = true}> : () -> i1
     "test.cond_br"(%c) [^bb1, ^bb2] : (i1) -> ()
   ^bb1:
-    %m = "tensor.nat.const"() <{value = 4 : i32}> : () -> !tensor.nat
+    %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
     "test.br"() [^bb2] : () -> ()
   ^bb2:
-    %u = "test.use"() : () -> !tensor.tensor<[%m], f32>
+    %u = "test.use"() : () -> !dtensor.tensor<[%m], f32>
     "test.ret"() : () -> ()
   }) : () -> ()
 }

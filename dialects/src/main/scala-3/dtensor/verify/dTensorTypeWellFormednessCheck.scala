@@ -1,7 +1,7 @@
-package scair.dialects.tensor.verify
+package scair.dialects.dTensor.verify
 
 import scair.dialects.builtin.*
-import scair.dialects.tensor.*
+import scair.dialects.dTensor.*
 import scair.ir.*
 import scair.utils.{Err, OK}
 import scair.verify.VerifierCheck
@@ -9,7 +9,7 @@ import scair.verify.VerifierCheck
 import scala.util.boundary
 import scala.util.boundary.break
 
-object TensorTypeWellFormednessCheck extends VerifierCheck:
+object dTensorTypeWellFormednessCheck extends VerifierCheck:
   override val name: String = "tensor-shapes"
 
   override def run(root: Operation): OK[Unit] =
@@ -18,19 +18,19 @@ object TensorTypeWellFormednessCheck extends VerifierCheck:
   private def walkAttribute(a: Attribute): OK[Unit] =
     boundary[OK[Unit]]:
       a match
-        case t: TensorNatType =>
+        case t: dTensorNatType =>
           t.customVerify() match
             case e: Err => break(e: OK[Unit])
             case _      => ()
-        case t: TensorVectorType =>
+        case t: dTensorVectorType =>
           t.customVerify() match
             case e: Err => break(e: OK[Unit])
             case _      => ()
-        case t: TensorMatrixType =>
+        case t: dTensorMatrixType =>
           t.customVerify() match
             case e: Err => break(e: OK[Unit])
             case _      => ()
-        case t: TensorTensorType =>
+        case t: dTensorTensorType =>
           t.customVerify() match
             case e: Err => break(e: OK[Unit])
             case _      => ()

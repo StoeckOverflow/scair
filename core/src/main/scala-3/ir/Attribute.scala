@@ -100,11 +100,11 @@ class ValueAttribute(
 
   override def equals(attr: Any): Boolean =
     attr match
-      case x: ValueAttribute => x.getVal() == v
+      case x: ValueAttribute => x.getVal() eq v
       case _                 => false
 
   override def hashCode(): Int =
-    v.hashCode()
+    System.identityHashCode(v)
 
 object DataAttribute:
   // Make all DataAttributes implicitely convertible to their held data.

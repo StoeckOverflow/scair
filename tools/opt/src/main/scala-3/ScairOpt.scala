@@ -7,7 +7,7 @@ import scair.parse.*
 import scair.tools.ScairToolBase
 import scair.utils.*
 import scair.verify.Verifier
-import scair.dialects.tensor.verify.TensorTypeWellFormednessCheck
+import scair.dialects.dTensor.verify.dTensorTypeWellFormednessCheck
 import scopt.OParser
 
 import scala.io.BufferedSource
@@ -76,8 +76,7 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
     )
 
   private def verifyWithChecks(op: Operation): OK[Operation] =
-    val checks = Verifier.defaultChecks ++
-      Seq(TensorTypeWellFormednessCheck)
+    val checks = Verifier.defaultChecks ++ Seq(dTensorTypeWellFormednessCheck)
     Verifier.verify(op, checks)
 
   override def parseArgs(args: Array[String]): ScairOptArgs =
