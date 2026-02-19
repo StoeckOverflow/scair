@@ -100,7 +100,7 @@ class ValueAttribute(
 
   override def equals(attr: Any): Boolean =
     attr match
-      case x: ValueAttribute => x.getVal() eq v
+      case x: ValueAttribute => x.getVal().eq(v)
       case _                 => false
 
   override def hashCode(): Int =
