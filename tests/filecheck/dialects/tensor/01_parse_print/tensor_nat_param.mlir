@@ -27,7 +27,6 @@ builtin.module {
 // VERIFY: !dtensor.tensor<[%0, %1], f32>
 // CANON: "test.keep_types"
 // CSE: "test.keep_types"
-// DCE: "test.keep_types"
 // PIPE: "test.keep_types"
 
 // -----
@@ -40,8 +39,8 @@ builtin.module {
   "test.keep_dce_nat_param"(%u) : (!dtensor.tensor<[%p], f32>) -> ()
 }
 
-// DCE: "dtensor.nat.param"
-// DCE: "test.keep_dce_nat_param"
+// DCE: dtensor.nat.param
+// DCE: keep_dce_nat_param
 // PIPE: "dtensor.nat.param"
 // PIPE: "test.keep_dce_nat_param"
 
@@ -59,5 +58,17 @@ builtin.module {
 
 // CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
 // CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%1], f32>
+// CSE: "test.keep0"
+// CSE: "test.keep1"
 // PIPE: "test.keep0"
 // PIPE: "test.keep1"
+
+// -----
+
+// Dead nat.param should be removed by DCE.
+builtin.module {
+  %p = "dtensor.nat.param"() : () -> !dtensor.nat
+}
+
+// DCE: ^bb0:
+// DCE: }

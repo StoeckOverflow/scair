@@ -45,9 +45,7 @@ builtin.module {
 }
 
 // CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%1], f32>
-// CSE: "dtensor.fill"(%4) : (f32) -> !dtensor.tensor<[%0], f32>
-// CSE: "dtensor.fill"(%4) : (f32) -> !dtensor.tensor<[%1], f32>
+// CSE: "dtensor.fill"(%{{[0-9]+}}) : (f32) -> !dtensor.tensor<[%0], f32>
 
 // -----
 

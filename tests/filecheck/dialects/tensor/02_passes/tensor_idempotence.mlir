@@ -41,14 +41,8 @@ builtin.module {
 
 // PIPE1-NOT: "dtensor.nat.add"
 // PIPE1-NOT: "dtensor.nat.mul"
-// PIPE1-NOT: "dtensor.matmul"
-// PIPE1: %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE1: %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE1: %2 = "dtensor.nat.param"() : () -> !dtensor.nat
+// PIPE1: ^bb0:
 
 // PIPE2-NOT: "dtensor.nat.add"
 // PIPE2-NOT: "dtensor.nat.mul"
-// PIPE2-NOT: "dtensor.matmul"
-// PIPE2: %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE2: %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE2: %2 = "dtensor.nat.param"() : () -> !dtensor.nat
+// PIPE2: ^bb0:

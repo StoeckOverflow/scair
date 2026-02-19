@@ -45,7 +45,8 @@ builtin.module {
 }
 
 // CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%1], f32>
+// CSE: "test.keep_distinct0"
+// CSE: "test.keep_distinct1"
 // PIPE: "test.keep_distinct0"
 // PIPE: "test.keep_distinct1"
 

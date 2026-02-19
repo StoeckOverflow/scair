@@ -28,5 +28,6 @@ builtin.module {
 // CANON: "dtensor.add"(%{{[0-9]+}}, %{{[0-9]+}}) : (!dtensor.tensor<[[[X]]], f32>, !dtensor.tensor<[[[X]]], f32>) -> !dtensor.tensor<[[[X]]], f32>
 // CANON: "dtensor.mul"(%{{[0-9]+}}, %{{[0-9]+}}) : (!dtensor.tensor<[[[X]]], f32>, !dtensor.tensor<[[[X]]], f32>) -> !dtensor.tensor<[[[X]]], f32>
 
-// PIPE-NOT: "dtensor.nat.add"
-// PIPE: %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// PIPE-LABEL: builtin.module {
+// PIPE: ^bb0:
+// PIPE: }

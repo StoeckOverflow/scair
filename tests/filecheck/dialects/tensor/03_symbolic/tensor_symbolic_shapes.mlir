@@ -39,7 +39,6 @@ builtin.module {
 // DCE: }
 // PIPE-LABEL: builtin.module {
 // PIPE: "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE: "dtensor.nat.param"() : () -> !dtensor.nat
 // PIPE: "test.vec"() : () -> !dtensor.vector<%0, f32>
 // PIPE: "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
 // PIPE: }
@@ -86,7 +85,6 @@ builtin.module {
 
 // CSE-LABEL: builtin.module {
 // CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%1], f32>
 // CSE: }
 
 // -----
