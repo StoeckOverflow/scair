@@ -2,7 +2,6 @@ package scair.dialects.dTensor
 
 import fastparse.*
 import scair.Printer
-import scair.clair.macros.*
 import scair.dialects.builtin.*
 import scair.ir.*
 import scair.parse.*
@@ -100,10 +99,10 @@ object dTensorTypeUtil:
       Err(
         s"dtensor.matmul: expected equal element types for lhs/rhs/result, got ${renderAttr(lhs.elem)}, ${renderAttr(rhs.elem)}, ${renderAttr(res.elem)}"
       )
-    else if lhs.params(1).getVal() ne rhs.params(0).getVal() then
+    else if lhs.params(1).getVal().ne(rhs.params(0).getVal()) then
       Err("dtensor.matmul: expected SSA-identical inner dims (lhs.k === rhs.k)")
-    else if (lhs.params(0).getVal() ne res.params(0).getVal()) ||
-      (rhs.params(1).getVal() ne res.params(1).getVal())
+    else if (lhs.params(0).getVal().ne(res.params(0).getVal())) ||
+      (rhs.params(1).getVal().ne(res.params(1).getVal()))
     then
       Err(
         "dtensor.matmul: expected result dims to be outer dims (lhs.m, rhs.n)"
