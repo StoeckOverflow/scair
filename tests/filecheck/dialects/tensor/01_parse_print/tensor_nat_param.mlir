@@ -1,9 +1,4 @@
 // Purpose: nat.param-focused coverage for parse/print+verify, DCE uses-in-types, and CSE non-merge by dim SSA identity.
-// Coverage checklist (existing -> gap -> this file):
-// - dtensor.nat.param exists in current symbolic tests -> add centralized nat.param-only invariants here.
-// - parse/print with nat.param in vector/matrix/tensor types -> explicitly checked here.
-// - DCE uses-in-types with nat.param-only dim producers -> explicitly checked here.
-// - CSE non-merge when result types differ only by distinct nat.param SSA dims -> explicitly checked here.
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=VERIFY
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize | filecheck %s -DFILE=%s --check-prefix=CANON
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p cse | filecheck %s -DFILE=%s --check-prefix=CSE
@@ -21,13 +16,36 @@ builtin.module {
     : (!dtensor.vector<%m, f32>, !dtensor.matrix<%m, %n, f32>, !dtensor.tensor<[%m, %n], f32>) -> ()
 }
 
-// VERIFY: "dtensor.nat.param"()
-// VERIFY: !dtensor.vector<%0, f32>
-// VERIFY: !dtensor.matrix<%0, %1, f32>
-// VERIFY: !dtensor.tensor<[%0, %1], f32>
+// VERIFY-LABEL: builtin.module {
+// VERIFY: [[M:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
+// VERIFY: [[N:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
+// VERIFY: "test.v"() : () -> !dtensor.vector<[[M]], f32>
+// VERIFY: "test.mat"() : () -> !dtensor.matrix<[[M]], [[N]], f32>
+// VERIFY: "test.t"() : () -> !dtensor.tensor<[[[M]], [[N]]], f32>
+// VERIFY: "test.keep_types"
+// VERIFY: }
+
+// CANON-LABEL: builtin.module {
 // CANON: "test.keep_types"
+// CANON: }
+
+// CSE-LABEL: builtin.module {
+// CSE: [[M:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
+// CSE: [[N:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
 // CSE: "test.keep_types"
+// CSE: }
+
+// DCE-LABEL: builtin.module {
+// DCE: [[M:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
+// DCE: [[N:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
+// DCE: "test.keep_types"
+// DCE: }
+
+// PIPE-LABEL: builtin.module {
+// PIPE: [[M:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
+// PIPE: [[N:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
 // PIPE: "test.keep_types"
+// PIPE: }
 
 // -----
 
@@ -39,14 +57,39 @@ builtin.module {
   "test.keep_dce_nat_param"(%u) : (!dtensor.tensor<[%p], f32>) -> ()
 }
 
-// DCE: dtensor.nat.param
-// DCE: keep_dce_nat_param
-// PIPE: "dtensor.nat.param"
+// DCE-LABEL: builtin.module {
+// DCE: [[P:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
+// DCE: "test.keep_dce_nat_param"
+// DCE: }
+
+// CSE-LABEL: builtin.module {
+// CSE: [[P:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
+// CSE: "test.keep_dce_nat_param"
+// CSE: }
+
+// PIPE-LABEL: builtin.module {
+// PIPE: [[P:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
 // PIPE: "test.keep_dce_nat_param"
+// PIPE: }
 
 // -----
 
-// Distinct nat.param dims mean result tensor types differ, so CSE must not merge.
+// CSE must not merge nat.param producers (fresh identity).
+builtin.module {
+  %p0 = "dtensor.nat.param"() : () -> !dtensor.nat
+  %p1 = "dtensor.nat.param"() : () -> !dtensor.nat
+  "test.keep_params"(%p0, %p1) : (!dtensor.nat, !dtensor.nat) -> ()
+}
+
+// CSE-LABEL: builtin.module {
+// CSE: "dtensor.nat.param"() : () -> !dtensor.nat
+// CSE: "dtensor.nat.param"() : () -> !dtensor.nat
+// CSE: "test.keep_params"
+// CSE: }
+
+// -----
+
+// Distinct nat.param dims mean result tensor types differ, so CSE must not merge dtensor.empty.
 builtin.module {
   %p0 = "dtensor.nat.param"() : () -> !dtensor.nat
   %p1 = "dtensor.nat.param"() : () -> !dtensor.nat
@@ -56,12 +99,12 @@ builtin.module {
   "test.keep1"(%e1) : (!dtensor.tensor<[%p1], f32>) -> ()
 }
 
+// CSE-LABEL: builtin.module {
 // CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
 // CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%1], f32>
 // CSE: "test.keep0"
 // CSE: "test.keep1"
-// PIPE: "test.keep0"
-// PIPE: "test.keep1"
+// CSE: }
 
 // -----
 
@@ -70,5 +113,7 @@ builtin.module {
   %p = "dtensor.nat.param"() : () -> !dtensor.nat
 }
 
+// DCE-LABEL: builtin.module {
 // DCE: ^bb0:
+// DCE-NOT: dtensor.nat.param
 // DCE: }
