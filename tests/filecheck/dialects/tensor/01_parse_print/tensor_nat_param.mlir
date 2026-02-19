@@ -59,6 +59,7 @@ builtin.module {
 
 // DCE-LABEL: builtin.module {
 // DCE: [[P:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
+// DCE: "dtensor.empty"() : () -> !dtensor.tensor<[[[P]]], f32>
 // DCE: "test.keep_dce_nat_param"
 // DCE: }
 
@@ -100,11 +101,18 @@ builtin.module {
 }
 
 // CSE-LABEL: builtin.module {
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%1], f32>
+// CSE: [[P0:%[0-9]+]] = "dtensor.nat.param"()
+// CSE: [[P1:%[0-9]+]] = "dtensor.nat.param"()
+// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[[[P0]]], f32>
+// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[[[P1]]], f32>
 // CSE: "test.keep0"
 // CSE: "test.keep1"
 // CSE: }
+
+// PIPE-LABEL: builtin.module {
+// PIPE: "test.keep0"
+// PIPE: "test.keep1"
+// PIPE: }
 
 // -----
 
