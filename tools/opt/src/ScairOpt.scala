@@ -131,9 +131,8 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
             var module =
               if parsedArgs.skipVerify then OK(inputModule)
               else
-                inputModule.structured.flatMap(op =>
-                  Verifier.verify(op, checks = checks)
-                )
+                inputModule.structured
+                  .flatMap(op => Verifier.verify(op, checks = checks))
             // verify parsed content
             module match
               case OK(op) =>
