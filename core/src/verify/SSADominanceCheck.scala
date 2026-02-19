@@ -53,6 +53,13 @@ object SSADominanceCheck extends VerifierCheck:
             case _      => ()
         }
 
+        // op properties
+        op.properties.values.foreach { a =>
+          walkAttr(a, op) match
+            case e: Err => break(e: OK[Unit])
+            case _      => ()
+        }
+
         OK(())
       }
 
