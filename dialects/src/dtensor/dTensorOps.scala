@@ -9,7 +9,7 @@ import scair.utils.*
 final case class NatParam(
     res: Result[dTensorNatType]
 ) extends DerivedOperation["dtensor.nat.param", NatParam]
-    with NoMemoryEffect derives DerivedOperationCompanion
+    derives DerivedOperationCompanion
 
 final case class NatConst(
     value: IntegerAttr,

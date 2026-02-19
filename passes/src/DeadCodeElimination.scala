@@ -1,6 +1,7 @@
 package scair.passes.dce
 
 import scair.MLContext
+import scair.dialects.dTensor.NatParam
 import scair.ir.*
 import scair.transformations.*
 import scair.transformations.patterns.*
@@ -9,6 +10,9 @@ import scair.transformations.patterns.*
 // type-embedded uses tracked through Value.typeUses.
 private val RemoveUnusedOperations = pattern {
   case _: IsTerminator => PatternAction.Abort
+  case op: NatParam
+      if op.results.forall(r => r.uses.isEmpty && r.typeUses.isEmpty) =>
+    PatternAction.Erase
   case op: NoMemoryEffect
       if op.results.forall(r => r.uses.isEmpty && r.typeUses.isEmpty) =>
     PatternAction.Erase
