@@ -305,34 +305,38 @@ object Monomorphize:
       val tapplies = collectTApplies(mod)
 
       tapplies.foreach { ta =>
-        val blk =
-          ta.containerBlock
-            .getOrElse(sys.error("monomorphize: tapply has no container block"))
+        val maybeBlk = ta.containerBlock
 
-        ta.tyArg match
-          case tyArg: TypeAttribute =>
-            cache.get((blk, ta.fun, tyArg)) match
-              case Some(existing) =>
-                replaceAllUsesWith(
-                  ta.res.asInstanceOf[Value[Attribute]],
-                  existing.asInstanceOf[Value[Attribute]],
-                )
-                blk.eraseOp(ta)
-                changed = true
-
-              case None =>
-                tlByValue.get(ta.fun) match
-                  case Some(tl) =>
-                    val repl = rewriteOneTApply(ta, tl)
-                    cache += (blk, ta.fun, tyArg) -> repl
+        // Top-level tapply has no insertion block. Skip it instead of crashing.
+        // The verifier/pipeline can diagnose or handle it elsewhere.
+        maybeBlk match
+          case None =>
+            ()
+          case Some(blk) =>
+            ta.tyArg match
+              case tyArg: TypeAttribute =>
+                cache.get((blk, ta.fun, tyArg)) match
+                  case Some(existing) =>
+                    replaceAllUsesWith(
+                      ta.res.asInstanceOf[Value[Attribute]],
+                      existing.asInstanceOf[Value[Attribute]],
+                    )
+                    blk.eraseOp(ta)
                     changed = true
 
-                    if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
-
                   case None =>
-                    ()
-          case _ =>
-            ()
+                    tlByValue.get(ta.fun) match
+                      case Some(tl) =>
+                        val repl = rewriteOneTApply(ta, tl)
+                        cache += (blk, ta.fun, tyArg) -> repl
+                        changed = true
+
+                        if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
+
+                      case None =>
+                        ()
+              case _ =>
+                ()
       }
     mod
 
