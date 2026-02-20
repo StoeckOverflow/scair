@@ -33,6 +33,7 @@ final case class VLambda(
 final case class VReturn(
     value: Value[TypeAttribute]
 ) extends DerivedOperation["tlam.vreturn", VReturn]
+    with NoMemoryEffect
     with IsTerminator derives DerivedOperationCompanion
 
 /** tlam.tlambda — type-level lambda abstraction (forall introduction). */
@@ -64,6 +65,7 @@ final case class TLambda(
 final case class TReturn(
     value: Value[TypeAttribute]
 ) extends DerivedOperation["tlam.treturn", TReturn]
+    with NoMemoryEffect
     with IsTerminator derives DerivedOperationCompanion
 
 /** tlam.tapply — type application (forall elimination). */
@@ -72,6 +74,7 @@ final case class TApply(
     tyArg: Attribute,
     res: Result[TypeAttribute],
 ) extends DerivedOperation["tlam.tapply", TApply]
+    with NoMemoryEffect
     derives DerivedOperationCompanion:
 
   override def verify(): OK[Operation] =
