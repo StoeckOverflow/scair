@@ -86,6 +86,23 @@ object Monomorphize:
     mod.regions.foreach(walkRegion)
     out.toSeq
 
+  private def findContainingBlock(
+      mod: ModuleOp,
+      target: Operation,
+  ): Option[Block] =
+    var found: Option[Block] = None
+
+    def walkRegion(r: Region): Unit =
+      if found.isDefined then return
+      r.blocks.foreach { b =>
+        if found.isEmpty then
+          if b.operations.exists(_ eq target) then found = Some(b)
+          else b.operations.foreach(op => if found.isEmpty then op.regions.foreach(walkRegion))
+      }
+
+    mod.regions.foreach(walkRegion)
+    found
+
   /** Clone a region, specializing all TypeAttributes by inst(..., tyArg), while
     * remapping SSA values so operands inside the clone refer to cloned defs.
     */
@@ -230,6 +247,7 @@ object Monomorphize:
   private def rewriteOneTApply(
       ta: TApply,
       tl: TLambda,
+      useBlock: Block,
   ): Value[TypeAttribute] =
     val origBlock =
       tl.body.blocks.headOption
@@ -248,12 +266,6 @@ object Monomorphize:
           sys.error(
             s"monomorphize: tlambda terminator must be treturn, got ${other.name}"
           )
-
-    val useBlock =
-      ta.containerBlock
-        .getOrElse {
-          sys.error("monomorphize: tapply has no container block")
-        }
 
     given valueMapper: mutable.Map[Value[Attribute], Value[Attribute]] =
       mutable.Map.empty
@@ -305,10 +317,8 @@ object Monomorphize:
       val tapplies = collectTApplies(mod)
 
       tapplies.foreach { ta =>
-        val maybeBlk = ta.containerBlock
+        val maybeBlk = ta.containerBlock.orElse(findContainingBlock(mod, ta))
 
-        // Top-level tapply has no insertion block. Skip it instead of crashing.
-        // The verifier/pipeline can diagnose or handle it elsewhere.
         maybeBlk match
           case None =>
             ()
@@ -327,7 +337,7 @@ object Monomorphize:
                   case None =>
                     tlByValue.get(ta.fun) match
                       case Some(tl) =>
-                        val repl = rewriteOneTApply(ta, tl)
+                        val repl = rewriteOneTApply(ta, tl, blk)
                         cache += (blk, ta.fun, tyArg) -> repl
                         changed = true
 

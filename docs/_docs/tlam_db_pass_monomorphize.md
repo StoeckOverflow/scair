@@ -17,7 +17,8 @@ Implemented with:
 ## High-level algorithm
 1. Collect all `TLambda` definitions and `TApply` sites in module.
 2. Iterate to fixed point:
-   - For each `TApply(fun, tyArg)` with container block:
+   - For each `TApply(fun, tyArg)`:
+     - Resolve insertion block from `containerBlock`, or fallback to containing block lookup.
      - If cached specialization `(block, fun, tyArg)` exists, reuse it.
      - Else, find `TLambda` producer and rewrite one site.
 3. Optional cleanup: erase `TLambda` when unused.
@@ -29,7 +30,8 @@ The implementation is a rewrite-to-fixed-point loop over the module:
    - `collectTLambdas(mod)` returns a map from `Value[TypeAttribute]` to `TLambda`.
    - `collectTApplies(mod)` returns all current `TApply` operations.
 2. Process each `TApply` in snapshot order:
-   - If `ta.containerBlock` is absent (module-scope corner case), skip it.
+   - Resolve insertion block from `ta.containerBlock.orElse(findContainingBlock(...))`.
+   - If no containing block can be found, skip.
    - If `ta.tyArg` is not a `TypeAttribute`, skip (verifier should catch invalid IR).
    - Compute cache key `(block, ta.fun, tyArg)`.
 3. Cache behavior:
@@ -65,7 +67,9 @@ Given `ta: TApply` and producer `tl: TLambda`, `rewriteOneTApply` performs:
    - Must be non-empty.
    - Last op must be `TReturn(v)`.
 2. Determine insertion location:
-   - `useBlock = ta.containerBlock` (must exist in this rewrite path).
+   - `useBlock` is provided by caller and resolved from either:
+     - `ta.containerBlock`, or
+     - fallback containing-block lookup for module-scope/top-level `tapply`.
    - Cloned operations are inserted immediately before `ta` to preserve dominance.
 3. Initialize a fresh `valueMapper`:
    - Maps old SSA values (from lambda body) to cloned/new SSA values.
@@ -103,9 +107,16 @@ Why this preserves type semantics:
 - Region structural assumptions inherited from verifier.
 
 ## Current limitations
-- Module-scope `TApply` has no container block; pass now skips it (no crash), no rewrite.
 - Some malformed-IR cases still use hard errors (`sys.error`) in internal helper paths.
 - No global dead-specialization elimination pass beyond existing cleanup opportunities.
+
+## Recent hardening update
+- Module-scope/top-level `TApply` is now supported in rewrite path:
+  - when `containerBlock` is absent, pass performs containing-block lookup and still rewrites.
+- Effect:
+  - previous “no crash but no rewrite” behavior is replaced by actual specialization in this case.
+  - regression test remains at:
+    `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/top_level_tapply_no_crash.mlir`
 
 ## Relevant tests
 - `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/monomorphize.mlir`
