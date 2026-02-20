@@ -85,8 +85,19 @@ After lambda lifting, value-level TLam ops are lowered by pattern rewriting:
 - Throws exception if unexpected callee type remains at rewrite time.
 - Type-level TLam ops should be erased beforehand (`erase-tlam`).
 
+## Recent hardening update
+- Added explicit precondition guard in implementation:
+  - if type-level TLam control ops (`TLambda`, `TApply`, `TReturn`) are still present,
+    `lower-tlam-to-func` returns early without rewriting.
+- Rationale:
+  - enforces phase contract (`erase-tlam` before lowering),
+  - avoids partial/unsafe lowering in mis-staged pipelines.
+- Effect:
+  - valid pipelines unchanged,
+  - mis-ordered pipelines fail cleanly at verification/staging boundaries.
+
 ### Practical implications
-- If `erase-tlam` has not run (or did not fully normalize type-level constructs), lowering may fail.
+- If `erase-tlam` has not run (or did not fully normalize type-level constructs), lowering now no-ops at pass entry.
 - If some callee path still carries TLam type instead of builtin `FunctionType`, lowering throws by design.
 - The pass intentionally prefers explicit failure over silent mis-lowering.
 

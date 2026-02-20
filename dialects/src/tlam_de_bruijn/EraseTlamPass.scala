@@ -16,6 +16,11 @@ final class EraseTLamPass(ctx: MLContext) extends ModulePass(ctx):
         eraseInModule(m); m
       case other => other
 
+  private def trailingTReturn(tl: TLambda): Option[TReturn] =
+    tl.body.blocks.headOption.flatMap(_.operations.lastOption) match
+      case Some(r: TReturn) => Some(r)
+      case _                => None
+
   private def eraseInModule(m: ModuleOp): Unit =
     def walkRegion(r: Region): Unit =
       r.blocks.foreach { b =>
@@ -24,22 +29,23 @@ final class EraseTLamPass(ctx: MLContext) extends ModulePass(ctx):
           case tl: TLambda =>
             // Erase nested TLambda ops first, then erase this one.
             walkRegion(tl.body)
+            // Be robust: if shape is malformed, leave untouched and let verifier
+            // report it under --verify-diagnostics.
+            trailingTReturn(tl) match
+              case Some(tret) =>
+                val bodyBlock = tl.body.blocks.head
+                val bodyOps = bodyBlock.operations.toSeq
 
-            val bodyBlock = tl.body.blocks.head
-            val bodyOps = bodyBlock.operations.toSeq
+                val moved = bodyOps.dropRight(1).map(bodyBlock.detachOp)
+                RewriteMethods.insertOpsBefore(tl, moved)
 
-            val tret = bodyOps.last match
-              case r: TReturn => r
-              case _          => throw new Exception("TLambda without TReturn")
-
-            val moved = bodyOps.dropRight(1).map(bodyBlock.detachOp)
-            RewriteMethods.insertOpsBefore(tl, moved)
-
-            RewriteMethods.replaceOp(
-              tl,
-              newOps = Seq.empty,
-              newResults = Some(Seq(tret.value)),
-            )
+                RewriteMethods.replaceOp(
+                  tl,
+                  newOps = Seq.empty,
+                  newResults = Some(Seq(tret.value)),
+                )
+              case None =>
+                ()
 
           case other =>
             other.regions.foreach(walkRegion)

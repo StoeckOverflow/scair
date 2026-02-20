@@ -18,7 +18,26 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
         lower(m); m
       case other => other
 
+  private def hasTypeLevelTLam(m: ModuleOp): Boolean =
+    var found = false
+    def walkRegion(r: Region): Unit =
+      r.blocks.foreach { b =>
+        b.operations.foreach { op =>
+          op match
+            case _: TLambda | _: TApply | _: TReturn =>
+              found = true
+            case _ => ()
+          if !found then op.regions.foreach(walkRegion)
+        }
+      }
+    m.regions.foreach(walkRegion)
+    found
+
   private def lower(m: ModuleOp): Unit =
+    // Lowering assumes type-level TLam control has already been erased.
+    // If not, leave unchanged and let verifier/pipeline staging report issues.
+    if hasTypeLevelTLam(m) then return
+
     var counter = 0
     val top = m.regions.head.blocks.head
 

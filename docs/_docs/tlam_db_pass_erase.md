@@ -67,9 +67,19 @@ Although both passes touch type-level constructs, they solve different problems:
 - Works best when input already satisfies verifier invariants.
 
 ## Current limitations
-- Assumes structural validity; throws on malformed `TLambda` without final `TReturn`.
+- Assumes structural validity for intended rewrite path; malformed `TLambda` is skipped and left for verifier diagnostics.
 - Does not itself verify DBI/region structure; relies on verifier/pipeline discipline.
 - Erases type-level control only; value-level lowering is separate.
+
+## Recent hardening update
+- Implementation now handles malformed `TLambda` bodies more robustly:
+  - if trailing `TReturn` is missing, `erase-tlam` leaves that op unchanged instead of throwing.
+- Rationale:
+  - prevents pass-level crash on invalid input,
+  - allows verifier diagnostics to surface structural issues cleanly.
+- Effect:
+  - valid, staged pipelines are unchanged,
+  - invalid IR is handled gracefully.
 
 ## Recommended usage
 Run after `monomorphize`, before `lower-tlam-to-func`.
