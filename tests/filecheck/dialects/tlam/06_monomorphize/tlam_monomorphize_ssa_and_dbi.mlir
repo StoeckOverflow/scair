@@ -67,3 +67,19 @@ builtin.module {
 }
 
 // MONO: tapply: result !tlam.forall<!tlam.bvar<0>> != instantiated !tlam.forall<i32>
+
+// -----
+
+// Invalid shape: malformed tlambda must not crash monomorphize.
+// expected-error @below {{tlambda: last op must be tlam.treturn}}
+builtin.module {
+  %mk = "tlam.tlambda"() ({
+  ^bb0(%T: !tlam.type):
+    %v = "test.mk_poly"() : () -> !tlam.forall<!tlam.tvar<%T>>
+    "test.use"(%v) : (!tlam.forall<!tlam.tvar<%T>>) -> ()
+  }) : () -> !tlam.forall<!tlam.forall<!tlam.bvar<1>>>
+
+  %s0 = "tlam.tapply"(%mk) <{tyArg = i32}>
+      : (!tlam.forall<!tlam.forall<!tlam.bvar<1>>>) -> !tlam.forall<i32>
+  "test.use"(%s0) : (!tlam.forall<i32>) -> ()
+}

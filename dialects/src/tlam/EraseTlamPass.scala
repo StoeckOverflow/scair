@@ -22,21 +22,24 @@ final class EraseTLamPass(ctx: MLContext) extends ModulePass(ctx):
         val ops = b.operations.toSeq
         ops.foreach {
           case tl: TLambda =>
-            val bodyBlock = tl.body.blocks.head
-            val bodyOps = bodyBlock.operations.toSeq
-
-            val tret = bodyOps.last match
-              case r: TReturn => r
-              case _          => throw new Exception("TLambda without TReturn")
-
-            val moved = bodyOps.dropRight(1).map(bodyBlock.detachOp)
-            RewriteMethods.insertOpsBefore(tl, moved)
-
-            RewriteMethods.replaceOp(
-              tl,
-              newOps = Seq.empty,
-              newResults = Some(Seq(tret.value)),
-            )
+            // Erase is only sound once type-level application has been resolved
+            // (typically by monomorphize). If TLambda is still used, keep it.
+            if tl.res.uses.isEmpty && tl.res.typeUses.isEmpty then
+              tl.body.blocks.headOption.foreach { bodyBlock =>
+                val bodyOps = bodyBlock.operations.toSeq
+                bodyOps.lastOption match
+                  case Some(tret: TReturn) =>
+                    val moved = bodyOps.dropRight(1).map(bodyBlock.detachOp)
+                    RewriteMethods.insertOpsBefore(tl, moved)
+                    RewriteMethods.replaceOp(
+                      tl,
+                      newOps = Seq.empty,
+                      newResults = Some(Seq(tret.value)),
+                    )
+                  case _ =>
+                    // Malformed TLambda: leave unchanged and let verifier report.
+                    ()
+              }
 
           case other =>
             other.regions.foreach(walkRegion)

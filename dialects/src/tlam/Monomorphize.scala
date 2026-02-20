@@ -64,27 +64,26 @@ object Monomorphize:
       usesSnapshot.groupMap(_.operation)(_.index)
 
     byOp.foreach { case (userOp, indices0) =>
-      val blk = userOp.containerBlock
-        .getOrElse {
-          sys.error("monomorphize: use has no container block (unexpected)")
-        }
+      val blkOpt = userOp.containerBlock
 
-      val indices = indices0.distinct
-      val newOperands =
-        indices.foldLeft(userOp.operands)((ops, idx) => ops.updated(idx, to))
+      blkOpt.foreach { blk =>
+        val indices = indices0.distinct
+        val newOperands =
+          indices.foldLeft(userOp.operands)((ops, idx) => ops.updated(idx, to))
 
-      val newUserOp =
-        userOp.updated(
-          operands = newOperands,
-          successors = userOp.successors,
-          results = userOp.results,
-          regions = userOp.detachedRegions,
-          properties = userOp.properties,
-          attributes = userOp.attributes,
-        )
+        val newUserOp =
+          userOp.updated(
+            operands = newOperands,
+            successors = userOp.successors,
+            results = userOp.results,
+            regions = userOp.detachedRegions,
+            properties = userOp.properties,
+            attributes = userOp.attributes,
+          )
 
-      blk.insertOpBefore(userOp, newUserOp)
-      blk.eraseOp(userOp, safeErase = false)
+        blk.insertOpBefore(userOp, newUserOp)
+        blk.eraseOp(userOp, safeErase = false)
+      }
     }
 
   private def collectTLambdas(
@@ -264,12 +263,10 @@ object Monomorphize:
   private def rewriteOneTApply(
       ta: TApply,
       tl: TLambda,
-  ): Value[TypeAttribute] =
-    val origBlock =
-      tl.body.blocks.headOption
-        .getOrElse {
-          sys.error("monomorphize: tlambda has no blocks")
-        }
+  ): Option[Value[TypeAttribute]] =
+    val origBlock = tl.body.blocks.headOption match
+      case Some(b) => b
+      case None    => return None
 
     // NEW: SSA binder (e.g. %T : !tlam.type) for !tlam.tvar<%T> substitution.
     // If older IR exists without a binder arg, this gracefully disables SSA substitution.
@@ -277,22 +274,16 @@ object Monomorphize:
       origBlock.arguments.headOption
 
     val origOps = origBlock.operations
-    if origOps.isEmpty then
-      sys.error("monomorphize: tlambda body block is empty")
+    if origOps.isEmpty then return None
 
     val retVal: Value[TypeAttribute] =
       origOps.last match
         case TReturn(v) => v
-        case other      =>
-          sys.error(
-            s"monomorphize: tlambda terminator must be treturn, got ${other.name}"
-          )
+        case _          => return None
 
-    val useBlock =
-      ta.containerBlock
-        .getOrElse {
-          sys.error("monomorphize: tapply has no container block")
-        }
+    val useBlock = ta.containerBlock match
+      case Some(b) => b
+      case None    => return None
 
     given valueMapper: mutable.Map[Value[Attribute], Value[Attribute]] =
       mutable.Map.empty
@@ -302,16 +293,9 @@ object Monomorphize:
 
     clonedOpsUnattached.foreach(op => useBlock.insertOpBefore(ta, op))
 
-    val newRetAny =
-      valueMapper.getOrElse(
-        retVal.asInstanceOf[Value[Attribute]],
-        sys
-          .error(
-            "monomorphize: return value not found in valueMapper (clone bug)"
-          ),
-      )
-
-    val newRet = newRetAny.asInstanceOf[Value[TypeAttribute]]
+    val newRet = valueMapper.get(retVal.asInstanceOf[Value[Attribute]]) match
+      case Some(v) => v.asInstanceOf[Value[TypeAttribute]]
+      case None    => return None
 
     replaceAllUsesWith(
       ta.res.asInstanceOf[Value[Attribute]],
@@ -319,7 +303,7 @@ object Monomorphize:
     )
 
     useBlock.eraseOp(ta)
-    newRet
+    Some(newRet)
 
   def run(mod: ModuleOp): ModuleOp =
     val cache =
@@ -336,32 +320,27 @@ object Monomorphize:
       val tapplies = collectTApplies(mod)
 
       tapplies.foreach { ta =>
-        val blk =
-          ta.containerBlock
-            .getOrElse(
-              sys.error("monomorphize: tapply has no container block")
-            )
+        ta.containerBlock.foreach { blk =>
+          cache.get((blk, ta.fun, ta.tyArg)) match
+            case Some(existing) =>
+              replaceAllUsesWith(
+                ta.res.asInstanceOf[Value[Attribute]],
+                existing.asInstanceOf[Value[Attribute]],
+              )
+              blk.eraseOp(ta)
+              changed = true
 
-        cache.get((blk, ta.fun, ta.tyArg)) match
-          case Some(existing) =>
-            replaceAllUsesWith(
-              ta.res.asInstanceOf[Value[Attribute]],
-              existing.asInstanceOf[Value[Attribute]],
-            )
-            blk.eraseOp(ta)
-            changed = true
-
-          case None =>
-            tlByValue.get(ta.fun) match
-              case Some(tl) =>
-                val repl = rewriteOneTApply(ta, tl)
-                cache += (blk, ta.fun, ta.tyArg) -> repl
-                changed = true
-
-                if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
-
-              case None =>
-                ()
+            case None =>
+              tlByValue.get(ta.fun) match
+                case Some(tl) =>
+                  rewriteOneTApply(ta, tl).foreach { repl =>
+                    cache += (blk, ta.fun, ta.tyArg) -> repl
+                    changed = true
+                    if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
+                  }
+                case None =>
+                  ()
+        }
       }
     mod
 
