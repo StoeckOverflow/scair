@@ -51,7 +51,7 @@ builtin.module {
 
 // -----
 
-// 3) Positive control: identical pure ops should merge.
+// 3) Positive control: identical memory-effect-free ops should merge.
 builtin.module {
   %x = "arith.constant"() <{value = 7 : i32}> : () -> i32
   %t0 = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !tlam.type

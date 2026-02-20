@@ -49,7 +49,7 @@ builtin.module {
 
 // -----
 
-// Valid 3: body with pure intermediates is cloned and rewired.
+// Valid 3: body with memory-effect-free intermediates is cloned and rewired.
 builtin.module {
   %f = "tlam.vlambda"() ({
   ^bb0(%x: i32):

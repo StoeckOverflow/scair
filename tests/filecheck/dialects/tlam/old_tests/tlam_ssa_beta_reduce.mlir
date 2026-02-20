@@ -22,7 +22,7 @@ builtin.module {
 
 // -----
 
-// Valid 2: body with pure intermediates is cloned at call site.
+// Valid 2: body with memory-effect-free intermediates is cloned at call site.
 builtin.module {
   %f = "tlam.vlambda"() ({
   ^bb0(%x: i32):

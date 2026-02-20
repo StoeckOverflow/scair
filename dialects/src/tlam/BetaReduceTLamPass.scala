@@ -16,7 +16,8 @@ import scala.collection.mutable
   *
   * This pass is conservative:
   *   - callee must be a direct VLambda producer,
-  *   - body ops (except final vreturn) must be pure by trait/pattern,
+  *   - body ops (except final vreturn) must be memory-effect free by
+  *     trait/pattern,
   *   - if the actual argument comes from an effectful producer and is used more
   *     than once in the lambda body, skip reduction.
   */
@@ -47,12 +48,14 @@ final class BetaReduceTLamPass(ctx: MLContext) extends ModulePass(ctx):
         }
       walkRegion(m.regions.head)
 
-  private def isPureOp(op: Operation): Boolean =
+  private def isMemoryEffectFreeOp(op: Operation): Boolean =
     op match
       case _: NoMemoryEffect => true
-      // TLam ops are pure by construction in this calculus.
-      case _: VLambda | _: VApply | _: VReturn | _: TLambda | _: TApply |
-          _: TReturn =>
+      // Region constructors are effect-free values in this IR, but they are
+      // intentionally not marked NoMemoryEffect to avoid over-aggressive CSE.
+      // Type application is compile-time and side-effect free, but likewise
+      // intentionally not globally marked NoMemoryEffect.
+      case _: VLambda | _: TLambda | _: TApply =>
         true
       case _ => false
 
@@ -104,14 +107,14 @@ final class BetaReduceTLamPass(ctx: MLContext) extends ModulePass(ctx):
         case _           => return false
 
     val prefixOps = bodyOps.dropRight(1)
-    if !prefixOps.forall(isPureOp) then return false
+    if !prefixOps.forall(isMemoryEffectFreeOp) then return false
 
     val paramUseCount = prefixOps.map(countValueUsesInOpTree(param, _)).sum +
       countValueUsesInOpTree(param, ret)
 
     val effectfulArgProducer =
       app.arg.owner match
-        case Some(prod: Operation) => !isPureOp(prod)
+        case Some(prod: Operation) => !isMemoryEffectFreeOp(prod)
         case _                     => false
 
     if effectfulArgProducer && paramUseCount > 1 then return false

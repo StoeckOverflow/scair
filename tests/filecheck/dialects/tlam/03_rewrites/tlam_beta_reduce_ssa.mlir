@@ -25,7 +25,7 @@ builtin.module {
 
 // -----
 
-// Valid 2: body with pure intermediates is cloned at call site.
+// Valid 2: body with memory-effect-free intermediates is cloned at call site.
 builtin.module {
   %f = "tlam.vlambda"() ({
   ^bb0(%x: i32):
@@ -99,6 +99,26 @@ builtin.module {
 // CHECK-LABEL: builtin.module {
 // CHECK: "test.effect"
 // CHECK: "tlam.vapply"
+// CHECK: }
+
+// -----
+
+// Must NOT reduce 5b: lambda body contains a call (vapply), conservatively effectful.
+builtin.module {
+  %callee = "test.fun_source"() : () -> !tlam.fun<i32, i32>
+  %f = "tlam.vlambda"() ({
+  ^bb0(%x: i32):
+    %y = "tlam.vapply"(%callee, %x) : (!tlam.fun<i32, i32>, i32) -> i32
+    "tlam.vreturn"(%y) : (i32) -> ()
+  }) : () -> !tlam.fun<i32, i32>
+
+  %a = "arith.constant"() <{value = 5 : i32}> : () -> i32
+  %r = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> i32
+}
+
+// CHECK-LABEL: builtin.module {
+// CHECK: "tlam.vapply"(%{{[0-9]+}}, %{{[0-9]+}}) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK: "tlam.vapply"(%{{[0-9]+}}, %{{[0-9]+}}) : (!tlam.fun<i32, i32>, i32) -> i32
 // CHECK: }
 
 // -----

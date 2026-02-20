@@ -32,6 +32,7 @@ final case class VLambda(
 final case class VReturn(
     value: Value[TypeAttribute]
 ) extends DerivedOperation["tlam.vreturn", VReturn]
+    with NoMemoryEffect
     with IsTerminator derives DerivedOperationCompanion:
   override def customVerify(): OK[Operation] =
     def enclosingVLambda(op: Operation): Option[VLambda] =
@@ -115,6 +116,7 @@ final case class TLambda(
 final case class TReturn(
     value: Value[TypeAttribute]
 ) extends DerivedOperation["tlam.treturn", TReturn]
+    with NoMemoryEffect
     with IsTerminator derives DerivedOperationCompanion:
   override def customVerify(): OK[Operation] =
     def enclosingTLambda(op: Operation): Option[TLambda] =
