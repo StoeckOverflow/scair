@@ -25,16 +25,16 @@ final case class TlamBVarType(k: IntegerAttr)
     with DerivedAttribute["tlam.bvar", TlamBVarType]
     derives DerivedAttributeCompanion
 
-// !tlam.tvar<%x> - type referencing an SSA value %x
-final case class TlamTVarType(ref: ValueAttribute)
+// !tlam.tvar<%x> - type containing an SSA value %x
+final case class TlamTVarType(tyVar: ValueAttribute)
     extends TlamType
     with ParametrizedAttribute:
 
   override def name: String = "tlam.tvar"
 
-  def tparam: Value[Attribute] = ref.getVal()
+  def tparam: Value[Attribute] = tyVar.getVal()
 
-  override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(ref)
+  override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(tyVar)
 
   override def customVerify(): OK[Unit] =
     tparam.typ match
@@ -79,9 +79,8 @@ given AttributeCompanion[TlamForAllType]:
   override def name = "tlam.forall"
 
   override def parse[$: P](using Parser): P[TlamForAllType] =
-    P("<" ~ typeP ~ ">").map { body =>
-      TlamForAllType(body.asInstanceOf[TypeAttribute])
-    }
+    P("<" ~ typeP ~ ">")
+      .map(body => TlamForAllType(body.asInstanceOf[TypeAttribute]))
 
 object TlamTy:
   inline def `type`: TlamType = TlamTypeType()
