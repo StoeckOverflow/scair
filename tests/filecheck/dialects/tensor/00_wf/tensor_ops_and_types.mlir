@@ -19,7 +19,7 @@ builtin.module {
   %prod = "dtensor.mul"(%a, %b)
     : (!dtensor.tensor<[%m, %n], f32>, !dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
   %d1 = "dtensor.dim"(%a) <{axis = 1 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%n> // return type %n? Wrap it into something?
   %c = "dtensor.cast"(%a)
     : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
 }
