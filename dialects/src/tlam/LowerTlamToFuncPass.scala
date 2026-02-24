@@ -8,6 +8,7 @@ import scair.transformations.patterns.*
 import scair.dialects.func.*
 import scair.dialects.builtin.*
 import scair.dialects.tlam.*
+import scala.collection.mutable
 
 final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
   override val name = "lower-tlam-to-func"
@@ -21,6 +22,20 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
   private def lower(m: ModuleOp): Unit =
     var counter = 0
     val top = m.regions.head.blocks.head
+    val usedSymbolNames: mutable.Set[String] =
+      mutable.Set.from(
+        top.operations.collect { case s: Symbol => s.sym_name.stringLiteral }
+      )
+
+    def freshLiftedName(): String =
+      var candidate = ""
+      var unique = false
+      while !unique do
+        counter += 1
+        candidate = s"lifted_$counter"
+        unique = !usedSymbolNames.contains(candidate)
+      usedSymbolNames += candidate
+      candidate
 
     /** Lower a TLam function type to a builtin FunctionType. */
     def lowerFunType(ft: TlamFunType): FunctionType =
@@ -40,12 +55,16 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
       }
 
       val usesSnapshot = oldV.uses.toList
-      usesSnapshot.foreach { use =>
-        val userOp = use.operation
-        val idx = use.index
-        val newOperands = userOp.operands.updated(idx, newV)
-        val rebuilt = userOp.updated(operands = newOperands)
-        RewriteMethods.replaceOp(userOp, rebuilt)
+      val byOp: Map[Operation, List[Int]] =
+        usesSnapshot.groupMap(_.operation)(_.index)
+
+      byOp.foreach { case (userOp, indices0) =>
+        if userOp.containerBlock.nonEmpty then
+          val indices = indices0.distinct
+          val newOperands =
+            indices.foldLeft(userOp.operands)((ops, idx) => ops.updated(idx, newV))
+          val rebuilt = userOp.updated(operands = newOperands)
+          RewriteMethods.replaceOp(userOp, rebuilt)
       }
 
     // ---------------------------
@@ -62,8 +81,7 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
         opsSnapshot.foreach { op =>
           op match
             case vl: VLambda =>
-              counter += 1
-              val name = s"lifted_$counter"
+              val name = freshLiftedName()
 
               val tlamFT: TlamFunType = vl.res.typ
               val fnTy: FunctionType = lowerFunType(tlamFT)
