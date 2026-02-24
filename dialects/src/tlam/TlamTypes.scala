@@ -128,6 +128,50 @@ object DBI:
 object TlamTypeUtil:
   import TlamTy.*
 
+  final case class CloseResult(
+      closed: TypeAttribute,
+      containsFreeTVar: Boolean,
+  )
+
+  private def closeAndDetect(
+      binder: Value[Attribute],
+      depth: Int,
+      t: TypeAttribute,
+  ): CloseResult =
+    t match
+      case tv: TlamTVarType =>
+        if tv.tparam eq binder then
+          CloseResult(
+            closed = bvar(IntData(depth)),
+            containsFreeTVar = false,
+          )
+        else
+          CloseResult(
+            closed = tv,
+            containsFreeTVar = true,
+          )
+
+      case TlamFunType(in, out) =>
+        val inR = closeAndDetect(binder, depth, in)
+        val outR = closeAndDetect(binder, depth, out)
+        CloseResult(
+          closed = fun(inR.closed, outR.closed),
+          containsFreeTVar = inR.containsFreeTVar || outR.containsFreeTVar,
+        )
+
+      case TlamForAllType(body) =>
+        val bodyR = closeAndDetect(binder, depth + 1, body)
+        CloseResult(
+          closed = forall(bodyR.closed),
+          containsFreeTVar = bodyR.containsFreeTVar,
+        )
+
+      case other =>
+        CloseResult(
+          closed = other,
+          containsFreeTVar = false,
+        )
+
   def containsTVar(t: TypeAttribute): Boolean = t match
     case _: TlamTVarType   => true
     case TlamFunType(i, o) => containsTVar(i) || containsTVar(o)
@@ -138,16 +182,10 @@ object TlamTypeUtil:
       binder: Value[Attribute],
       t: TypeAttribute,
   ): TypeAttribute =
-    def loop(depth: Int, cur: TypeAttribute): TypeAttribute = cur match
-      case tv: TlamTVarType if tv.tparam eq binder =>
-        // Convert SSA binder reference to a de Bruijn index at the current depth.
-        bvar(IntData(depth))
-      case TlamFunType(i, o) =>
-        fun(loop(depth, i), loop(depth, o))
-      case TlamForAllType(body) =>
-        // Entering a binder increases the de Bruijn depth.
-        forall(loop(depth + 1, body))
-      case other =>
-        other
+    closeAndDetect(binder, depth = 0, t).closed
 
-    loop(0, t)
+  def closeUnderAndContainsFreeTVar(
+      binder: Value[Attribute],
+      t: TypeAttribute,
+  ): CloseResult =
+    closeAndDetect(binder, depth = 0, t)

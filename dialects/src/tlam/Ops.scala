@@ -64,7 +64,7 @@ final case class TLambda(
     derives DerivedOperationCompanion:
 
   override def customVerify(): OK[Operation] =
-    def isWithinTLambdaBody(op: Operation): Boolean =
+    def hasEnclosingTLambda(op: Operation): Boolean =
       var curRegion = op.containerBlock.flatMap(_.containerRegion)
       var curParent = curRegion.flatMap(_.containerOperation)
       while curParent.isDefined do
@@ -91,14 +91,13 @@ final case class TLambda(
           case Some(TReturn(ret)) =>
             // Close the SSA-bound type variable into a de Bruijn body to compare
             // with the stored forall type.
-            val closed = TlamTypeUtil.closeUnder(tparam, ret.typ)
-            if closed != res.typ.body then
+            val closedRes =
+              TlamTypeUtil.closeUnderAndContainsFreeTVar(tparam, ret.typ)
+            if closedRes.closed != res.typ.body then
               Err(
-                s"tlambda: result body ${res.typ.body} != return type closed over binder $closed"
+                s"tlambda: result body ${res.typ.body} != return type closed over binder ${closedRes.closed}"
               )
-            else if !isWithinTLambdaBody(this) && TlamTypeUtil.containsTVar(
-                res.typ.body
-              )
+            else if !hasEnclosingTLambda(this) && closedRes.containsFreeTVar
             then
               // Outside any tlambda body, forall types must not reference SSA tvars.
               Err(
