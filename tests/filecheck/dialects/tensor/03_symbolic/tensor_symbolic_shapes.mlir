@@ -60,6 +60,39 @@ builtin.module {
 
 // -----
 
+// Dedicated symbolic matmul coverage: valid symbolic dims.
+builtin.module {
+  %m = "dtensor.nat.param"() : () -> !dtensor.nat
+  %k = "dtensor.nat.param"() : () -> !dtensor.nat
+  %n = "dtensor.nat.param"() : () -> !dtensor.nat
+
+  %A = "test.A"() : () -> !dtensor.tensor<[%m, %k], f32>
+  %B = "test.B"() : () -> !dtensor.tensor<[%k, %n], f32>
+  %ok = "dtensor.matmul"(%A, %B)
+    : (!dtensor.tensor<[%m, %k], f32>, !dtensor.tensor<[%k, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
+}
+
+// VERIFY: "dtensor.matmul"
+// VERIFY: !dtensor.tensor<[%0, %2], f32>
+
+// -----
+
+// Dedicated symbolic matmul coverage: invalid inner-dim identity mismatch.
+builtin.module {
+  %m = "dtensor.nat.param"() : () -> !dtensor.nat
+  %k = "dtensor.nat.param"() : () -> !dtensor.nat
+  %n = "dtensor.nat.param"() : () -> !dtensor.nat
+
+  %k2 = "dtensor.nat.param"() : () -> !dtensor.nat
+  %A = "test.A"() : () -> !dtensor.tensor<[%m, %k], f32>
+  %Bbad = "test.Bbad"() : () -> !dtensor.tensor<[%k2, %n], f32>
+  // expected-error @below {{dtensor.matmul: expected SSA-identical inner dims}}
+  %bad = "dtensor.matmul"(%A, %Bbad)
+    : (!dtensor.tensor<[%m, %k], f32>, !dtensor.tensor<[%k2, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
+}
+
+// -----
+
 // Shape canonicalization should fold symbolic add(x, 0) and deep-RAUW type-embedded dims.
 builtin.module {
   %x = "dtensor.nat.param"() : () -> !dtensor.nat
