@@ -1,5 +1,4 @@
 // Purpose: PyTorch-like symbolic-shape chain stressing deep RAUW after shape-canonicalize and full-pipeline safety.
-// Coverage checklist (existing -> gap -> this file):
 // - Existing big-chain tests cover representative paths -> add focused MLP-like chain with explicit nat.add(x,0)/nat.mul(x,1) folding + type-dim rewrite checks.
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=VERIFY
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize | filecheck %s -DFILE=%s --check-prefix=CANON

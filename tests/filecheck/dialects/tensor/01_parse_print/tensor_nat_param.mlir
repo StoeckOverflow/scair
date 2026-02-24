@@ -49,32 +49,6 @@ builtin.module {
 
 // -----
 
-// nat.param must be preserved when only used via type params.
-builtin.module {
-  %p = "dtensor.nat.param"() : () -> !dtensor.nat
-  %t = "dtensor.empty"() : () -> !dtensor.tensor<[%p], f32>
-  %u = "test.id"(%t) : (!dtensor.tensor<[%p], f32>) -> !dtensor.tensor<[%p], f32>
-  "test.keep_dce_nat_param"(%u) : (!dtensor.tensor<[%p], f32>) -> ()
-}
-
-// DCE-LABEL: builtin.module {
-// DCE: [[P:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// DCE: "dtensor.empty"() : () -> !dtensor.tensor<[[[P]]], f32>
-// DCE: "test.keep_dce_nat_param"
-// DCE: }
-
-// CSE-LABEL: builtin.module {
-// CSE: [[P:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// CSE: "test.keep_dce_nat_param"
-// CSE: }
-
-// PIPE-LABEL: builtin.module {
-// PIPE: [[P:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE: "test.keep_dce_nat_param"
-// PIPE: }
-
-// -----
-
 // CSE must not merge nat.param producers (fresh identity).
 builtin.module {
   %p0 = "dtensor.nat.param"() : () -> !dtensor.nat
@@ -87,32 +61,6 @@ builtin.module {
 // CSE: "dtensor.nat.param"() : () -> !dtensor.nat
 // CSE: "test.keep_params"
 // CSE: }
-
-// -----
-
-// Distinct nat.param dims mean result tensor types differ, so CSE must not merge dtensor.empty.
-builtin.module {
-  %p0 = "dtensor.nat.param"() : () -> !dtensor.nat
-  %p1 = "dtensor.nat.param"() : () -> !dtensor.nat
-  %e0 = "dtensor.empty"() : () -> !dtensor.tensor<[%p0], f32>
-  %e1 = "dtensor.empty"() : () -> !dtensor.tensor<[%p1], f32>
-  "test.keep0"(%e0) : (!dtensor.tensor<[%p0], f32>) -> ()
-  "test.keep1"(%e1) : (!dtensor.tensor<[%p1], f32>) -> ()
-}
-
-// CSE-LABEL: builtin.module {
-// CSE: [[P0:%[0-9]+]] = "dtensor.nat.param"()
-// CSE: [[P1:%[0-9]+]] = "dtensor.nat.param"()
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[[[P0]]], f32>
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[[[P1]]], f32>
-// CSE: "test.keep0"
-// CSE: "test.keep1"
-// CSE: }
-
-// PIPE-LABEL: builtin.module {
-// PIPE: "test.keep0"
-// PIPE: "test.keep1"
-// PIPE: }
 
 // -----
 

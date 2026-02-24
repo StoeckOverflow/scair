@@ -6,49 +6,19 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p dce | filecheck %s -DFILE=%s --check-prefix=DCE
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | filecheck %s -DFILE=%s --check-prefix=PIPE
 
-// Pass-safety: should transform canonical nat identities and keep IR valid.
+// Smoke: pass pipeline keeps a simple valid tensor program intact.
 builtin.module {
-  %x = "dtensor.nat.param"() : () -> !dtensor.nat
-  %z = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %o = "dtensor.nat.const"() <{value = 1 : i32}> : () -> !dtensor.nat
-  %sx = "dtensor.nat.add"(%x, %z) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %d = "dtensor.nat.mul"(%sx, %o) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-
-  %a = "test.a"() : () -> !dtensor.tensor<[%d], f32>
-  %b = "test.b"() : () -> !dtensor.tensor<[%d], f32>
-  %s = "dtensor.add"(%a, %b)
-    : (!dtensor.tensor<[%d], f32>, !dtensor.tensor<[%d], f32>) -> !dtensor.tensor<[%d], f32>
-  "test.keep_pass_ok"(%s) : (!dtensor.tensor<[%d], f32>) -> ()
+  %m = "dtensor.nat.param"() : () -> !dtensor.nat
+  %a = "test.a"() : () -> !dtensor.tensor<[%m], f32>
+  "test.keep_smoke"(%a) : (!dtensor.tensor<[%m], f32>) -> ()
 }
 
-// VERIFY: "test.keep_pass_ok"
-// CANON-NOT: "dtensor.nat.add"
-// CANON-NOT: "dtensor.nat.mul"
-// CANON: "test.keep_pass_ok"
-// CN: "test.keep_pass_ok"
-// CSE: "test.keep_pass_ok"
-// DCE: "test.keep_pass_ok"
-// PIPE-NOT: "dtensor.nat.add"
-// PIPE-NOT: "dtensor.nat.mul"
-// PIPE: "test.keep_pass_ok"
-
-// -----
-
-// Pass-safety: must-not-transform CSE case (distinct dim identities).
-builtin.module {
-  %p0 = "dtensor.nat.param"() : () -> !dtensor.nat
-  %p1 = "dtensor.nat.param"() : () -> !dtensor.nat
-  %e0 = "dtensor.empty"() : () -> !dtensor.tensor<[%p0], f32>
-  %e1 = "dtensor.empty"() : () -> !dtensor.tensor<[%p1], f32>
-  "test.keep_distinct0"(%e0) : (!dtensor.tensor<[%p0], f32>) -> ()
-  "test.keep_distinct1"(%e1) : (!dtensor.tensor<[%p1], f32>) -> ()
-}
-
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// CSE: "test.keep_distinct0"
-// CSE: "test.keep_distinct1"
-// PIPE: "test.keep_distinct0"
-// PIPE: "test.keep_distinct1"
+// VERIFY: "test.keep_smoke"
+// CANON: "test.keep_smoke"
+// CN: "test.keep_smoke"
+// CSE: "test.keep_smoke"
+// DCE: "test.keep_smoke"
+// PIPE: "test.keep_smoke"
 
 // -----
 

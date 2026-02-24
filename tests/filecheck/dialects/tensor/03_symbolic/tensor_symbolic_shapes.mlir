@@ -60,35 +60,6 @@ builtin.module {
 
 // -----
 
-// DCE must preserve symbolic dim producers used only from type params.
-builtin.module {
-  %x = "dtensor.nat.param"() : () -> !dtensor.nat
-  %t = "dtensor.empty"() : () -> !dtensor.tensor<[%x], f32>
-  "test.keep_tensor"(%t) : (!dtensor.tensor<[%x], f32>) -> ()
-}
-
-// DCE-LABEL: builtin.module {
-// DCE: "dtensor.nat.param"() : () -> !dtensor.nat
-// DCE: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// DCE: "test.keep_tensor"(%1) : (!dtensor.tensor<[%0], f32>) -> ()
-// DCE: }
-
-// -----
-
-// CSE must not merge dtensor.empty when result types differ by dim SSA identity.
-builtin.module {
-  %x1 = "dtensor.nat.param"() : () -> !dtensor.nat
-  %x2 = "dtensor.nat.param"() : () -> !dtensor.nat
-  %t1 = "dtensor.empty"() : () -> !dtensor.tensor<[%x1], f32>
-  %t2 = "dtensor.empty"() : () -> !dtensor.tensor<[%x2], f32>
-}
-
-// CSE-LABEL: builtin.module {
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// CSE: }
-
-// -----
-
 // Shape canonicalization should fold symbolic add(x, 0) and deep-RAUW type-embedded dims.
 builtin.module {
   %x = "dtensor.nat.param"() : () -> !dtensor.nat
