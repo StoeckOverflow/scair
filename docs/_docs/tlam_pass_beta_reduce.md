@@ -6,57 +6,88 @@ title: "TLam Pass: beta-reduce-tlam"
 
 Implementation: `dialects/src/tlam/BetaReduceTlamPass.scala`
 
-## What the pass does
+## What this pass does
 
-It performs local value-level beta reduction:
-- pattern: `tlam.vapply` where callee is directly produced by `tlam.vlambda`
-- rewrite: inline cloned lambda body before the apply site, map parameter to argument, replace apply result with mapped return value, erase `vapply`
+`beta-reduce-tlam` performs **local value-level** beta-reduction.
 
-This is value-level inlining, not type-level forall instantiation.
+Rewrite shape:
+1. match `%r = tlam.vapply(%f, %arg)`
+2. require `%f` is directly produced by `tlam.vlambda`
+3. clone the lambda body (except final `tlam.vreturn`) before `%r`
+4. substitute lambda parameter with `%arg` via value mapping
+5. replace `%r` with the mapped return value
+6. erase the original `tlam.vapply`
+
+This is value-level inlining. It does not perform type-level `forall` instantiation (`tlam.tapply`); that is handled by `monomorphize`.
 
 ## Pass structure
 
-1. `transform` runs only for `ModuleOp`.
-2. `run` walks all regions recursively.
-3. It iterates to fixed point (`while changed`) so newly exposed opportunities can reduce in the same pass run.
+`run` walks the module recursively and applies rewrites to fixed point (`while changed`), so reductions exposed by earlier reductions in the same run can also fire.
 
-## Matching and safety guards
+## Preconditions for one reduction
 
-`betaReduce(app: VApply)` requires:
-1. `app.fun.owner` is `VLambda`.
-2. Lambda body has one block, one argument, and ends with `VReturn`.
-3. All non-terminator body ops are memory-effect free by `isMemoryEffectFreeOp`.
-4. If argument producer is effectful and lambda parameter use count is greater than one, do not reduce.
+`betaReduce(app: VApply)` only rewrites when all checks pass:
+1. callee producer is exactly a `VLambda`
+2. lambda body is a single block with exactly one argument
+3. lambda body ends with `VReturn`
+4. all non-terminator body ops are memory-effect free by `isMemoryEffectFreeOp`
+5. duplication safety: if `%arg` comes from an effectful producer and parameter-use count is greater than 1, skip
 
-Effect model in code:
-- pure: ops with `NoMemoryEffect`, plus `VLambda`, `TLambda`, `TApply` (explicitly treated as pure here)
-- effectful: everything else
+If any check fails, the `vapply` is left unchanged.
+
+## Effect model used by the pass
+
+`isMemoryEffectFreeOp` treats as pure:
+- ops implementing `NoMemoryEffect`
+- `VLambda`, `TLambda`, `TApply` (explicitly treated as effect free here)
+
+Everything else is treated conservatively as effectful.
+
+Notably, nested `vapply` in the lambda body is considered effectful by this model, so such outer calls are not beta-reduced.
 
 ## How substitution is implemented
 
-The pass uses IR cloning plus value mapping, not textual replacement.
+The pass uses cloning + SSA remapping (not textual replacement):
+1. initialize `valueMapper` with `param -> app.arg`
+2. `deepCopy` body prefix ops
+3. insert cloned ops before `app`
+4. resolve mapped `vreturn` value through mapper
+5. `RewriteMethods.replaceValue(app.res, mappedRet)`
+6. erase `app`
 
-Steps:
-1. Build `valueMapper` and seed with `param -> app.arg`.
-2. Clone lambda body prefix ops (`deepCopy`).
-3. Insert clones immediately before the original `vapply`.
-4. Resolve mapped return value from the mapper.
-5. Replace all uses of `app.res` via `RewriteMethods.replaceValue`.
-6. Erase original `vapply`.
+This preserves SSA correctness and handles nested regions/types consistently.
 
-Because clone/remap works at IR value level, nested regions and SSA identity are handled safely.
+## Uses counted for duplication safety
 
-## Why type-embedded uses are considered
-
-`countValueUsesInOpTree` counts parameter uses from:
+Parameter-use counting (`countValueUsesInOpTree`) includes occurrences in:
 - operands
-- result/operand types
+- operand/result types
 - attributes
 - properties
 - nested regions
 
-It uses `AttributeWalker.foreachValueAttribute`, so `tvar(%x)` occurrences inside types/attrs/properties are included in duplication safety checks.
+It uses `AttributeWalker.foreachValueAttribute`, so embedded value references such as `!tlam.tvar<%x>` count too.
 
-## Failure/skip behavior
+## Typical outcomes (from tests)
 
-If any precondition fails, the pass simply skips that `vapply` and leaves IR unchanged.
+Will reduce:
+- direct identity/application cases
+- bodies with only effect-free intermediates
+- SSA-in-types cases where values appear in types/attributes
+
+Will not reduce:
+- callee not directly from `vlambda`
+- body containing effectful/unknown ops
+- body containing nested `vapply` (conservative effect model)
+- argument from effectful producer when parameter would be duplicated
+
+See: `tests/filecheck/dialects/tlam/03_rewrites/tlam_beta_reduce_ssa.mlir` and `tests/filecheck/dialects/tlam/03_rewrites/tlam_beta_reduce_db.mlir`.
+
+## Pipeline role
+
+Often scheduled before or around canonicalization/CSE, then followed by:
+1. `monomorphize`
+2. `erase-tlam`
+3. `lower-tlam-to-func`
+
+Both early-beta and late-beta placements are covered by pipeline tests.

@@ -6,52 +6,71 @@ title: "TLam Pass: lower-tlam-to-func"
 
 Implementation: `dialects/src/tlam/LowerTlamToFuncPass.scala`
 
-## What the pass does
+## What this pass does
 
-It lowers value-level TLam constructs into `func` dialect operations.
+`lower-tlam-to-func` converts value-level TLam constructs to `func` dialect IR.
 
 Main rewrites:
-1. `VLambda` is lifted to top-level `func.func @lifted_N` plus `func.constant @lifted_N`
-2. `VApply` is rewritten to `func.call_indirect`
-3. `VReturn` is rewritten to `func.return`
+1. `tlam.vlambda` -> lifted `func.func @lifted_N` + `func.constant @lifted_N`
+2. `tlam.vapply` -> `func.call_indirect`
+3. `tlam.vreturn` -> `func.return`
 
-## Two-phase implementation
+## Two-phase lowering
 
-## Phase 1: Lambda lifting
+### Phase 1: lambda lifting
 
-While walking regions, for each `VLambda`:
-1. generate unique symbol name (`lifted_<counter>`)
-2. convert `TlamFunType` to builtin `FunctionType` (`lowerFunType`)
-3. detach lambda body region and create `func.func`
-4. insert function at start of top module block
-5. create `func.constant` referencing the symbol
-6. insert constant at start of top module block
-7. replace all uses of original lambda value with constant value (`replaceAllUses`)
-8. erase original `VLambda`
+For each `VLambda` discovered recursively:
+1. build unique symbol name `lifted_<counter>`
+2. convert `TlamFunType(in, out)` to builtin `FunctionType(inputs = [in], outputs = [out])`
+3. detach/move lambda body region into a new top-level `func.func`
+4. create `func.constant` that materializes a first-class function value to that symbol
+5. replace all uses of original lambda result with constant result
+6. erase original `vlambda`
 
-Why insert at module start: preserve hierarchical dominance for nested uses.
+Both `func.func` and `func.constant` are inserted at the start of the top module block.
+This placement ensures hierarchical dominance for uses that may be inside nested regions.
 
-## Phase 2: Rewrite remaining value ops
+### Phase 2: rewrite remaining value ops
 
-A greedy pattern rewriter applies:
+A greedy pattern rewrite converts:
 - `VApply` -> `CallIndirect`
-  - requires runtime callee type is builtin `FunctionType`
-  - call results come from that function type outputs
 - `VReturn` -> `Return`
 
-## Use replacement helper
+For `VApply`, runtime callee type is inspected after phase 1 replacement and must be builtin `FunctionType`.
+Call result types are taken from that function type outputs.
 
-`replaceAllUses(oldV, newV)` updates:
-1. `oldV.typeUses` by rewriting value-attributes and re-registering type uses
-2. `oldV.uses` by rebuilding user ops with updated operands
+## Use replacement helper behavior
 
-This prevents stale embedded references in type/attribute payloads.
+`replaceAllUses(oldV, newV)` updates both:
+1. `oldV.typeUses` (embedded value references in attributes/types)
+2. normal operand `uses`
+
+This prevents stale SSA-in-types references during lambda value replacement.
 
 ## Error behavior
 
-If a `VApply` callee is not `FunctionType` at lowering time, pass throws with an explicit error message. This indicates pass-ordering or earlier rewrite issues.
+If a `VApply` callee is not builtin `FunctionType` at rewrite time, pass throws:
+`lower-tlam-to-func: expected callee of call_indirect to have builtin.function_type, got ...`
 
-## Expected preconditions
+That usually indicates an ordering or invariant violation in earlier stages.
 
-- TLam type-level ops should already be erased/specialized for normal pipelines.
-- Value-level lambdas/applies remain for this pass to lower.
+## Preconditions and pipeline position
+
+Typical usage:
+1. `monomorphize`
+2. `erase-tlam`
+3. `lower-tlam-to-func`
+4. `reconcile-unrealized-casts`
+
+`lower-tlam-to-func` expects TLam type-level control flow to be gone (or irrelevant) and focuses on value-level lowering.
+
+## Practical outcomes (from tests)
+
+Expected after erase+lower(+reconcile):
+- no `tlam.` operations
+- no `!tlam.` types
+- `func.func`, `func.constant`, `func.call_indirect`, and `func.return` remain
+
+Nested placements (for example under `scf.execute_region`) are also lowered.
+
+See: `tests/filecheck/dialects/tlam/07_lowering/tlam_no_leftovers_after_erase_lower_reconcile.mlir` and `tests/filecheck/dialects/tlam/99_pipeline/tlam_pipeline_smoke.mlir`.

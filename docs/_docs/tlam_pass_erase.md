@@ -6,39 +6,59 @@ title: "TLam Pass: erase-tlam"
 
 Implementation: `dialects/src/tlam/EraseTlamPass.scala`
 
-## What the pass does
+## What this pass does
 
-It removes type-level lambda wrappers (`TLambda`) by splicing their bodies into the parent block and forwarding results from trailing `TReturn`.
+`erase-tlam` removes dead type-level lambda wrappers by splicing their body into the parent block.
 
-Per `TLambda`:
-1. move body ops except final `TReturn` before `TLambda`
-2. replace `TLambda` result with `TReturn` value
-3. erase `TLambda`
+For an erasable `TLambda`:
+1. move body ops except trailing `tlam.treturn` before the `tlambda`
+2. forward `tlambda` result to `treturn` value
+3. erase `tlambda`
 
-## Implementation walkthrough
+## Important guard: only dead `tlambda` is erased
+
+Current implementation erases a `TLambda` **only if** both are empty:
+- `tl.res.uses`
+- `tl.res.typeUses`
+
+If a `TLambda` is still referenced (for example by `tlam.tapply`), erase pass leaves it unchanged.
+
+This makes the pass safe to run on partially processed IR.
+
+## Rewrite algorithm
 
 `eraseInModule` recursively walks regions.
 
-On `TLambda tl`:
-1. read `bodyBlock = tl.body.blocks.head`
-2. snapshot `bodyOps`
-3. require `bodyOps.last` is `TReturn` (throws otherwise)
-4. detach prefix ops (`bodyOps.dropRight(1).map(bodyBlock.detachOp)`)
-5. insert detached ops before `tl` (`RewriteMethods.insertOpsBefore`)
-6. replace op with no new ops and one forwarded result (`RewriteMethods.replaceOp` with `newResults = Some(Seq(tret.value))`)
+On each `TLambda tl`:
+1. check liveness guard (`uses` + `typeUses` empty)
+2. read first body block if present
+3. if last body op is `TReturn`:
+   - detach body prefix ops (`dropRight(1)`)
+   - insert them before `tl`
+   - `RewriteMethods.replaceOp(tl, newOps = Seq.empty, newResults = Some(Seq(tret.value)))`
+4. otherwise do nothing
 
-Result forwarding handles RAUW for all uses of `tl.res`.
+Malformed `tlambda` is intentionally left unchanged so verifier diagnostics remain the user-facing signal.
 
-## Scope of this pass
+## What this pass does not do
 
-- It erases type-level control (`TLambda`/`TReturn` structure).
-- It does not lower value-level TLam ops (`VLambda`, `VApply`, `VReturn`); that is done by `lower-tlam-to-func`.
+- It does not monomorphize type application (`tlam.tapply`).
+- It does not lower value-level TLam ops (`VLambda`, `VApply`, `VReturn`).
+
+Those are handled by `monomorphize` and `lower-tlam-to-func` respectively.
+
+## Behavior on non-ideal input
+
+- Live `tlambda` + `tapply` input: no destructive rewrite.
+- Malformed `tlambda` body (missing trailing `treturn`): unchanged; verifier reports the error.
+
+See: `tests/filecheck/dialects/tlam/07_lowering/tlam_erase_safety.mlir`.
 
 ## Pipeline role
 
-Typical order:
+Typical ordering:
 1. `monomorphize`
 2. `erase-tlam`
 3. `lower-tlam-to-func`
 
-This keeps specialization semantics separate from structural erasure and backend lowering.
+`erase-tlam` is the structural cleanup stage between specialization and backend lowering.
