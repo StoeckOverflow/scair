@@ -101,17 +101,18 @@ builtin.module {
 
 // -----
 
-// dtensor.dim extraction chain on symbolic dims folds to exact embedded dim SSA value.
+// dtensor.dim extraction chain on symbolic dims remains valid with !value<...> result typing.
 builtin.module {
   %m = "dtensor.nat.param"() : () -> !dtensor.nat
   %n = "dtensor.nat.param"() : () -> !dtensor.nat
   %A = "test.A"() : () -> !dtensor.tensor<[%m, %n], f32>
   %d0 = "dtensor.dim"(%A) <{axis = 0 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
   %E = "dtensor.empty"() : () -> !dtensor.tensor<[%d0], f32>
 }
 
-// CANOND: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
+// CANOND: "dtensor.dim"
+// CANOND: "dtensor.empty"()
 
 // -----
 

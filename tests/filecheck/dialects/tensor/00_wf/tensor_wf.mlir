@@ -14,7 +14,7 @@ builtin.module {
   %x = "dtensor.matmul"(%a, %b)
     : (!dtensor.tensor<[%m, %k], f32>, !dtensor.tensor<[%k, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
   %d0 = "dtensor.dim"(%x) <{axis = 0 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
   %v0 = "test.v0"() : () -> !dtensor.vector<%m, f32>
   %m0 = "test.m0"() : () -> !dtensor.matrix<%m, %n, f32>
   %c = "dtensor.cast"(%x)
@@ -66,7 +66,7 @@ builtin.module {
   %n = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
   %a = "test.a"() : () -> !dtensor.tensor<[%m, %n], f32>
   %d = "dtensor.dim"(%a) <{axis = 2 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
 }
 
 // VERIFY: dtensor.dim: axis 2 out of bounds for rank 2

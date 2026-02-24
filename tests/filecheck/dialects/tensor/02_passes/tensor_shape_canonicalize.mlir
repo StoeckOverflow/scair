@@ -53,20 +53,20 @@ builtin.module {
 
 // -----
 
-// dim fold to exact embedded dim SSA value.
+// dtensor.dim remains (no dim-fold in strict !value<...> typing mode).
 builtin.module {
   %m = "dtensor.nat.const"() <{value = 6 : i32}> : () -> !dtensor.nat
   %n = "dtensor.nat.const"() <{value = 9 : i32}> : () -> !dtensor.nat
   %A = "test.A"() : () -> !dtensor.tensor<[%m, %n], f32>
   %d0 = "dtensor.dim"(%A) <{axis = 0 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
   %E = "dtensor.empty"() : () -> !dtensor.tensor<[%d0], f32>
 }
 
 // CHECK-LABEL: builtin.module {
 // CHECK: [[M:%[0-9]+]] = "dtensor.nat.const"() <{value = 6 : i32}> : () -> !dtensor.nat
-// CHECK-NOT: "dtensor.dim"
-// CHECK: "dtensor.empty"() : () -> !dtensor.tensor<[[[M]]], f32>
+// CHECK: "dtensor.dim"
+// CHECK: "dtensor.empty"()
 // CHECK: }
 
 // -----

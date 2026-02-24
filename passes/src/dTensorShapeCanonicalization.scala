@@ -6,7 +6,6 @@ import scair.dialects.dTensor.*
 import scair.ir.*
 import scair.transformations.*
 import scair.transformations.patterns.*
-import scair.utils.OK
 
 private def constValue(
     v: Value[dTensorNatType]
@@ -41,17 +40,11 @@ private val NatMulFold = pattern { case NatMul(lhs, rhs, _) =>
     case _ => PatternAction.Abort
 }
 
-private val DimFold = pattern { case d: Dim =>
-  d.selectedDimValue match
-    case OK(v) => (Seq(), Seq(v))
-    case _     => PatternAction.Abort
-}
-
 final class dTensorShapeCanonicalize(ctx: MLContext) extends WalkerPass(ctx):
   override val name = "tensor-shape-canonicalize"
 
   override val walker = PatternRewriteWalker(
     GreedyRewritePatternApplier(
-      Seq(NatAddFold, NatMulFold, DimFold)
+      Seq(NatAddFold, NatMulFold)
     )
   )

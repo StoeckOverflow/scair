@@ -56,7 +56,7 @@ final case class Fill(
 final case class Dim(
     t: Operand[dTensorTensorType],
     axis: IntegerAttr,
-    res: Result[dTensorNatType],
+    res: Result[ValueRefType],
 ) extends DerivedOperation["dtensor.dim", Dim]
     with NoMemoryEffect derives DerivedOperationCompanion:
 
@@ -71,7 +71,15 @@ final case class Dim(
     val axisTyOk = axis.typ == I32
     if !axisTyOk then
       Err(s"dtensor.dim: expected i32 axis attribute, got ${axis.typ}")
-    else selectedDimValue.map(_ => this)
+    else
+      selectedDimValue.flatMap(sel =>
+        if res.typ.ref.getVal() eq sel then
+          dTensorTypeUtil.resolveNatValue(res.typ.ref.getVal()).map(_ => this)
+        else
+          Err(
+            "dtensor.dim: expected result !value<...> to reference the selected embedded dim"
+          )
+      )
 
 final case class Add(
     lhs: Operand[dTensorTensorType],
@@ -124,7 +132,6 @@ final case class Cast(
         s"dtensor.cast: expected equal ranks, got ${src.typ.params
             .size} and ${res.typ.params.size}"
       )
-    else if src.typ.params.zip(res.typ.params)
-        .exists((s, r) => s.getVal() ne r.getVal())
+    else if !dTensorTypeUtil.sameDims(src.typ.params, res.typ.params)
     then Err("dtensor.cast: expected pairwise SSA-identical dims")
     else OK(this)

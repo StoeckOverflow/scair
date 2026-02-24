@@ -9,6 +9,23 @@ import scair.parse.given
 import scair.utils.*
 
 object dTensorTypeUtil:
+  private def resolveNatBase(
+      v: Value[Attribute],
+      seen: Set[Value[Attribute]] = Set.empty,
+  ): OK[Value[Attribute]] =
+    if seen.contains(v) then
+      Err("shape SSA parameter contains a cyclic !value<...> reference")
+    else
+      v.typ match
+        case _: dTensorNatType => OK(v)
+        case ValueRefType(ref) => resolveNatBase(ref.getVal(), seen + v)
+        case other             =>
+          Err(
+            s"shape SSA parameter must have type !dtensor.nat, got ${renderAttr(other)}"
+          )
+
+  def resolveNatValue(v: Value[Attribute]): OK[Value[Attribute]] =
+    resolveNatBase(v)
 
   def renderAttr(a: Attribute): String =
     val out = java.io.StringWriter()
@@ -18,14 +35,7 @@ object dTensorTypeUtil:
     out.toString
 
   def checkParam(param: ValueAttribute): OK[Unit] =
-    param match
-      case va: ValueAttribute =>
-        va.getVal().typ match
-          case _: dTensorNatType => OK(())
-          case other             =>
-            Err(
-              s"shape SSA parameter must have type !dtensor.nat, got ${renderAttr(other)}"
-            )
+    resolveNatBase(param.getVal()).map(_ => ())
 
   def elemOK(elem: TypeAttribute): Boolean =
     elem match
@@ -47,7 +57,11 @@ object dTensorTypeUtil:
       rhs: Seq[ValueAttribute],
   ): Boolean =
     lhs.size == rhs.size && lhs.zip(rhs)
-      .forall((l, r) => (l.getVal() eq r.getVal()))
+      .forall((l, r) =>
+        (resolveNatBase(l.getVal()), resolveNatBase(r.getVal())) match
+          case (OK(lv), OK(rv)) => lv eq rv
+          case _                => false
+      )
 
   def checkSameTensorShapeAndElem(
       lhs: dTensorTensorType,
@@ -99,10 +113,10 @@ object dTensorTypeUtil:
       Err(
         s"dtensor.matmul: expected equal element types for lhs/rhs/result, got ${renderAttr(lhs.elem)}, ${renderAttr(rhs.elem)}, ${renderAttr(res.elem)}"
       )
-    else if lhs.params(1).getVal().ne(rhs.params(0).getVal()) then
+    else if !sameDims(Seq(lhs.params(1)), Seq(rhs.params(0))) then
       Err("dtensor.matmul: expected SSA-identical inner dims (lhs.k === rhs.k)")
-    else if (lhs.params(0).getVal().ne(res.params(0).getVal())) ||
-      (rhs.params(1).getVal().ne(res.params(1).getVal()))
+    else if !sameDims(Seq(lhs.params(0)), Seq(res.params(0))) ||
+      !sameDims(Seq(rhs.params(1)), Seq(res.params(1)))
     then
       Err(
         "dtensor.matmul: expected result dims to be outer dims (lhs.m, rhs.n)"

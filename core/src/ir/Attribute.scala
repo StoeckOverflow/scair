@@ -106,6 +106,12 @@ class ValueAttribute(
   override def hashCode(): Int =
     System.identityHashCode(v)
 
+final case class ValueRefType(ref: ValueAttribute)
+    extends TypeAttribute
+    with ParametrizedAttribute:
+  override val name: String = "value"
+  override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(ref)
+
 object DataAttribute:
   // Make all DataAttributes implicitely convertible to their held data.
   given [D]: Conversion[DataAttribute[D], D] = _.data

@@ -48,7 +48,11 @@ final class TensorTypesSpec extends AnyFlatSpec:
         )
       )
       val dim =
-        Dim(tensor, IntegerAttr(IntData(1), I32), Result(dTensorNatType()))
+        Dim(
+          tensor,
+          IntegerAttr(IntData(1), I32),
+          Result(ValueRefType(ValueAttribute(d1))),
+        )
 
       dim.verify()
       dim.selectedDimValue shouldBe OK(d1)

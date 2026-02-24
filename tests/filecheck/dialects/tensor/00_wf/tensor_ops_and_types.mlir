@@ -19,7 +19,7 @@ builtin.module {
   %prod = "dtensor.mul"(%a, %b)
     : (!dtensor.tensor<[%m, %n], f32>, !dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
   %d1 = "dtensor.dim"(%a) <{axis = 1 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%n> // return type %n? Wrap it into something?
+    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%n>
   %c = "dtensor.cast"(%a)
     : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
 }
@@ -127,7 +127,7 @@ builtin.module {
   %n = "dtensor.nat.const"() <{value = 5 : i32}> : () -> !dtensor.nat
   %a = "test.a"() : () -> !dtensor.tensor<[%m, %n], f32>
   %dneg = "dtensor.dim"(%a) <{axis = -1 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
 }
 
 // VERIFY: dtensor.dim: axis -1 out of bounds for rank 2
@@ -139,7 +139,7 @@ builtin.module {
   %n = "dtensor.nat.const"() <{value = 5 : i32}> : () -> !dtensor.nat
   %a = "test.a"() : () -> !dtensor.tensor<[%m, %n], f32>
   %drank = "dtensor.dim"(%a) <{axis = 2 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
 }
 
 // VERIFY: dtensor.dim: axis 2 out of bounds for rank 2
@@ -233,13 +233,33 @@ builtin.module {
   %n = "dtensor.nat.const"() <{value = 9 : i32}> : () -> !dtensor.nat
   %A = "test.A"() : () -> !dtensor.tensor<[%m, %n], f32>
   %d0 = "dtensor.dim"(%A) <{axis = 0 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
   %E = "dtensor.empty"() : () -> !dtensor.tensor<[%d0], f32>
 }
 
 // VERIFY: "dtensor.dim"
-// VERIFY: -> !dtensor.nat
+// VERIFY: -> !value<%
 // VERIFY: "dtensor.empty"() : () -> !dtensor.tensor<[%3], f32>
+
+// -----
+
+// Big semantic: dtensor.dim result (!value<...>) reused as a dim and dim'd again.
+builtin.module {
+  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+  %n = "dtensor.nat.const"() <{value = 7 : i32}> : () -> !dtensor.nat
+  %A = "test.A"() : () -> !dtensor.tensor<[%m, %n], f32>
+  %d0 = "dtensor.dim"(%A) <{axis = 0 : i32}>
+    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
+  %E = "dtensor.empty"() : () -> !dtensor.tensor<[%d0, %n], f32>
+  %d1 = "dtensor.dim"(%E) <{axis = 0 : i32}>
+    : (!dtensor.tensor<[%d0, %n], f32>) -> !value<%d0>
+}
+
+// VERIFY: "dtensor.dim"
+// VERIFY: -> !value<%
+// VERIFY: "dtensor.empty"() : () -> !dtensor.tensor<[
+// VERIFY: "dtensor.dim"
+// VERIFY: -> !value<%
 
 // -----
 

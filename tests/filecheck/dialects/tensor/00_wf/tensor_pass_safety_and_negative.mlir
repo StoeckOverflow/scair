@@ -212,7 +212,7 @@ builtin.module {
   %n = "dtensor.nat.param"() : () -> !dtensor.nat
   %a = "test.a"() : () -> !dtensor.tensor<[%m, %n], f32>
   // expected-error @below {{dtensor.dim: axis -1 out of bounds for rank 2}}
-  %bad = "dtensor.dim"(%a) <{axis = -1 : i32}> : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+  %bad = "dtensor.dim"(%a) <{axis = -1 : i32}> : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
 }
 
 // -----
@@ -223,7 +223,7 @@ builtin.module {
   %n = "dtensor.nat.param"() : () -> !dtensor.nat
   %a = "test.a"() : () -> !dtensor.tensor<[%m, %n], f32>
   // expected-error @below {{dtensor.dim: axis 2 out of bounds for rank 2}}
-  %bad = "dtensor.dim"(%a) <{axis = 2 : i32}> : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.nat
+  %bad = "dtensor.dim"(%a) <{axis = 2 : i32}> : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
 }
 
 // -----
@@ -233,7 +233,7 @@ builtin.module {
   %m = "dtensor.nat.param"() : () -> !dtensor.nat
   %a = "test.a"() : () -> !dtensor.tensor<[%m], f32>
   // expected-error @below {{dtensor.dim: expected i32 axis attribute}}
-  %bad = "dtensor.dim"(%a) <{axis = 0 : i64}> : (!dtensor.tensor<[%m], f32>) -> !dtensor.nat
+  %bad = "dtensor.dim"(%a) <{axis = 0 : i64}> : (!dtensor.tensor<[%m], f32>) -> !value<%m>
 }
 
 // -----

@@ -23,9 +23,10 @@ builtin.module {
 
 // Rank-0 dim query must fail (axis out of bounds).
 builtin.module {
+  %m = "dtensor.nat.param"() : () -> !dtensor.nat
   %e = "dtensor.empty"() : () -> !dtensor.tensor<[], f32>
   // expected-error @below {{dtensor.dim: axis 0 out of bounds for rank 0}}
-  %d = "dtensor.dim"(%e) <{axis = 0 : i32}> : (!dtensor.tensor<[], f32>) -> !dtensor.nat
+  %d = "dtensor.dim"(%e) <{axis = 0 : i32}> : (!dtensor.tensor<[], f32>) -> !value<%m>
 }
 
 // -----
