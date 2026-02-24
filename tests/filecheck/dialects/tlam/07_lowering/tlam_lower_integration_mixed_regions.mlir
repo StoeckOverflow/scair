@@ -1,0 +1,54 @@
+// Purpose: Integration coverage for lowering across nested regions with multiple lambdas.
+// Invariants covered: preexisting symbol collision avoidance, hierarchical dominance of lifted constants, and full value-level TLam lowering.
+
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p lower-tlam-to-func --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=LOWER
+
+builtin.module {
+  // Preexisting symbol that should not be reused by lifting.
+  func.func @lifted_1(%x: i32) -> i32 {
+    func.return %x : i32
+  }
+
+  // Lambda A: used from top-level and from inside a nested region.
+  %f = "tlam.vlambda"() ({
+  ^bb0(%x: i32):
+    "tlam.vreturn"(%x) : (i32) -> ()
+  }) : () -> !tlam.fun<i32, i32>
+
+  // Top-level use of lambda A.
+  %a = "arith.constant"() <{value = 11 : i32}> : () -> i32
+  %r0 = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> i32
+  "test.use"(%r0) : (i32) -> ()
+
+  // Nested region: defines lambda B and uses both A and B.
+  "scf.execute_region"() ({
+  ^bb0:
+    %g = "tlam.vlambda"() ({
+    ^bb1(%y: i32):
+      "tlam.vreturn"(%y) : (i32) -> ()
+    }) : () -> !tlam.fun<i32, i32>
+
+    %b = "arith.constant"() <{value = 22 : i32}> : () -> i32
+    %r1 = "tlam.vapply"(%f, %b) : (!tlam.fun<i32, i32>, i32) -> i32
+    %r2 = "tlam.vapply"(%g, %b) : (!tlam.fun<i32, i32>, i32) -> i32
+    "test.use2"(%r1, %r2) : (i32, i32) -> ()
+    "scf.yield"() : () -> ()
+  }) : () -> ()
+}
+
+// LOWER-LABEL: builtin.module {
+// LOWER-DAG: %[[CF:[0-9]+]] = func.constant @lifted_2 : (i32) -> i32
+// LOWER-DAG: %[[CG:[0-9]+]] = func.constant @lifted_3 : (i32) -> i32
+// LOWER-DAG: func.func @lifted_1(%{{[0-9]+}}: i32) -> i32 {
+// LOWER-DAG: func.func @lifted_2(%{{[0-9]+}}: i32) -> i32 {
+// LOWER-DAG: func.func @lifted_3(%{{[0-9]+}}: i32) -> i32 {
+// LOWER: "func.call_indirect"(%[[CF]], %{{[0-9]+}}) : ((i32) -> i32, i32) -> i32
+// LOWER: "scf.execute_region"() ({
+// LOWER: "func.call_indirect"(%[[CF]], %{{[0-9]+}}) : ((i32) -> i32, i32) -> i32
+// LOWER: "func.call_indirect"(%[[CG]], %{{[0-9]+}}) : ((i32) -> i32, i32) -> i32
+// LOWER: "scf.yield"() : () -> ()
+// LOWER: }) : () -> ()
+// LOWER-NOT: "tlam.vlambda"
+// LOWER-NOT: "tlam.vapply"
+// LOWER-NOT: "tlam.vreturn"
+// LOWER: }
