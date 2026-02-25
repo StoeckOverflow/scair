@@ -38,14 +38,14 @@ builtin.module {
   %TA = "test.make_type_a"() : () -> !tlam.type
   %TB = "test.make_type_b"() : () -> !tlam.type
 
-  %a = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !tlam.tvar<%TA>
-  %b = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !tlam.tvar<%TB>
-  "test.use"(%a, %b) : (!tlam.tvar<%TA>, !tlam.tvar<%TB>) -> ()
+  %a = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !value<%TA>
+  %b = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !value<%TB>
+  "test.use"(%a, %b) : (!value<%TA>, !value<%TB>) -> ()
 }
 
 // CSE-LABEL: builtin.module {
-// CSE-DAG: [[A:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.tvar<%{{[0-9]+}}>
-// CSE-DAG: [[B:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.tvar<%{{[0-9]+}}>
+// CSE-DAG: [[A:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !value<%{{[0-9]+}}>
+// CSE-DAG: [[B:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !value<%{{[0-9]+}}>
 // CSE: "test.use"([[A]], [[B]])
 // CSE: }
 
@@ -56,10 +56,10 @@ builtin.module {
   %x = "arith.constant"() <{value = 7 : i32}> : () -> i32
   %t0 = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !tlam.type
   %t1 = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !tlam.type
-  "test.use"() {dep = !tlam.tvar<%t1>} : () -> ()
+  "test.use"() {dep = !value<%t1>} : () -> ()
 }
 
 // CSE-LABEL: builtin.module {
 // CSE: [[T:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// CSE: "test.use"() {dep = !tlam.tvar<[[T]]>} : () -> ()
+// CSE: "test.use"() {dep = !value<[[T]]>} : () -> ()
 // CSE: }

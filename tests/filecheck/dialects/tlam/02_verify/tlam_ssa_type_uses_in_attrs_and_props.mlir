@@ -8,19 +8,19 @@
 // Valid: dominating type value referenced from a nested attribute parameter.
 builtin.module {
   %T = "test.make_type"() : () -> !tlam.type
-  "test.use"() {dep = !tlam.forall<!tlam.fun<i32, !tlam.tvar<%T>>>} : () -> ()
+  "test.use"() {dep = !tlam.forall<!tlam.fun<i32, !value<%T>>>} : () -> ()
 }
 
 // VERIFY-LABEL: builtin.module {
 // VERIFY: "test.make_type"() : () -> !tlam.type
-// VERIFY: "test.use"() {dep = !tlam.forall<!tlam.fun<i32, !tlam.tvar<%{{[0-9]+}}>>>
+// VERIFY: "test.use"() {dep = !tlam.forall<!tlam.fun<i32, !value<%{{[0-9]+}}>>>
 // VERIFY: }
 
 // -----
 
 // Invalid: forward reference in attribute payload.
 builtin.module {
-  "test.use"() {dep = !tlam.forall<!tlam.fun<i32, !tlam.tvar<%T>>>} : () -> ()
+  "test.use"() {dep = !tlam.forall<!tlam.fun<i32, !value<%T>>>} : () -> ()
   %T = "test.make_type"() : () -> !tlam.type
 }
 
@@ -37,12 +37,12 @@ builtin.module {
     "tlam.treturn"(%v) : (i64) -> ()
   }) : () -> !tlam.forall<i64>
 
-  %h = "tlam.tapply"(%G) <{tyArg = !tlam.tvar<%T>}>
+  %h = "tlam.tapply"(%G) <{tyArg = !value<%T>}>
        : (!tlam.forall<i64>) -> i64
 }
 
 // VERIFY-LABEL: builtin.module {
-// VERIFY: "tlam.tapply"(%{{[0-9]+}}) <{tyArg = !tlam.tvar<%{{[0-9]+}}>}> : (!tlam.forall<i64>) -> i64
+// VERIFY: "tlam.tapply"(%{{[0-9]+}}) <{tyArg = !value<%{{[0-9]+}}>}> : (!tlam.forall<i64>) -> i64
 // VERIFY: }
 
 // -----
@@ -55,7 +55,7 @@ builtin.module {
     "tlam.treturn"(%v) : (i64) -> ()
   }) : () -> !tlam.forall<i64>
 
-  %h = "tlam.tapply"(%G) <{tyArg = !tlam.tvar<%T>}>
+  %h = "tlam.tapply"(%G) <{tyArg = !value<%T>}>
        : (!tlam.forall<i64>) -> i64
   %T = "test.make_type"() : () -> !tlam.type
 }

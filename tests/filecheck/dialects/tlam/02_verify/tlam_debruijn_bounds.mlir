@@ -55,10 +55,10 @@ builtin.module {
   %poly = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
     %id = "tlam.vlambda"() ({
-    ^bb1(%x: !tlam.tvar<%T>):
-      "tlam.vreturn"(%x) : (!tlam.tvar<%T>) -> ()
-    }) : () -> !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>
-    "tlam.treturn"(%id) : (!tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>) -> ()
+    ^bb1(%x: !value<%T>):
+      "tlam.vreturn"(%x) : (!value<%T>) -> ()
+    }) : () -> !tlam.fun<!value<%T>, !value<%T>>
+    "tlam.treturn"(%id) : (!tlam.fun<!value<%T>, !value<%T>>) -> ()
   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 
   %bad = "tlam.tapply"(%poly) <{tyArg = !tlam.forall<!tlam.bvar<1>>}>
@@ -75,10 +75,10 @@ builtin.module {
   %poly = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
     %id = "tlam.vlambda"() ({
-    ^bb1(%x: !tlam.tvar<%T>):
-      "tlam.vreturn"(%x) : (!tlam.tvar<%T>) -> ()
-    }) : () -> !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>
-    "tlam.treturn"(%id) : (!tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>) -> ()
+    ^bb1(%x: !value<%T>):
+      "tlam.vreturn"(%x) : (!value<%T>) -> ()
+    }) : () -> !tlam.fun<!value<%T>, !value<%T>>
+    "tlam.treturn"(%id) : (!tlam.fun<!value<%T>, !value<%T>>) -> ()
   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 
   %outer = "tlam.tlambda"() ({
@@ -87,10 +87,10 @@ builtin.module {
       : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
        -> !tlam.fun<!tlam.forall<!tlam.bvar<1>>, !tlam.forall<!tlam.bvar<1>>>
     %v = "tlam.vlambda"() ({
-    ^bb1(%x: !tlam.tvar<%U>):
-      "tlam.vreturn"(%x) : (!tlam.tvar<%U>) -> ()
-    }) : () -> !tlam.fun<!tlam.tvar<%U>, !tlam.tvar<%U>>
-    "tlam.treturn"(%v) : (!tlam.fun<!tlam.tvar<%U>, !tlam.tvar<%U>>) -> ()
+    ^bb1(%x: !value<%U>):
+      "tlam.vreturn"(%x) : (!value<%U>) -> ()
+    }) : () -> !tlam.fun<!value<%U>, !value<%U>>
+    "tlam.treturn"(%v) : (!tlam.fun<!value<%U>, !value<%U>>) -> ()
   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 }
 
@@ -107,10 +107,10 @@ builtin.module {
   %poly = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
     %id = "tlam.vlambda"() ({
-    ^bb1(%x: !tlam.tvar<%T>):
-      "tlam.vreturn"(%x) : (!tlam.tvar<%T>) -> ()
-    }) : () -> !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>
-    "tlam.treturn"(%id) : (!tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>) -> ()
+    ^bb1(%x: !value<%T>):
+      "tlam.vreturn"(%x) : (!value<%T>) -> ()
+    }) : () -> !tlam.fun<!value<%T>, !value<%T>>
+    "tlam.treturn"(%id) : (!tlam.fun<!value<%T>, !value<%T>>) -> ()
   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 
   %bad = "tlam.tapply"(%poly) <{tyArg = !tlam.bvar<0>}>

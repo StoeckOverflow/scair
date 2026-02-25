@@ -10,20 +10,20 @@ builtin.module {
     // 1) Result type embedding.
     // 2) Attribute parameter embedding + 4) nested list parameter embedding.
     %tv = "builtin.unrealized_conversion_cast"(%x) {
-      dep = !tlam.forall<!tlam.fun<!tlam.tvar<%x>, !tlam.forall<!tlam.tvar<%x>>>>,
-      nested = [!tlam.tvar<%x>, [!tlam.forall<!tlam.tvar<%x>>, !tlam.tvar<%x>]]
-    } : (!tlam.type) -> !tlam.tvar<%x>
+      dep = !tlam.forall<!tlam.fun<!value<%x>, !tlam.forall<!value<%x>>>>,
+      nested = [!value<%x>, [!tlam.forall<!value<%x>>, !value<%x>]]
+    } : (!tlam.type) -> !value<%x>
 
     // 3) Property parameter embedding.
     %G = "tlam.tlambda"() ({
     ^bb1(%U: !tlam.type):
-      %u = "builtin.unrealized_conversion_cast"(%U) : (!tlam.type) -> !tlam.tvar<%U>
-      "tlam.treturn"(%u) : (!tlam.tvar<%U>) -> ()
+      %u = "builtin.unrealized_conversion_cast"(%U) : (!tlam.type) -> !value<%U>
+      "tlam.treturn"(%u) : (!value<%U>) -> ()
     }) : () -> !tlam.forall<!tlam.bvar<0>>
-    %h = "tlam.tapply"(%G) <{tyArg = !tlam.tvar<%x>}>
-         : (!tlam.forall<!tlam.bvar<0>>) -> !tlam.tvar<%x>
+    %h = "tlam.tapply"(%G) <{tyArg = !value<%x>}>
+         : (!tlam.forall<!tlam.bvar<0>>) -> !value<%x>
 
-    %back = "builtin.unrealized_conversion_cast"(%h) : (!tlam.tvar<%x>) -> !tlam.type
+    %back = "builtin.unrealized_conversion_cast"(%h) : (!value<%x>) -> !tlam.type
     "tlam.vreturn"(%back) : (!tlam.type) -> ()
   }) : () -> !tlam.fun<!tlam.type, !tlam.type>
 
@@ -35,15 +35,15 @@ builtin.module {
 // RAUW-LABEL: builtin.module {
 // RAUW: [[A:%[0-9]+]] = "builtin.unrealized_conversion_cast"() : () -> !tlam.type
 // RAUW-NOT: "tlam.vapply"
-// RAUW: [[TV:%[0-9]+]] = "builtin.unrealized_conversion_cast"([[A]]) {dep = !tlam.forall<!tlam.fun<!tlam.tvar<[[A]]>, !tlam.forall<!tlam.tvar<[[A]]>>>>, nested = [!tlam.tvar<[[TV]]>, [!tlam.forall<!tlam.tvar<[[TV]]>>, !tlam.tvar<[[TV]]>]]} : (!tlam.type) -> !tlam.tvar<[[A]]>
-// RAUW: "tlam.tapply"(%{{[0-9]+}}) <{tyArg = !tlam.tvar<%{{[0-9]+}}>}> : (!tlam.forall<!tlam.bvar<0>>) -> !tlam.tvar<%{{[0-9]+}}>
-// RAUW: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (!tlam.tvar<[[A]]>) -> !tlam.type
+// RAUW: [[TV:%[0-9]+]] = "builtin.unrealized_conversion_cast"([[A]]) {dep = !tlam.forall<!tlam.fun<!value<[[A]]>, !tlam.forall<!value<[[A]]>>>>, nested = [!value<[[TV]]>, [!tlam.forall<!value<[[TV]]>>, !value<[[TV]]>]]} : (!tlam.type) -> !value<[[A]]>
+// RAUW: "tlam.tapply"(%{{[0-9]+}}) <{tyArg = !value<%{{[0-9]+}}>}> : (!tlam.forall<!tlam.bvar<0>>) -> !value<%{{[0-9]+}}>
+// RAUW: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (!value<[[A]]>) -> !tlam.type
 
 // -----
 
 // Invalid nested attr forward reference in embedded tvar.
 // expected-error @below {{ssa-dominance: value Value}}
 builtin.module {
-  "test.use"() {nested = [!tlam.tvar<%T>, [!tlam.forall<!tlam.tvar<%T>>, !tlam.tvar<%T>]]} : () -> ()
+  "test.use"() {nested = [!value<%T>, [!tlam.forall<!value<%T>>, !value<%T>]]} : () -> ()
   %T = "test.make_type"() : () -> !tlam.type
 }

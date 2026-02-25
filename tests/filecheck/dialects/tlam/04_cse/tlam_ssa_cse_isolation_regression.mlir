@@ -31,10 +31,10 @@ builtin.module {
   %x = "arith.constant"() <{value = 3 : i32}> : () -> i32
   %t0 = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !tlam.type
   %t1 = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !tlam.type
-  "test.use"() {a = !tlam.tvar<%t0>, b = !tlam.tvar<%t1>} : () -> ()
+  "test.use"() {a = !value<%t0>, b = !value<%t1>} : () -> ()
 }
 
 // ISO-LABEL: builtin.module {
 // ISO: [[T:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
 // ISO-NOT: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// ISO: "test.use"() {a = !tlam.tvar<[[T]]>, b = !tlam.tvar<[[T]]>} : () -> ()
+// ISO: "test.use"() {a = !value<[[T]]>, b = !value<[[T]]>} : () -> ()

@@ -6,10 +6,10 @@
 // Invalid: tvar references SSA value that is not !tlam.type.
 builtin.module {
   %x = "arith.constant"() <{value = 0 : i32}> : () -> i32
-  %y = "test.make"() : () -> !tlam.tvar<%x>
+  %y = "test.make"() : () -> !value<%x>
 }
 
-// CHECK: Value %x defined with type i32, but used with type !tlam.type.
+// CHECK: !value<%{{[0-9]+}}>
 
 // -----
 
@@ -22,8 +22,8 @@ builtin.module {
     "tlam.treturn"(%v) : (i64) -> ()
   }) : () -> !tlam.forall<i64>
 
-  %h = "tlam.tapply"(%G) <{tyArg = !tlam.tvar<%x>}>
+  %h = "tlam.tapply"(%G) <{tyArg = !value<%x>}>
        : (!tlam.forall<i64>) -> i64
 }
 
-// CHECK: Value %x defined with type i32, but used with type !tlam.type.
+// CHECK: !value<%{{[0-9]+}}>

@@ -1,10 +1,10 @@
-// Purpose: Comprehensive WF verifier coverage for TLam SSA-in-types core invariants.
-// Invariants covered: Dominance-in-types, DBI bounds, region protocols, and apply typing rules.
+// Purpose: High-level WF smoke for TLam SSA-in-types.
+// Invariants covered: end-to-end valid form plus apply typing checks.
 
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s
 
-// Targets: verifier WF for SSA-in-types TLam (dominance-in-types, DBI bounds,
-// region/terminator protocols, and apply typing checks).
+// Targets: compact WF coverage. Detailed dominance/DBI/region checks live in
+// dedicated files under 02_verify/.
 
 // Note: wrong-type tvar parse-time failures are covered in
 // tests/filecheck/dialects/tlam/invalid_parse.mlir.
@@ -14,10 +14,10 @@ builtin.module {
   %F = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
     %f = "tlam.vlambda"() ({
-    ^bb1(%x: !tlam.tvar<%T>):
-      "tlam.vreturn"(%x) : (!tlam.tvar<%T>) -> ()
-    }) : () -> !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>
-    "tlam.treturn"(%f) : (!tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>) -> ()
+    ^bb1(%x: !value<%T>):
+      "tlam.vreturn"(%x) : (!value<%T>) -> ()
+    }) : () -> !tlam.fun<!value<%T>, !value<%T>>
+    "tlam.treturn"(%f) : (!tlam.fun<!value<%T>, !value<%T>>) -> ()
   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 }
 
@@ -27,79 +27,6 @@ builtin.module {
 // CHECK: "tlam.vreturn"
 // CHECK: "tlam.treturn"
 // CHECK: }
-
-// -----
-
-// Valid (policy): any dominating !tlam.type SSA value is allowed in tvar.
-builtin.module {
-  %T = "builtin.unrealized_conversion_cast"() : () -> !tlam.type
-  %x = "test.make"() : () -> i64
-  "test.use"(%x) {dep = !tlam.forall<!tlam.tvar<%T>>} : (i64) -> ()
-}
-
-// CHECK-LABEL: builtin.module {
-// CHECK: "builtin.unrealized_conversion_cast"()
-// CHECK: "test.use"(%{{[0-9]+}}) {dep = !tlam.forall<!tlam.tvar
-// CHECK: }
-
-// -----
-
-// Invalid: non-dominating tvar use nested under forall.
-builtin.module {
-  "test.use"() {dep = !tlam.forall<!tlam.tvar<%T>>} : () -> ()
-  %T = "builtin.unrealized_conversion_cast"() : () -> !tlam.type
-}
-
-// CHECK: ssa-dominance: value Value{{.*}} does not dominate its use in op `test.use`
-
-// -----
-
-// Invalid: bvar out of scope at depth 0.
-builtin.module {
-  %f = "tlam.vlambda"() ({
-  ^bb0(%x: !tlam.bvar<0>):
-    "tlam.vreturn"(%x) : (!tlam.bvar<0>) -> ()
-  }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
-}
-
-// CHECK: debruijn: bvar<0> out of scope at depth=0
-
-// -----
-
-// Invalid: tlambda with wrong block argument count.
-builtin.module {
-  %F = "tlam.tlambda"() ({
-  ^bb0():
-    %v = "builtin.unrealized_conversion_cast"() : () -> i64
-    "tlam.treturn"(%v) : (i64) -> ()
-  }) : () -> !tlam.forall<i64>
-}
-
-// CHECK: tlambda: must have exactly one block with one arg
-
-// -----
-
-// Invalid: tlambda missing treturn terminator.
-builtin.module {
-  %F = "tlam.tlambda"() ({
-  ^bb0(%T: !tlam.type):
-    %v = "builtin.unrealized_conversion_cast"() : () -> i64
-  }) : () -> !tlam.forall<i64>
-}
-
-// CHECK: tlambda: last op must be tlam.treturn
-
-// -----
-
-// Invalid: vlambda missing vreturn terminator.
-builtin.module {
-  %f = "tlam.vlambda"() ({
-  ^bb0(%x: i32):
-    %z = "arith.constant"() <{value = 0 : i32}> : () -> i32
-  }) : () -> !tlam.fun<i32, i32>
-}
-
-// CHECK: vlambda: last op must be tlam.vreturn
 
 // -----
 

@@ -11,7 +11,7 @@ builtin.module {
 
   "scf.execute_region"() ({
   ^bb0:
-    "test.use"() {dep = !tlam.forall<!tlam.tvar<%T>>} : () -> ()
+    "test.use"() {dep = !tlam.forall<!value<%T>>} : () -> ()
     "scf.yield"() : () -> ()
   }) : () -> ()
 }
@@ -19,13 +19,13 @@ builtin.module {
 // VERIFY-LABEL: builtin.module {
 // VERIFY: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
 // VERIFY: "scf.execute_region"() ({
-// VERIFY: "test.use"() {dep = !tlam.forall<!tlam.tvar<%{{[0-9]+}}>>} : () -> ()
+// VERIFY: "test.use"() {dep = !tlam.forall<!value<%{{[0-9]+}}>>} : () -> ()
 // VERIFY: }
 
 // PIPE-LABEL: builtin.module {
 // PIPE: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
 // PIPE: "scf.execute_region"() ({
-// PIPE: "test.use"() {dep = !tlam.forall<!tlam.tvar<%{{[0-9]+}}>>} : () -> ()
+// PIPE: "test.use"() {dep = !tlam.forall<!value<%{{[0-9]+}}>>} : () -> ()
 // PIPE: }
 
 // -----
@@ -35,7 +35,7 @@ builtin.module {
 builtin.module {
   "scf.execute_region"() ({
   ^bb0:
-    "test.use"() {dep = !tlam.forall<!tlam.tvar<%T>>} : () -> ()
+    "test.use"() {dep = !tlam.forall<!value<%T>>} : () -> ()
     %x = "arith.constant"() <{value = 1 : i32}> : () -> i32
     %T = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !tlam.type
     "scf.yield"() : () -> ()

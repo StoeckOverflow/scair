@@ -10,21 +10,21 @@ builtin.module {
 
   %mk = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
-    %v = "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.tvar<%T>>>
-    "tlam.treturn"(%v) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.tvar<%T>>>) -> ()
+    %v = "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !value<%T>>>
+    "tlam.treturn"(%v) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !value<%T>>>) -> ()
   }) : () -> !tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<1>>>>
 
-  %spec = "tlam.tapply"(%mk) <{tyArg = !tlam.forall<!tlam.tvar<%Y>>}>
+  %spec = "tlam.tapply"(%mk) <{tyArg = !tlam.forall<!value<%Y>>}>
       : (!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<1>>>>)
-       -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!tlam.tvar<%Y>>>>
-  "test.use"(%spec) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!tlam.tvar<%Y>>>>) -> ()
+       -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<%Y>>>>
+  "test.use"(%spec) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<%Y>>>>) -> ()
 }
 
 // MONO-LABEL: builtin.module {
 // MONO: [[Y:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
 // MONO-NOT: "tlam.tapply"
-// MONO: "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!tlam.tvar<[[Y]]>>>>
-// MONO: "test.use"(%{{[0-9]+}}) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!tlam.tvar<[[Y]]>>>>) -> ()
+// MONO: "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<[[Y]]>>>>
+// MONO: "test.use"(%{{[0-9]+}}) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<[[Y]]>>>>) -> ()
 
 // -----
 
@@ -36,11 +36,11 @@ builtin.module {
 
   %mk = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
-    %v = "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.tvar<%T>>>
-    "tlam.treturn"(%v) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.tvar<%T>>>) -> ()
+    %v = "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !value<%T>>>
+    "tlam.treturn"(%v) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !value<%T>>>) -> ()
   }) : () -> !tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<1>>>>
 
-  %bad = "tlam.tapply"(%mk) <{tyArg = !tlam.forall<!tlam.tvar<%Y>>}>
+  %bad = "tlam.tapply"(%mk) <{tyArg = !tlam.forall<!value<%Y>>}>
       : (!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<1>>>>)
        -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, i32>>
 }

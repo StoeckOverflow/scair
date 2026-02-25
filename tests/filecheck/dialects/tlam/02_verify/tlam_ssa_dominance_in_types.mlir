@@ -8,11 +8,11 @@ builtin.module {
   %F = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
     %v = "tlam.vlambda"() ({
-    ^bb0(%x: !tlam.tvar<%T>):
-      "tlam.vreturn"(%x) : (!tlam.tvar<%T>) -> ()
-    }) : () -> !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>
+    ^bb0(%x: !value<%T>):
+      "tlam.vreturn"(%x) : (!value<%T>) -> ()
+    }) : () -> !tlam.fun<!value<%T>, !value<%T>>
     "tlam.treturn"(%v)
-      : (!tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>) -> ()
+      : (!tlam.fun<!value<%T>, !value<%T>>) -> ()
   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 }
 
@@ -27,7 +27,7 @@ builtin.module {
 
 // Use-before-def of a type value in an attribute.
 builtin.module {
-  "test.use"() {dep = !tlam.tvar<%T>} : () -> ()
+  "test.use"() {dep = !value<%T>} : () -> ()
   %T = "test.make_type"() : () -> !tlam.type
 }
 
@@ -40,16 +40,16 @@ builtin.module {
   %G = "tlam.tlambda"() ({
   ^bb0(%U: !tlam.type):
     %v = "tlam.vlambda"() ({
-    ^bb0(%x: !tlam.tvar<%U>):
-      "tlam.vreturn"(%x) : (!tlam.tvar<%U>) -> ()
-    }) : () -> !tlam.fun<!tlam.tvar<%U>, !tlam.tvar<%U>>
+    ^bb0(%x: !value<%U>):
+      "tlam.vreturn"(%x) : (!value<%U>) -> ()
+    }) : () -> !tlam.fun<!value<%U>, !value<%U>>
     "tlam.treturn"(%v)
-      : (!tlam.fun<!tlam.tvar<%U>, !tlam.tvar<%U>>) -> ()
+      : (!tlam.fun<!value<%U>, !value<%U>>) -> ()
   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 
-  %h = "tlam.tapply"(%G) <{tyArg = !tlam.tvar<%T>}>
+  %h = "tlam.tapply"(%G) <{tyArg = !value<%T>}>
        : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
-         -> !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>
+         -> !tlam.fun<!value<%T>, !value<%T>>
 
   %T = "test.make_type"() : () -> !tlam.type
 }
@@ -61,12 +61,12 @@ builtin.module {
 // Passing case: tvar may reference any dominating !tlam.type value (not only a tlambda binder).
 builtin.module {
   %T = "test.make_type"() : () -> !tlam.type
-  "test.use"() {dep = !tlam.tvar<%T>} : () -> ()
+  "test.use"() {dep = !value<%T>} : () -> ()
 }
 
 // CHECK-LABEL: builtin.module {
 // CHECK: "test.make_type"()
-// CHECK: "test.use"() {dep = !tlam.tvar
+// CHECK: "test.use"() {dep = !value
 // CHECK: }
 
 // -----
@@ -79,7 +79,7 @@ builtin.module {
     "tlam.treturn"(%v) : (i64) -> ()
   }) : () -> !tlam.forall<i64>
 
-  %h = "tlam.tapply"(%G) <{tyArg = !tlam.tvar<%T>}>
+  %h = "tlam.tapply"(%G) <{tyArg = !value<%T>}>
        : (!tlam.forall<i64>) -> i64
 
   %T = "test.make_type"() : () -> !tlam.type

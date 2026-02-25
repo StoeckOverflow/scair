@@ -9,8 +9,8 @@
 builtin.module {
   %mk = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
-    %v = "test.mk_poly"() : () -> !tlam.forall<!tlam.tvar<%T>>
-    "tlam.treturn"(%v) : (!tlam.forall<!tlam.tvar<%T>>) -> ()
+    %v = "test.mk_poly"() : () -> !tlam.forall<!value<%T>>
+    "tlam.treturn"(%v) : (!tlam.forall<!value<%T>>) -> ()
   }) : () -> !tlam.forall<!tlam.forall<!tlam.bvar<1>>>
 
   %s0 = "tlam.tapply"(%mk) <{tyArg = i32}>
@@ -33,8 +33,8 @@ builtin.module {
 builtin.module {
   %mk = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
-    %v = "test.mk_poly"() : () -> !tlam.forall<!tlam.tvar<%T>>
-    "tlam.treturn"(%v) : (!tlam.forall<!tlam.tvar<%T>>) -> ()
+    %v = "test.mk_poly"() : () -> !tlam.forall<!value<%T>>
+    "tlam.treturn"(%v) : (!tlam.forall<!value<%T>>) -> ()
   }) : () -> !tlam.forall<!tlam.forall<!tlam.bvar<1>>>
 
   %s32 = "tlam.tapply"(%mk) <{tyArg = i32}>
@@ -58,8 +58,8 @@ builtin.module {
 builtin.module {
   %mk = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
-    %v = "test.mk_poly"() : () -> !tlam.forall<!tlam.tvar<%T>>
-    "tlam.treturn"(%v) : (!tlam.forall<!tlam.tvar<%T>>) -> ()
+    %v = "test.mk_poly"() : () -> !tlam.forall<!value<%T>>
+    "tlam.treturn"(%v) : (!tlam.forall<!value<%T>>) -> ()
   }) : () -> !tlam.forall<!tlam.forall<!tlam.bvar<1>>>
 
   %bad = "tlam.tapply"(%mk) <{tyArg = i32}>
@@ -75,8 +75,8 @@ builtin.module {
 builtin.module {
   %mk = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
-    %v = "test.mk_poly"() : () -> !tlam.forall<!tlam.tvar<%T>>
-    "test.use"(%v) : (!tlam.forall<!tlam.tvar<%T>>) -> ()
+    %v = "test.mk_poly"() : () -> !tlam.forall<!value<%T>>
+    "test.use"(%v) : (!tlam.forall<!value<%T>>) -> ()
   }) : () -> !tlam.forall<!tlam.forall<!tlam.bvar<1>>>
 
   %s0 = "tlam.tapply"(%mk) <{tyArg = i32}>

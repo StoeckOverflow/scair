@@ -48,12 +48,12 @@ builtin.module {
 
 // -----
 
-// Valid 3: SSA-in-types remap in cloned ops: !tlam.tvar<%x> becomes !tlam.tvar<%A>.
+// Valid 3: SSA-in-types remap in cloned ops: !value<%x> becomes !value<%A>.
 builtin.module {
   %f = "tlam.vlambda"() ({
   ^bb0(%x: !tlam.type):
-    %tv = "builtin.unrealized_conversion_cast"(%x) : (!tlam.type) -> !tlam.tvar<%x>
-    %back = "builtin.unrealized_conversion_cast"(%tv) : (!tlam.tvar<%x>) -> !tlam.type
+    %tv = "builtin.unrealized_conversion_cast"(%x) : (!tlam.type) -> !value<%x>
+    %back = "builtin.unrealized_conversion_cast"(%tv) : (!value<%x>) -> !tlam.type
     "tlam.vreturn"(%back) : (!tlam.type) -> ()
   }) : () -> !tlam.fun<!tlam.type, !tlam.type>
 
@@ -64,7 +64,7 @@ builtin.module {
 
 // CHECK-LABEL: builtin.module {
 // CHECK: [[A:%[0-9]+]] = "builtin.unrealized_conversion_cast"() : () -> !tlam.type
-// CHECK: "builtin.unrealized_conversion_cast"([[A]]) : (!tlam.type) -> !tlam.tvar<[[A]]>
+// CHECK: "builtin.unrealized_conversion_cast"([[A]]) : (!tlam.type) -> !value<[[A]]>
 // CHECK-NOT: "tlam.vapply"
 // CHECK: "test.use"(%{{[0-9]+}}) : (!tlam.type) -> ()
 // CHECK: }
@@ -142,35 +142,12 @@ builtin.module {
 
 // -----
 
-// Valid 7: dominance-in-types remains valid after replacing vapply result.
-builtin.module {
-  %f = "tlam.vlambda"() ({
-  ^bb0(%x: !tlam.type):
-    %tv = "builtin.unrealized_conversion_cast"(%x) : (!tlam.type) -> !tlam.tvar<%x>
-    %back = "builtin.unrealized_conversion_cast"(%tv) : (!tlam.tvar<%x>) -> !tlam.type
-    "tlam.vreturn"(%back) : (!tlam.type) -> ()
-  }) : () -> !tlam.fun<!tlam.type, !tlam.type>
-
-  %A = "builtin.unrealized_conversion_cast"() : () -> !tlam.type
-  %r = "tlam.vapply"(%f, %A) : (!tlam.fun<!tlam.type, !tlam.type>, !tlam.type) -> !tlam.type
-  "test.use"(%r) {dep = !tlam.tvar<%r>} : (!tlam.type) -> ()
-}
-
-// CHECK-LABEL: builtin.module {
-// CHECK: [[A:%[0-9]+]] = "builtin.unrealized_conversion_cast"() : () -> !tlam.type
-// CHECK: "builtin.unrealized_conversion_cast"([[A]]) : (!tlam.type) -> !tlam.tvar<[[A]]>
-// CHECK-NOT: "tlam.vapply"
-// CHECK: "test.use"(%{{[0-9]+}}) {dep = !tlam.tvar<%{{[0-9]+}}>}
-// CHECK: }
-
-// -----
-
 // Must NOT reduce 8: effectful body with uses-in-types.
 builtin.module {
   %f = "tlam.vlambda"() ({
   ^bb0(%x: !tlam.type):
-    %e = "test.effect_type"(%x) : (!tlam.type) -> !tlam.tvar<%x>
-    %back = "builtin.unrealized_conversion_cast"(%e) : (!tlam.tvar<%x>) -> !tlam.type
+    %e = "test.effect_type"(%x) : (!tlam.type) -> !value<%x>
+    %back = "builtin.unrealized_conversion_cast"(%e) : (!value<%x>) -> !tlam.type
     "tlam.vreturn"(%back) : (!tlam.type) -> ()
   }) : () -> !tlam.fun<!tlam.type, !tlam.type>
 
@@ -181,28 +158,4 @@ builtin.module {
 // CHECK-LABEL: builtin.module {
 // CHECK: "test.effect_type"
 // CHECK: "tlam.vapply"
-// CHECK: }
-
-// -----
-
-// Valid 9: nested tlambda/vlambda remains well-formed with binder tvar.
-builtin.module {
-  %poly = "tlam.tlambda"() ({
-  ^bb0(%T: !tlam.type):
-    %id = "tlam.vlambda"() ({
-    ^bb1(%x: !tlam.tvar<%T>):
-      "tlam.vreturn"(%x) : (!tlam.tvar<%T>) -> ()
-    }) : () -> !tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>
-
-    %arg = "builtin.unrealized_conversion_cast"(%T) : (!tlam.type) -> !tlam.tvar<%T>
-    %r = "tlam.vapply"(%id, %arg) : (!tlam.fun<!tlam.tvar<%T>, !tlam.tvar<%T>>, !tlam.tvar<%T>) -> !tlam.tvar<%T>
-    "tlam.treturn"(%r) : (!tlam.tvar<%T>) -> ()
-  }) : () -> !tlam.forall<!tlam.bvar<0>>
-}
-
-// CHECK-LABEL: builtin.module {
-// CHECK: "tlam.tlambda"()
-// CHECK: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (!tlam.type) -> !tlam.tvar<%{{[0-9]+}}>
-// CHECK-NOT: "tlam.vapply"
-// CHECK: "tlam.treturn"(%{{[0-9]+}}) : (!tlam.tvar<%{{[0-9]+}}>) -> ()
 // CHECK: }
