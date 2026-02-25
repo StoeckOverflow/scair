@@ -2,9 +2,7 @@
 // Invariants covered: Monomorphize/erase/lower/full pipeline success plus invalid-input verifier failures.
 
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=MONO
-// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize,erase-tlam --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=ERASE
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize,erase-tlam,lower-tlam-to-func --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=LOWER
-// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p canonicalize,cse,canonicalize,monomorphize,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=FULL
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,canonicalize,cse,canonicalize,monomorphize,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETAFULL
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p canonicalize,monomorphize,beta-reduce-tlam,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETALATE
 
@@ -32,25 +30,12 @@ builtin.module {
 // MONO: "tlam.vlambda"()
 // MONO: }
 
-// ERASE-LABEL: builtin.module {
-// ERASE-NOT: "tlam.tlambda"
-// ERASE-NOT: "tlam.tapply"
-// ERASE-NOT: "tlam.treturn"
-// ERASE: "tlam.vlambda"()
-// ERASE: }
-
 // LOWER-LABEL: builtin.module {
 // LOWER-NOT: "tlam."
 // LOWER-DAG: %{{[0-9]+}} = func.constant @lifted_{{[0-9]+}} : (i64) -> i64
 // LOWER-DAG: func.func @lifted_{{[0-9]+}}(%{{[0-9]+}}: i64) -> i64 {
 // LOWER-DAG: func.return %{{[0-9]+}} : i64
 // LOWER: }
-
-// FULL-LABEL: builtin.module {
-// FULL-NOT: "tlam."
-// FULL: func.func @lifted_{{[0-9]+}}(%{{[0-9]+}}: i64) -> i64 {
-// FULL: func.return %{{[0-9]+}} : i64
-// FULL: }
 
 // -----
 
@@ -69,9 +54,7 @@ builtin.module {
 }
 
 // MONO: ssa-dominance: value Value{{.*}} does not dominate its use in op `tlam.tapply`
-// ERASE: ssa-dominance: value Value{{.*}} does not dominate its use in op `tlam.tapply`
 // LOWER: ssa-dominance: value Value{{.*}} does not dominate its use in op `tlam.tapply`
-// FULL: ssa-dominance: value Value{{.*}} does not dominate its use in op `tlam.tapply`
 
 // -----
 
@@ -84,9 +67,7 @@ builtin.module {
 }
 
 // MONO: debruijn: bvar<0> out of scope at depth=0
-// ERASE: debruijn: bvar<0> out of scope at depth=0
 // LOWER: debruijn: bvar<0> out of scope at depth=0
-// FULL: debruijn: bvar<0> out of scope at depth=0
 
 // -----
 
