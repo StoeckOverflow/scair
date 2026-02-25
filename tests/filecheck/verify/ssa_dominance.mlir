@@ -107,7 +107,7 @@ builtin.module {
 
 // Value used in a dependent result type before the defining op.
 builtin.module {
-  %1 = "arith.constant"() <{value = 1 : i32}> : () -> !tlam.tvar<%t0>
+  %1 = "arith.constant"() <{value = 1 : i32}> : () -> !value<%t0>
   %t0 = "test.make_type"() : () -> !tlam.type
 }
 
@@ -117,7 +117,7 @@ builtin.module {
 
 // Value used in an attribute before the defining op.
 builtin.module {
-  "test.use"() {dep = !tlam.tvar<%t0>} : () -> ()
+  "test.use"() {dep = !value<%t0>} : () -> ()
   %t0 = "test.make_type"() : () -> !tlam.type
 }
 
