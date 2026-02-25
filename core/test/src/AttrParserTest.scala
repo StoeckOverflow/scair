@@ -348,3 +348,37 @@ class AttrParserTest extends AnyFlatSpec with BeforeAndAfter:
           ) =>
     }
   }
+
+  "valueRefType parsing" should "accept both !value and value spellings" in {
+    val input =
+      """%x = "test.make"() : () -> i32
+        |"test.use"() {a = !value<%x>, b = value<%x>} : () -> ()""".stripMargin
+
+    parser.parse(input) match
+      case Parsed.Success(m: ModuleOp, _) =>
+        val useOp = m.body.blocks.head.operations(1)
+        val a = useOp.attributes("a").asInstanceOf[ValueRefType]
+        val b = useOp.attributes("b").asInstanceOf[ValueRefType]
+        val x = m.body.blocks.head.operations.head.results.head
+
+        a.value should be theSameInstanceAs x
+        b.value should be theSameInstanceAs x
+        b.toString.startsWith("!value<%") shouldEqual true
+      case other =>
+        fail(s"expected successful parse, got: $other")
+  }
+
+  "valueRefType parsing" should "keep unresolved placeholders for forward refs" in {
+    val input =
+      """%u = "test.mk"() : () -> !value<%x>
+        |%x = "test.make"() : () -> i32""".stripMargin
+
+    parser.parse(input) match
+      case Parsed.Success(m: ModuleOp, _) =>
+        val mk = m.body.blocks.head.operations.head
+        val dep = mk.results.head.typ.asInstanceOf[ValueRefType]
+
+        dep.value.typ shouldEqual StringData("unresolved:%x")
+      case other =>
+        fail(s"expected successful parse, got: $other")
+  }

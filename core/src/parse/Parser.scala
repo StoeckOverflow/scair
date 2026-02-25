@@ -6,11 +6,13 @@ import fastparse.Parsed.Failure
 import fastparse.internal.Util
 import scair.MLContext
 import scair.clair.macros.DerivedOperationCompanion
+import scair.dialects.builtin.StringData
 import scair.dialects.builtin.ModuleOp
 import scair.ir.*
 
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.collection.mutable.AnyRefMap
 import scala.collection.mutable.Builder
 
 // ██████╗░ ░█████╗░ ██████╗░ ░██████╗ ███████╗ ██████╗░
@@ -162,10 +164,14 @@ def concatRepeater[T] = new Repeater[Seq[T], Seq[T]]:
 \*≡==---==≡==---==≡*/
 
 private final class Scope(
-    var valueMap: mutable.Map[String, Value[Attribute]] = mutable.Map
+    var valueMap: mutable.Map[String, Value[Attribute]] = AnyRefMap
       .empty[String, Value[Attribute]],
     var forwardValues: mutable.Set[String] = mutable.Set.empty[String],
-    var blockMap: mutable.Map[String, Block] = mutable.Map.empty[String, Block],
+    var unresolvedValueRefs: mutable.Map[String, mutable.ArrayBuffer[
+      ValueAttribute
+    ]] =
+      AnyRefMap.empty[String, mutable.ArrayBuffer[ValueAttribute]],
+    var blockMap: mutable.Map[String, Block] = AnyRefMap.empty[String, Block],
     var forwardBlocks: mutable.Set[String] = mutable.Set.empty[String],
 ):
 
@@ -174,10 +180,28 @@ private final class Scope(
       case Some(valueName) =>
         Fail(s"Value %$valueName not defined within Scope")
       case None =>
-        forwardBlocks.headOption match
-          case Some(blockName) =>
-            Fail(s"Successor ^$blockName not defined within Scope")
-          case None => Pass
+        unresolvedValueRefs.headOption match
+          case Some((valueName, _)) =>
+            Fail(s"Value %$valueName not defined within Scope")
+          case None                 =>
+            forwardBlocks.headOption match
+              case Some(blockName) =>
+                Fail(s"Successor ^$blockName not defined within Scope")
+              case None            => Pass
+
+  private inline def resolvePendingValueRefs(
+      name: String,
+      resolvedValue: Value[Attribute],
+  ): Unit =
+    unresolvedValueRefs.remove(name).foreach(_.foreach { va =>
+      val oldValue = va.getVal()
+      // Drain uses in place to avoid snapshot allocations on hot parse paths.
+      while oldValue.typeUses.nonEmpty do
+        val tu = oldValue.typeUses.head
+        oldValue.typeUses -= tu
+        va.replaceValue(oldValue, resolvedValue)
+        resolvedValue.typeUses += TypeUse(tu.owner, va)
+    })
 
   inline def defineValueP[$: P](
       name: String,
@@ -188,11 +212,21 @@ private final class Scope(
         Fail(
           s"Value cannot be defined twice within the same scope - %$name"
         )
-      Pass(valueMap(name))
+      else
+        val definedValue = valueMap(name)
+        resolvePendingValueRefs(name, definedValue)
+        Pass(definedValue)
     else
       val v = Value[Attribute](typ)
       valueMap(name) = v
+      resolvePendingValueRefs(name, v)
       Pass(v)
+
+  inline def addUnresolvedValueRef(name: String, ref: ValueAttribute): Unit =
+    unresolvedValueRefs.getOrElseUpdate(name, mutable.ArrayBuffer.empty) += ref
+
+  inline def getValue(name: String): Option[Value[Attribute]] =
+    valueMap.get(name)
 
   def defineBlockArgumentP[$: P](
       name: String,
@@ -417,6 +451,21 @@ def operandP[$: P, A <: Attribute](name: String, typ: A)(using
       p.scopes.top.valueMap(name) = forwardValue
       p.scopes.top.forwardValues += name
       Pass(forwardValue)
+
+def existingOrForwardValueRefOperandP[$: P](name: String)(using
+    p: Parser
+): P[ValueAttribute] =
+  p.scopes.collectFirst {
+    case scope if scope.getValue(name).isDefined =>
+      scope.getValue(name).get
+  } match
+    case Some(value) =>
+      Pass(ValueAttribute(value))
+    case None =>
+      val forwardValue = Value[Attribute](StringData(s"unresolved:%$name"))
+      val valueRef = ValueAttribute(forwardValue)
+      p.scopes.top.addUnresolvedValueRef(name, valueRef)
+      Pass(valueRef)
 
 def valueRefInAnglesP[$: P](expected: Attribute)(using
     p: Parser

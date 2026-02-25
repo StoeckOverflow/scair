@@ -43,8 +43,6 @@ sealed trait Attribute:
 trait TypeAttribute extends Attribute:
   override def prefix: String = "!"
 
-/*
- */
 trait IntegerEnumAttr extends Attribute:
   def ordinalIntAttr: IntegerAttr
 
@@ -105,6 +103,16 @@ class ValueAttribute(
 
   override def hashCode(): Int =
     System.identityHashCode(v)
+
+final case class ValueRefType(ref: ValueAttribute)
+    extends TypeAttribute
+    with ParametrizedAttribute:
+
+  override val name: String = "value"
+
+  def value: Value[Attribute] = ref.getVal()
+
+  override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(ref)
 
 object DataAttribute:
   // Make all DataAttributes implicitely convertible to their held data.
