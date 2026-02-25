@@ -169,8 +169,7 @@ private final class Scope(
     var forwardValues: mutable.Set[String] = mutable.Set.empty[String],
     var unresolvedValueRefs: mutable.Map[String, mutable.ArrayBuffer[
       ValueAttribute
-    ]] =
-      AnyRefMap.empty[String, mutable.ArrayBuffer[ValueAttribute]],
+    ]] = AnyRefMap.empty[String, mutable.ArrayBuffer[ValueAttribute]],
     var blockMap: mutable.Map[String, Block] = AnyRefMap.empty[String, Block],
     var forwardBlocks: mutable.Set[String] = mutable.Set.empty[String],
 ):
@@ -183,11 +182,11 @@ private final class Scope(
         unresolvedValueRefs.headOption match
           case Some((valueName, _)) =>
             Fail(s"Value %$valueName not defined within Scope")
-          case None                 =>
+          case None =>
             forwardBlocks.headOption match
               case Some(blockName) =>
                 Fail(s"Successor ^$blockName not defined within Scope")
-              case None            => Pass
+              case None => Pass
 
   private inline def resolvePendingValueRefs(
       name: String,
@@ -419,10 +418,15 @@ final class Parser(
 
     // Get the error's line's content
     val length = traced.input.length
-    val inputLine = traced.input.slice(0, length).split("\n")(line - 1)
+    val lines = traced.input.slice(0, length).split("\n", -1)
+    val safeLineIndex =
+      if lines.isEmpty then 0
+      else math.max(0, math.min(line - 1, lines.length - 1))
+    val inputLine = if lines.isEmpty then "" else lines(safeLineIndex)
 
     // Build a visual indicator of where the error is.
-    val indicator = " " * (col - 1) + "^"
+    val safeCol = math.max(1, col)
+    val indicator = " " * (safeCol - 1) + "^"
 
     // Build the error message.
     val msg =
