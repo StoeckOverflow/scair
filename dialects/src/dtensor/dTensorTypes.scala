@@ -106,3 +106,7 @@ given AttributeCompanion[dTensorTensorType]:
       .map((params, elem) =>
         dTensorTensorType(params, elem.asInstanceOf[TypeAttribute])
       )
+
+def ValueAttributeP[$: P](using p: Parser): P[ValueAttribute] =
+  import scair.parse.given
+  operandNameP.flatMap(existingOrForwardValueRefOperandP)

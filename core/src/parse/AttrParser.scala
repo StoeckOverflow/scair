@@ -440,8 +440,7 @@ def functionTypeP[$: P](using Parser): P[FunctionType] = P(
 
 private def builtinTypeP[$: P](using Parser): P[Attribute] =
   floatTypeP | indexTypeP | integerTypeP | complexTypeP | functionTypeP |
-    valueRefTypeP |
-    tensorTypeP | memrefTypeP | vectorTypeP
+    valueRefTypeP | tensorTypeP | memrefTypeP | vectorTypeP
 
 private def builtinAttrP[$: P](using Parser): P[Attribute] =
   arrayAttributeP | denseArrayAttributeP | symbolRefAttrP | floatAttrP |
@@ -450,5 +449,8 @@ private def builtinAttrP[$: P](using Parser): P[Attribute] =
 
 private def valueRefTypeP[$: P](using p: Parser): P[ValueRefType] =
   import scair.parse.given
-  P(("!value" | "value") ~ "<" ~ operandNameP.flatMap(existingOperandP) ~ ">")
-    .map(v => ValueRefType(ValueAttribute(v)))
+  P(
+    ("!value" | "value") ~ "<" ~ operandNameP.flatMap(
+      existingOrForwardValueRefOperandP
+    ) ~ ">"
+  ).map(ValueRefType(_))

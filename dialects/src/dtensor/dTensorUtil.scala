@@ -9,6 +9,7 @@ import scair.parse.given
 import scair.utils.*
 
 object dTensorTypeUtil:
+
   private def resolveNatBase(
       v: Value[Attribute],
       seen: Set[Value[Attribute]] = Set.empty,
@@ -56,12 +57,11 @@ object dTensorTypeUtil:
       lhs: Seq[ValueAttribute],
       rhs: Seq[ValueAttribute],
   ): Boolean =
-    lhs.size == rhs.size && lhs.zip(rhs)
-      .forall((l, r) =>
-        (resolveNatBase(l.getVal()), resolveNatBase(r.getVal())) match
-          case (OK(lv), OK(rv)) => lv eq rv
-          case _                => false
-      )
+    lhs.size == rhs.size && lhs.zip(rhs).forall((l, r) =>
+      (resolveNatBase(l.getVal()), resolveNatBase(r.getVal())) match
+        case (OK(lv), OK(rv)) => lv eq rv
+        case _                => false
+    )
 
   def checkSameTensorShapeAndElem(
       lhs: dTensorTensorType,
@@ -122,7 +122,3 @@ object dTensorTypeUtil:
         "dtensor.matmul: expected result dims to be outer dims (lhs.m, rhs.n)"
       )
     else OK(())
-
-private def ValueAttributeP[$: P](using p: Parser): P[ValueAttribute] = P(
-  operandNameP.flatMap(existingOperandP).map(v => ValueAttribute(v))
-)

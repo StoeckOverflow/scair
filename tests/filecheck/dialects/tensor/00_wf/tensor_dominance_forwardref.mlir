@@ -27,4 +27,4 @@ builtin.module {
   %n = "dtensor.nat.param"() : () -> !dtensor.nat
 }
 
-// PARSE: Value %n must be defined before use
+// PARSE: ssa-dominance: value Value(!dtensor.nat) does not dominate its use in op `test.bad`

@@ -18,4 +18,4 @@ builtin.module {
 }
 
 // CHECK: Parse error at [[FILE]]
-// CHECK: Value %n must be defined before use in this context.
+// CHECK: Value %n not defined within Scope
