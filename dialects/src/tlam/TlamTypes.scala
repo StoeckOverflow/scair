@@ -25,29 +25,6 @@ final case class TlamBVarType(k: IntegerAttr)
     with DerivedAttribute["tlam.bvar", TlamBVarType]
     derives DerivedAttributeCompanion
 
-// !tlam.tvar<%x> - type containing an SSA value %x
-final case class TlamTVarType(tyVar: ValueAttribute)
-    extends TlamType
-    with ParametrizedAttribute:
-
-  override def name: String = "tlam.tvar"
-
-  def tparam: Value[Attribute] = tyVar.getVal()
-
-  override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(tyVar)
-
-  override def customVerify(): OK[Unit] =
-    tparam.typ match
-      case _: TlamTypeType => OK(())
-      case other           =>
-        Err(s"tvar: referenced SSA value must have type !tlam.type, got $other")
-
-given AttributeCompanion[TlamTVarType]:
-  override def name: String = "tlam.tvar"
-
-  override def parse[$: P](using p: Parser): P[TlamTVarType] =
-    valueRefInAnglesP(TlamTypeType()).map(v => TlamTVarType(ValueAttribute(v)))
-
 // !tlam.fun<in -> out> — function type
 final case class TlamFunType(in: TypeAttribute, out: TypeAttribute)
     extends ParametrizedAttribute(),
@@ -139,8 +116,8 @@ object TlamTypeUtil:
       t: TypeAttribute,
   ): CloseResult =
     t match
-      case tv: TlamTVarType =>
-        if tv.tparam eq binder then
+      case tv: ValueRefType =>
+        if tv.value eq binder then
           CloseResult(
             closed = bvar(IntData(depth)),
             containsFreeTVar = false,
@@ -173,7 +150,7 @@ object TlamTypeUtil:
         )
 
   def containsTVar(t: TypeAttribute): Boolean = t match
-    case _: TlamTVarType   => true
+    case _: ValueRefType   => true
     case TlamFunType(i, o) => containsTVar(i) || containsTVar(o)
     case TlamForAllType(b) => containsTVar(b)
     case _                 => false

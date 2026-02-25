@@ -110,5 +110,11 @@ object DeBruijnIndicesCheck extends VerifierCheck:
       case TlamForAllType(body) =>
         checkType(body, depth + 1)
 
+      case vr: ValueRefType =>
+        vr.value.typ match
+          case _: TlamTypeType => OK(())
+          case other           =>
+            Err(s"value<...> in TLam type must reference !tlam.type, got $other")
+
       case _ =>
         OK(())

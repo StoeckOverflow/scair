@@ -11,7 +11,7 @@ object Monomorphize:
 
   /** Substitute both:
     *   - de Bruijn bvar(0) (for forall bodies) via DBI.subst
-    *   - SSA type vars !tlam.tvar<%binder> (new encoding) via substTVar
+    *   - SSA type vars !value<%binder> via substTVar
     */
   private def inst(
       t: TypeAttribute,
@@ -23,14 +23,14 @@ object Monomorphize:
       case None         => t1
       case Some(binder) => substTVar(t1, binder, tyArg)
 
-  /** Replace occurrences of !tlam.tvar<%binder> inside a TypeAttribute. */
+  /** Replace occurrences of !value<%binder> inside a TypeAttribute. */
   private def substTVar(
       t: TypeAttribute,
       binder: Value[Attribute],
       tyArg: TypeAttribute,
   ): TypeAttribute =
     t match
-      case tv: TlamTVarType if tv.tparam == binder =>
+      case tv: ValueRefType if tv.value == binder =>
         tyArg
 
       case TlamFunType(in, out) =>
@@ -268,7 +268,7 @@ object Monomorphize:
       case Some(b) => b
       case None    => return None
 
-    // NEW: SSA binder (e.g. %T : !tlam.type) for !tlam.tvar<%T> substitution.
+    // NEW: SSA binder (e.g. %T : !tlam.type) for !value<%T> substitution.
     // If older IR exists without a binder arg, this gracefully disables SSA substitution.
     val binderOpt: Option[Value[Attribute]] =
       origBlock.arguments.headOption
