@@ -64,6 +64,13 @@ Typical usage:
 
 `lower-tlam-to-func` expects TLam type-level control flow to be gone (or irrelevant) and focuses on value-level lowering.
 
+One important value-level invariant is closure-freedom:
+- phase 1 physically moves each `vlambda` body into a top-level `func.func`
+- `func.func` is verified with `IsolatedFromAbove`
+- so any remaining capture of outer SSA values is rejected by the verifier instead of silently producing an invalid lifted function
+
+In other words, this pass implements lambda lifting, not closure conversion.
+
 ## Practical outcomes (from tests)
 
 Expected after erase+lower(+reconcile):
@@ -72,5 +79,9 @@ Expected after erase+lower(+reconcile):
 - `func.func`, `func.constant`, `func.call_indirect`, and `func.return` remain
 
 Nested placements (for example under `scf.execute_region`) are also lowered.
+
+`func.call_indirect` is only formed when the callee has builtin `FunctionType`, and the `func` dialect verifier rechecks:
+- argument types match the callee input types
+- result types match the callee output types
 
 See: `tests/filecheck/dialects/tlam/07_lowering/tlam_no_leftovers_after_erase_lower_reconcile.mlir` and `tests/filecheck/dialects/tlam/99_pipeline/tlam_pipeline_smoke.mlir`.

@@ -31,9 +31,15 @@ After monomorphization, each use site has a concrete specialized version, which 
 
 The helper `inst(t, binderOpt, tyArg)` applies both:
 1. de Bruijn substitution for `!tlam.bvar<0>` via `DBI.subst(0, tyArg, t)`
-2. SSA type-variable substitution for `!tlam.tvar<%binder>` via `substTVar(...)`
+2. SSA type-variable substitution for `!value<%binder>` via `substTVar(...)`
 
 This is the key TLam detail: specialization must handle both binding encodings in one rewrite.
+
+In the current implementation, that substitution is not limited to top-level result types:
+- nested `ParametrizedAttribute` payloads are rebuilt recursively
+- op properties are rewritten
+- op attributes are rewritten
+- cloned embedded value references are remapped so they point at cloned SSA defs, not the original ones
 
 ## Rewrite algorithm (module-level)
 
@@ -45,6 +51,7 @@ This is the key TLam detail: specialization must handle both binding encodings i
    - else, if `fun` resolves to a known `TLambda`, rewrite it via `rewriteOneTApply`
 4. if a rewritten `TLambda` result has no uses left, erase that `TLambda`
 5. repeat while changes happen
+6. if any `tlam.tapply` remains after the fixed point, throw an error
 
 Cache key: `(use block, callee value, tyArg)`.
 So identical specializations in the same block are deduplicated.
@@ -53,7 +60,7 @@ So identical specializations in the same block are deduplicated.
 
 `rewriteOneTApply(ta, tl)`:
 1. read tlambda body block and require trailing `tlam.treturn`
-2. read optional binder block argument (`%T : !tlam.type`) for `tvar` substitution
+2. read optional binder block argument (`%T : !tlam.type`) for `!value<%T>` substitution
 3. clone all body ops except final `treturn` with type specialization (`cloneOpSpec`)
 4. insert cloned ops immediately before the `tapply`
 5. map original return value to its cloned value
@@ -62,13 +69,18 @@ So identical specializations in the same block are deduplicated.
 
 If the shape is malformed (missing body/return/mapping), the rewrite bails out for that use.
 
+There is one additional SSA-binder case:
+- if the TLambda binder is used as a term SSA operand, specialization is only supported when `tyArg` is itself a `!value<%X>` type
+- in that case the pass maps `%T -> %X` while cloning
+- otherwise the rewrite refuses that `tapply`, and the pass will fail at the end because an unresolved `tapply` remains
+
 ## Important implementation detail: replacing value uses in types
 
 `replaceAllUsesWith(from, to)` handles two channels:
 1. normal SSA operand uses (`from.uses`)
 2. embedded value uses in attributes/types (`from.typeUses`)
 
-The second part is essential in SSA-in-types mode, where values can be referenced inside type attributes (for example `!tlam.tvar<%T>`).
+The second part is essential in SSA-in-types mode, where values can be referenced inside type attributes (for example `!value<%T>`).
 
 ## Cloning behavior
 
@@ -81,6 +93,7 @@ For each cloned op it:
 2. specializes all `TypeAttribute` positions via `inst(...)`
 3. clones nested regions recursively
 4. records old-result -> new-result mapping
+5. rewrites nested type payloads in generic attributes/properties
 
 Other ops are cloned through a generic `updated(...)` fallback with the same specialization/remapping rules.
 
@@ -90,8 +103,8 @@ Input shape:
 ```mlir
 %mk = "tlam.tlambda"() ({
 ^bb0(%T: !tlam.type):
-  %v = "test.mk_poly"() : () -> !tlam.forall<!tlam.tvar<%T>>
-  "tlam.treturn"(%v) : (!tlam.forall<!tlam.tvar<%T>>) -> ()
+  %v = "test.mk_poly"() : () -> !tlam.forall<!value<%T>>
+  "tlam.treturn"(%v) : (!tlam.forall<!value<%T>>) -> ()
 }) : () -> !tlam.forall<!tlam.forall<!tlam.bvar<1>>>
 
 %s0 = "tlam.tapply"(%mk) <{tyArg = i32}> ... -> !tlam.forall<i32>
@@ -105,12 +118,32 @@ After `monomorphize`:
 
 See: `tests/filecheck/dialects/tlam/06_monomorphize/tlam_monomorphize_ssa_and_dbi.mlir`.
 
-## Example: tyArg containing `tvar` is preserved
+## Example: `tyArg` containing embedded SSA refs is preserved
 
-The pass correctly specializes even when `tyArg` itself contains `!tlam.tvar<%Y>`.
+The pass correctly specializes even when `tyArg` itself contains `!value<%Y>` under nested TLam type structure.
 It performs DBI substitution and preserves SSA identity of `%Y` inside the resulting type.
 
 See: `tests/filecheck/dialects/tlam/06_monomorphize/tlam_ssa_monomorphize_tvar_in_tyarg.mlir`.
+
+## Example: nested attribute payloads are rewritten too
+
+The pass also specializes TLam types found inside:
+- op attributes
+- op properties
+- nested parametrized attributes
+
+That means a body containing payloads like:
+```mlir
+"test.use"(%tv)
+  {dep = !tlam.forall<!tlam.fun<!value<%tv>, !tlam.forall<!value<%T>>>>}
+  : (!tlam.type) -> ()
+```
+
+is rewritten so:
+- `%T` becomes the concrete `tyArg`
+- `%tv` inside the attribute stays tied to the cloned `%tv`, not the original one
+
+See: `tests/filecheck/dialects/tlam/06_monomorphize/tlam_monomorphize_ssa_and_dbi.mlir`.
 
 ## Pipeline position
 
@@ -126,4 +159,6 @@ Common full pipeline variants in tests:
 ## Failure/robustness expectations
 
 - User-facing structural/type mismatches are expected to be reported by verifiers (for example malformed `tapply` result types).
+- A `tlambda` that directly returns its binder (`treturn %T`) is explicitly rejected by the TLam verifier before monomorphization.
+- A `tapply` that cannot be rewritten is now treated as a hard pass failure instead of silently remaining in the IR.
 - Internal impossible states during cloning currently use `sys.error(...)` with `monomorphize:` diagnostics.

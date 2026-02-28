@@ -66,7 +66,7 @@ Parameter-use counting (`countValueUsesInOpTree`) includes occurrences in:
 - properties
 - nested regions
 
-It uses `AttributeWalker.foreachValueAttribute`, so embedded value references such as `!tlam.tvar<%x>` count too.
+It uses `AttributeWalker.foreachValueAttribute`, so embedded value references such as `!value<%x>` count too.
 
 ## Typical outcomes (from tests)
 
