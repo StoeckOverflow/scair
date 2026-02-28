@@ -7,6 +7,7 @@ import scair.parse.*
 import scair.tools.ScairToolBase
 import scair.utils.*
 import scair.verify.Verifier
+import scair.dialects.tlam_de_bruijn.verify.DeBruijnIndicesCheck
 import scopt.OParser
 
 import scala.collection.mutable
@@ -75,6 +76,10 @@ trait ScairRunBase extends ScairToolBase[ScairRunArgs]:
           Err(parser.error(failure))
     Array(inputModule)
 
+  private def verifyWithChecks(op: Operation): OK[Operation] =
+    val checks = Verifier.defaultChecks :+ DeBruijnIndicesCheck
+    Verifier.verify(op, checks)
+
   def main(args: Array[String]): Unit =
 
     val parsedArgs = parseArgs(args)
@@ -88,7 +93,7 @@ trait ScairRunBase extends ScairToolBase[ScairRunArgs]:
     val module = parse(parsedArgs)(input).head.get.asInstanceOf[ModuleOp]
 
     if !parsedArgs.skipVerify then
-      Verifier.verify(module) match
+      verifyWithChecks(module) match
         case e: scair.utils.Err => throw new Exception(e.msg)
         case _                  => ()
 
