@@ -24,6 +24,17 @@ final class tlamDeBruijnParamsTest extends AnyFlatSpec:
     DBI.instantiate(poly, I32) shouldEqual fun(I32, I32)
   }
 
+  it should "shift an outer type argument when instantiating under a nested binder" in {
+    val poly = forall1(forall1(fun(b1, b0)))
+    DBI.instantiate(poly, b0) shouldEqual forall1(fun(b1, b0))
+  }
+
+  it should "avoid capture when instantiating with a type that mentions the current depth" in {
+    val poly = forall1(forall1(fun(b1, b0)))
+    DBI.instantiate(poly, fun(b0, b0)) shouldEqual
+      forall1(fun(fun(b1, b1), b0))
+  }
+
   "DBI.shift" should
     "bump only indices >= cutoff, distribute over fun, and respect binders" in {
       import DBI.*

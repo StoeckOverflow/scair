@@ -21,6 +21,51 @@ final class EraseTLamPass(ctx: MLContext) extends ModulePass(ctx):
       case Some(r: TReturn) => Some(r)
       case _                => None
 
+  private def containsForbiddenType(t: TypeAttribute): Boolean = t match
+    case _: tlamForAllType => true
+    case _: tlamBVarType   => true
+    case tlamFunType(in, out) =>
+      containsForbiddenType(in) || containsForbiddenType(out)
+    case _ => false
+
+  private def safeToErase(tl: TLambda): Boolean =
+    def typeIsSafe(a: Attribute): Boolean =
+      a match
+        case t: TypeAttribute => !containsForbiddenType(t)
+        case _                => true
+
+    def walkRegion(r: Region): Boolean =
+      r.blocks.forall { b =>
+        b.arguments.forall(arg => typeIsSafe(arg.typ)) &&
+        b.operations.forall { op =>
+          !op.isInstanceOf[TLambda] &&
+          !op.isInstanceOf[TApply] &&
+          !op.isInstanceOf[TReturn] &&
+          op.operands.forall(v => typeIsSafe(v.typ)) &&
+          op.results.forall(res => typeIsSafe(res.typ)) &&
+          op.regions.forall(walkRegion)
+        }
+      }
+
+    trailingTReturn(tl) match
+      case Some(tret) =>
+        val bodyBlock = tl.body.blocks.head
+        val nonTerminatorOps = bodyBlock.operations.toSeq.dropRight(1)
+        val bodyIsSafe =
+          bodyBlock.arguments.forall(arg => typeIsSafe(arg.typ)) &&
+          nonTerminatorOps.forall { op =>
+            !op.isInstanceOf[TLambda] &&
+            !op.isInstanceOf[TApply] &&
+            !op.isInstanceOf[TReturn] &&
+            op.operands.forall(v => typeIsSafe(v.typ)) &&
+            op.results.forall(res => typeIsSafe(res.typ)) &&
+            op.regions.forall(walkRegion)
+          }
+
+        typeIsSafe(tret.value.typ) && bodyIsSafe
+      case None =>
+        false
+
   private def eraseInModule(m: ModuleOp): Unit =
     def walkRegion(r: Region): Unit =
       r.blocks.foreach { b =>
@@ -32,7 +77,7 @@ final class EraseTLamPass(ctx: MLContext) extends ModulePass(ctx):
             // Be robust: if shape is malformed, leave untouched and let verifier
             // report it under --verify-diagnostics.
             trailingTReturn(tl) match
-              case Some(tret) =>
+              case Some(tret) if safeToErase(tl) =>
                 val bodyBlock = tl.body.blocks.head
                 val bodyOps = bodyBlock.operations.toSeq
 
@@ -44,6 +89,11 @@ final class EraseTLamPass(ctx: MLContext) extends ModulePass(ctx):
                   newOps = Seq.empty,
                   newResults = Some(Seq(tret.value)),
                 )
+              case Some(_) =>
+                if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
+                else ()
+              case None if tl.res.uses.isEmpty =>
+                RewriteMethods.eraseOp(tl)
               case None =>
                 ()
 

@@ -46,19 +46,6 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
       // Note: inputs/outputs can still be TLam types (or builtin types). That's fine.
       FunctionType(inputs = Seq(ft.in), outputs = Seq(ft.out))
 
-    /** Replace all uses of `oldV` with `newV` by rebuilding each user operation
-      * and replacing it via RewriteMethods (so parent pointers stay valid).
-      */
-    def replaceAllUses(oldV: Value[Attribute], newV: Value[Attribute]): Unit =
-      val usesSnapshot = oldV.uses.toList
-      usesSnapshot.foreach { use =>
-        val userOp = use.operation
-        val idx = use.index
-        val newOperands = userOp.operands.updated(idx, newV)
-        val rebuilt = userOp.updated(operands = newOperands)
-        RewriteMethods.replaceOp(userOp, rebuilt)
-      }
-
     // ---------------------------
     // Phase 1: lift every VLambda
     //   - create func.func @lifted_n with MOVED body
@@ -98,12 +85,13 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
                 res = Result(fnTy),
               )
 
-              // Insert constant right before the original VLambda
-              b.operations.insert(vl, cst)
+              // Insert constant right before the original VLambda so parent
+              // pointers are attached before later dominance verification.
+              RewriteMethods.insertOpsBefore(vl, cst)
 
               // Replace all uses of the lambda value with the constant value
               // (upcast to Attribute to match helper signature)
-              replaceAllUses(vl.res, cst.res)
+              RewriteMethods.replaceValue(vl.res, cst.res)
 
               // Erase the original VLambda
               RewriteMethods.eraseOp(vl)
@@ -127,7 +115,8 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
           // IMPORTANT:
           // app.fun is statically Value[TlamFunType], but after Phase 1 its *runtime*
           // Value.typ can be builtin FunctionType (because we replaced uses with func.constant).
-          val funV: Value[Attribute] = app.fun // widen for runtime inspection
+          val funV: Value[Attribute] = app.operands.head // widen for runtime inspection
+          val argV: Value[Attribute] = app.operands(1)
           val ft: FunctionType =
             funV.typ match
               case f: FunctionType => f
@@ -138,13 +127,13 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
 
           CallIndirect(
             callee = funV.asInstanceOf[Operand[FunctionType]],
-            callee_operands = Seq(app.arg), // arguments only
+            callee_operands = Seq(argV), // arguments only
             _results = ft.outputs
               .map(Result(_)), // result types from function type
           )
         },
         pattern { case vr: VReturn =>
-          Return(Seq(vr.value))
+          Return(Seq(vr.operands.head))
         },
       )
     )
