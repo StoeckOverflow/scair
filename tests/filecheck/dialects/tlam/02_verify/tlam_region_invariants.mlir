@@ -45,6 +45,18 @@ builtin.module {
 
 // -----
 
+// Invalid: directly returning the binder is not supported by monomorphize.
+builtin.module {
+  %F = "tlam.tlambda"() ({
+  ^bb0(%T: !tlam.type):
+    "tlam.treturn"(%T) : (!tlam.type) -> ()
+  }) : () -> !tlam.forall<!tlam.bvar<0>>
+}
+
+// CHECK: tlambda: directly returning the binder block argument is unsupported; materialize a concrete type value before treturn
+
+// -----
+
 // Invalid: vlambda block arg type must match function input.
 builtin.module {
   %f = "tlam.vlambda"() ({

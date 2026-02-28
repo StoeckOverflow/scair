@@ -6,8 +6,109 @@ import scair.transformations.*
 import scair.dialects.builtin.*
 import scair.dialects.tlam.*
 import scala.collection.mutable
+import scala.collection.mutable.LinkedHashMap
 
 object Monomorphize:
+
+  private def clonePayload(payload: Any): Any =
+    payload match
+      case a: Attribute => cloneAttr(a)
+      case xs: Seq[?]   => xs.map(clonePayload)
+      case opt: Option[?] =>
+        opt.map(clonePayload)
+      case other => other
+
+  private def rebuildAttr(
+      attr: Attribute,
+      payloadMapper: Any => Any,
+  ): Attribute =
+      attr match
+      case va: ValueAttribute =>
+        new ValueAttribute(va.getVal())
+      case p: Product =>
+        val ctorOpt =
+          attr.getClass.getConstructors.find(_.getParameterCount == p.productArity)
+        ctorOpt match
+          case Some(ctor) =>
+            val args =
+              p.productIterator.map(payloadMapper).map(_.asInstanceOf[Object]).toArray
+            ctor.newInstance(args*).asInstanceOf[Attribute]
+          case None =>
+            attr
+      case _ =>
+        attr
+
+  private def cloneAttr(a: Attribute): Attribute =
+    a match
+      case _: ParametrizedAttribute => rebuildAttr(a, clonePayload)
+      case va: ValueAttribute       => new ValueAttribute(va.getVal())
+      case other                    => other
+
+  private def instPayload(
+      payload: Any,
+      binderOpt: Option[Value[Attribute]],
+      tyArg: TypeAttribute,
+  ): Any =
+    payload match
+      case a: Attribute => instAttr(a, binderOpt, tyArg)
+      case xs: Seq[?]   => xs.map(instPayload(_, binderOpt, tyArg))
+      case opt: Option[?] =>
+        opt.map(instPayload(_, binderOpt, tyArg))
+      case other => other
+
+  private def remapAttrUsesInPlace(
+      a: Attribute
+  )(using
+      valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
+  ): Unit =
+    AttributeWalker.remapTypeUsesInPlace(a)
+
+  private def instAttr(
+      a: Attribute,
+      binderOpt: Option[Value[Attribute]],
+      tyArg: TypeAttribute,
+  ): Attribute =
+    a match
+      case t: TypeAttribute => inst(t, binderOpt, tyArg)
+      case _: ParametrizedAttribute =>
+        rebuildAttr(a, instPayload(_, binderOpt, tyArg))
+      case va: ValueAttribute =>
+        new ValueAttribute(va.getVal())
+      case other =>
+        other
+
+  private def instAndRemapAttr(
+      a: Attribute,
+      binderOpt: Option[Value[Attribute]],
+      tyArg: TypeAttribute,
+  )(using
+      valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
+  ): Attribute =
+    val out = instAttr(a, binderOpt, tyArg)
+    remapAttrUsesInPlace(out)
+    out
+
+  private def instAndRemapType(
+      t: TypeAttribute,
+      binderOpt: Option[Value[Attribute]],
+      tyArg: TypeAttribute,
+  )(using
+      valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
+  ): TypeAttribute =
+    instAndRemapAttr(t, binderOpt, tyArg).asInstanceOf[TypeAttribute]
+
+  private def copyAttributes(
+      from: Operation,
+      to: Operation,
+      binderOpt: Option[Value[Attribute]],
+      tyArg: TypeAttribute,
+  )(using
+      valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
+  ): Operation =
+    from.attributes.foreach { case (k, v) =>
+      to.attributes.update(k, instAndRemapAttr(v, binderOpt, tyArg))
+    }
+    to
 
   /** Substitute both:
     *   - de Bruijn bvar(0) (for forall bodies) via DBI.subst
@@ -31,7 +132,10 @@ object Monomorphize:
   ): TypeAttribute =
     t match
       case tv: ValueRefType if tv.value == binder =>
-        tyArg
+        cloneAttr(tyArg).asInstanceOf[TypeAttribute]
+
+      case tv: ValueRefType =>
+        ValueRefType(new ValueAttribute(tv.value))
 
       case TlamFunType(in, out) =>
         TlamFunType(
@@ -42,6 +146,9 @@ object Monomorphize:
       case TlamForAllType(body) =>
         // forall binds de Bruijn indices, not SSA binder values
         TlamForAllType(substTVar(body, binder, tyArg))
+
+      case _: ParametrizedAttribute =>
+        rebuildAttr(t, instPayload(_, Some(binder), tyArg)).asInstanceOf[TypeAttribute]
 
       case other =>
         other
@@ -120,6 +227,13 @@ object Monomorphize:
     mod.regions.foreach(walkRegion)
     out.toSeq
 
+  private def opUsesValue(
+      op: Operation,
+      target: Value[Attribute],
+  ): Boolean =
+    op.operands.exists(_ eq target) ||
+    op.regions.exists(_.blocks.exists(_.operations.exists(opUsesValue(_, target))))
+
   /** Clone a region, specializing all TypeAttributes by inst(...), while
     * remapping SSA values so operands inside the clone refer to cloned defs.
     */
@@ -142,8 +256,8 @@ object Monomorphize:
     val newArgTypes: Seq[Attribute] =
       b.arguments.iterator.map { a =>
         a.typ match
-          case t: TypeAttribute => inst(t, binderOpt, tyArg)
-          case other            => other
+          case t: TypeAttribute => instAndRemapType(t, binderOpt, tyArg)
+          case other            => instAndRemapAttr(other, binderOpt, tyArg)
       }.toSeq
 
     Block(
@@ -179,24 +293,25 @@ object Monomorphize:
               )
 
         val newRes = Result[TlamFunType](newFunTy)
+        remapAttrUsesInPlace(newRes.typ)
         valueMapper += (v.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
         val newBody = cloneRegionSpec(v.body, binderOpt, tyArg)
-        VLambda(newBody, newRes)
+        copyAttributes(v, VLambda(newBody, newRes), binderOpt, tyArg)
 
       case vr: VReturn =>
         val newV = mapOperand(vr.value).asInstanceOf[Value[TypeAttribute]]
-        VReturn(newV)
+        copyAttributes(vr, VReturn(newV), binderOpt, tyArg)
 
       case va: VApply =>
         val newFun = mapOperand(va.fun).asInstanceOf[Value[TlamFunType]]
         val newArg = mapOperand(va.arg).asInstanceOf[Value[TypeAttribute]]
 
-        val newResTy = inst(va.res.typ, binderOpt, tyArg)
+        val newResTy = instAndRemapType(va.res.typ, binderOpt, tyArg)
         val newRes = Result[TypeAttribute](newResTy)
         valueMapper += (va.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
-        VApply(newFun, newArg, newRes)
+        copyAttributes(va, VApply(newFun, newArg, newRes), binderOpt, tyArg)
 
       case tl: TLambda =>
         val newForAllTA = inst(tl.res.typ, binderOpt, tyArg)
@@ -209,24 +324,25 @@ object Monomorphize:
               )
 
         val newRes = Result[TlamForAllType](newForAll)
+        remapAttrUsesInPlace(newRes.typ)
         valueMapper += (tl.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
         val newBody = cloneRegionSpec(tl.body, binderOpt, tyArg)
-        TLambda(newBody, newRes)
+        copyAttributes(tl, TLambda(newBody, newRes), binderOpt, tyArg)
 
       case tr: TReturn =>
         val newV = mapOperand(tr.value).asInstanceOf[Value[TypeAttribute]]
-        TReturn(newV)
+        copyAttributes(tr, TReturn(newV), binderOpt, tyArg)
 
       case ta: TApply =>
         val newFun = mapOperand(ta.fun).asInstanceOf[Value[TlamForAllType]]
-        val newTyArg = inst(ta.tyArg, binderOpt, tyArg)
+        val newTyArg = instAndRemapType(ta.tyArg, binderOpt, tyArg)
 
-        val newResTy = inst(ta.res.typ, binderOpt, tyArg)
+        val newResTy = instAndRemapType(ta.res.typ, binderOpt, tyArg)
         val newRes = Result[TypeAttribute](newResTy)
         valueMapper += (ta.res: Value[Attribute]) -> (newRes: Value[Attribute])
 
-        TApply(newFun, newTyArg, newRes)
+        copyAttributes(ta, TApply(newFun, newTyArg, newRes), binderOpt, tyArg)
 
       case other =>
         val newOperands = other.operands.map(mapOperand)
@@ -236,20 +352,30 @@ object Monomorphize:
         val newResults: Seq[Result[Attribute]] =
           other.results.map { r =>
             val newTy: Attribute = r.typ match
-              case t: TypeAttribute => inst(t, binderOpt, tyArg)
-              case a                => a
+              case t: TypeAttribute => instAndRemapType(t, binderOpt, tyArg)
+              case a                => instAndRemapAttr(a, binderOpt, tyArg)
             val nr = Result(newTy)
             valueMapper += (r: Value[Attribute]) -> (nr: Value[Attribute])
             nr
           }
+
+        val newProperties =
+          other.properties.view
+            .mapValues(instAndRemapAttr(_, binderOpt, tyArg))
+            .toMap
+        val newAttributes =
+          LinkedHashMap.from(
+            other.attributes.view
+              .mapValues(instAndRemapAttr(_, binderOpt, tyArg))
+          )
 
         other.updated(
           operands = newOperands,
           results = newResults,
           regions = newRegions,
           successors = other.successors,
-          properties = other.properties,
-          attributes = other.attributes,
+          properties = newProperties,
+          attributes = newAttributes,
         )
 
   /** Rewrite of one TApply
@@ -288,14 +414,30 @@ object Monomorphize:
     given valueMapper: mutable.Map[Value[Attribute], Value[Attribute]] =
       mutable.Map.empty
 
+    val unsupportedBinderOperandUse =
+      binderOpt.exists { binder =>
+      ta.tyArg match
+        case tv: ValueRefType =>
+          valueMapper += (binder -> tv.value)
+          false
+        case _ =>
+          origOps.dropRight(1).exists(opUsesValue(_, binder)) ||
+            (retVal.asInstanceOf[Value[Attribute]] eq binder)
+      }
+    if unsupportedBinderOperandUse then return None
+
     val clonedOpsUnattached: Seq[Operation] =
       origOps.toSeq.dropRight(1).map(op => cloneOpSpec(op, binderOpt, ta.tyArg))
 
     clonedOpsUnattached.foreach(op => useBlock.insertOpBefore(ta, op))
 
-    val newRet = valueMapper.get(retVal.asInstanceOf[Value[Attribute]]) match
-      case Some(v) => v.asInstanceOf[Value[TypeAttribute]]
-      case None    => return None
+    val newRet =
+      valueMapper.get(retVal.asInstanceOf[Value[Attribute]]) match
+        case Some(v) => v.asInstanceOf[Value[TypeAttribute]]
+        case None if binderOpt.contains(retVal.asInstanceOf[Value[Attribute]]) =>
+          return None
+        case None =>
+          retVal
 
     replaceAllUsesWith(
       ta.res.asInstanceOf[Value[Attribute]],
@@ -341,7 +483,12 @@ object Monomorphize:
                 case None =>
                   ()
         }
-      }
+        }
+    collectTApplies(mod).headOption.foreach { _ =>
+      throw new Exception(
+        "monomorphize: unresolved tapply remained; callee must resolve to a clonable tlam.tlambda body"
+      )
+    }
     mod
 
 final class MonomorphizePass(ctx: MLContext) extends ModulePass(ctx):

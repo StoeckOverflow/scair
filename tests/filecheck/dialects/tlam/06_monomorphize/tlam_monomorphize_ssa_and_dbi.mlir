@@ -54,6 +54,37 @@ builtin.module {
 
 // -----
 
+// Valid: rewrite nested attribute trees and remap embedded SSA refs to cloned defs.
+builtin.module {
+  %x = "arith.constant"() <{value = 3 : i32}> : () -> i32
+  %Y = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !tlam.type
+
+  %mk = "tlam.tlambda"() ({
+  ^bb0(%T: !tlam.type):
+    %tv = "builtin.unrealized_conversion_cast"(%T)
+        {dep = !tlam.forall<!value<%T>>}
+        : (!tlam.type) -> !tlam.type
+    "test.use"(%tv)
+        {dep = !tlam.forall<!tlam.fun<!value<%tv>, !tlam.forall<!value<%T>>>>}
+        : (!tlam.type) -> ()
+    "tlam.treturn"(%tv) : (!tlam.type) -> ()
+  }) : () -> !tlam.forall<!tlam.type>
+
+  %spec = "tlam.tapply"(%mk) <{tyArg = !value<%Y>}>
+      : (!tlam.forall<!tlam.type>) -> !tlam.type
+  "test.consume"(%spec) : (!tlam.type) -> ()
+}
+
+// MONO-LABEL: builtin.module {
+// MONO: [[Y:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
+// MONO-NOT: "tlam.tapply"
+// MONO: [[TV:%[0-9]+]] = "builtin.unrealized_conversion_cast"([[Y]]) {dep = !tlam.forall<!value<[[Y]]>>} : (!tlam.type) -> !tlam.type
+// MONO: "test.use"([[TV]]) {dep = !tlam.forall<!tlam.fun<!value<[[TV]]>, !tlam.forall<!value<[[Y]]>>>>} : (!tlam.type) -> ()
+// MONO: "test.consume"([[TV]]) : (!tlam.type) -> ()
+// MONO: }
+
+// -----
+
 // Invalid: instantiation result mismatch must be rejected.
 builtin.module {
   %mk = "tlam.tlambda"() ({

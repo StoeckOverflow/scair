@@ -26,6 +26,26 @@ builtin.module {
 
 // -----
 
+// Dead tlambda must not be erased if moving the body would leak the binder through
+// operands, result types, or nested attribute payloads.
+builtin.module {
+  %dead = "tlam.tlambda"() ({
+  ^bb0(%T: !tlam.type):
+    %tv = "builtin.unrealized_conversion_cast"(%T)
+        {dep = !tlam.forall<!value<%T>>}
+        : (!tlam.type) -> !value<%T>
+    %v = "test.make_i64"() : () -> i64
+    "tlam.treturn"(%v) : (i64) -> ()
+  }) : () -> !tlam.forall<i64>
+}
+
+// ERASESAFE-LABEL: builtin.module {
+// ERASESAFE: "tlam.tlambda"
+// ERASESAFE: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) {dep = !tlam.forall<!value<%{{[0-9]+}}>>} : (!tlam.type) -> !value<%{{[0-9]+}}>
+// ERASESAFE: }
+
+// -----
+
 // Malformed tlambda must be left unchanged; verifier reports shape error.
 // expected-error @below {{tlambda: last op must be tlam.treturn}}
 builtin.module {

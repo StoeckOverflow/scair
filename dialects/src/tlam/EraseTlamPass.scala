@@ -17,6 +17,21 @@ final class EraseTLamPass(ctx: MLContext) extends ModulePass(ctx):
       case other => other
 
   private def eraseInModule(m: ModuleOp): Unit =
+    def attrRefsBinder(a: Attribute, binder: Value[Attribute]): Boolean =
+      var found = false
+      AttributeWalker.foreachValueAttribute(a) { va =>
+        if va.getVal() eq binder then found = true
+      }
+      found
+
+    def opRefsBinder(op: Operation, binder: Value[Attribute]): Boolean =
+      op.operands.exists(_ eq binder) ||
+      op.operands.exists(v => attrRefsBinder(v.typ, binder)) ||
+      op.results.exists(r => attrRefsBinder(r.typ, binder)) ||
+      op.attributes.values.exists(attrRefsBinder(_, binder)) ||
+      op.properties.values.exists(attrRefsBinder(_, binder)) ||
+      op.regions.exists(_.blocks.exists(_.operations.exists(opRefsBinder(_, binder))))
+
     def walkRegion(r: Region): Unit =
       r.blocks.foreach { b =>
         val ops = b.operations.toSeq
@@ -29,13 +44,19 @@ final class EraseTLamPass(ctx: MLContext) extends ModulePass(ctx):
                 val bodyOps = bodyBlock.operations.toSeq
                 bodyOps.lastOption match
                   case Some(tret: TReturn) =>
-                    val moved = bodyOps.dropRight(1).map(bodyBlock.detachOp)
-                    RewriteMethods.insertOpsBefore(tl, moved)
-                    RewriteMethods.replaceOp(
-                      tl,
-                      newOps = Seq.empty,
-                      newResults = Some(Seq(tret.value)),
-                    )
+                    val binder = bodyBlock.arguments.head
+                    val prefixOps = bodyOps.dropRight(1)
+                    val binderLeaks =
+                      prefixOps.exists(opRefsBinder(_, binder)) ||
+                        attrRefsBinder(tret.value.typ, binder)
+                    if !binderLeaks then
+                      val moved = prefixOps.map(bodyBlock.detachOp)
+                      RewriteMethods.insertOpsBefore(tl, moved)
+                      RewriteMethods.replaceOp(
+                        tl,
+                        newOps = Seq.empty,
+                        newResults = Some(Seq(tret.value)),
+                      )
                   case _ =>
                     // Malformed TLambda: leave unchanged and let verifier report.
                     ()

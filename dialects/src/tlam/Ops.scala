@@ -89,6 +89,10 @@ final case class TLambda(
 
         ops.lastOption match
           case Some(TReturn(ret)) =>
+            if ret eq tparam then
+              return Err(
+                "tlambda: directly returning the binder block argument is unsupported; materialize a concrete type value before treturn"
+              )
             // Close the SSA-bound type variable into a de Bruijn body to compare
             // with the stored forall type.
             val closedRes =
