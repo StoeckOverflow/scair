@@ -7,6 +7,8 @@ Perform conservative value-level beta reduction:
 `vapply(vlambda, arg) -> inline(vlambda.body, x := arg)`
 
 This is value-level beta reduction only (not type instantiation).
+It is optional in the DBI-only pipeline and is independent of DBI type
+substitution semantics.
 
 ## Matching rule
 A `VApply` is considered only when:
@@ -93,6 +95,8 @@ The current policy intentionally refuses such reductions unless it is clearly sa
 - Region terminators are not structurally rewritten in lambda definitions.
 - No type-level DBI rewriting is performed.
 - Conservative purity checks avoid effectful miscompilations.
+- The pass does not participate in `tapply` / `tlambda` instantiation and does
+  not rely on any type-binder encoding beyond the existing verified IR.
 
 ### What is intentionally *not* preserved/attempted
 - No guarantee of maximal beta-normal form in one run.
@@ -113,6 +117,13 @@ The current policy intentionally refuses such reductions unless it is clearly sa
 - `beta-reduce-tlam` is value-level and effect-sensitive.
 - `monomorphize` is type-level and DBI-substitution-driven.
 - Keeping them separate prevents mixing value side-effect policy with type specialization logic, which simplifies reasoning and testing.
+
+## Recommended pipeline placement
+If used, run this pass before `monomorphize`:
+- `beta-reduce-tlam -> monomorphize -> erase-tlam -> lower-tlam-to-func`
+
+This keeps value-level inlining separate from type-level instantiation and makes
+later pass behavior easier to reason about.
 
 ## Relevant tests
 - `tests/filecheck/dialects/tlam_de_bruijn/06_beta/beta.mlir`

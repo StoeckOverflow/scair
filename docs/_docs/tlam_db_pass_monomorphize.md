@@ -5,6 +5,12 @@ File: `dialects/src/tlam_de_bruijn/Monomorphize.scala`
 ## Goal
 Eliminate `tapply` by specializing polymorphic type-level lambdas (`tlambda`) at concrete type arguments.
 
+This pass implements the DBI-only System F instantiation story for the
+`tlam_de_bruijn` pipeline:
+- type binders are represented only as `!tlam.bvar<k>` under `tlambda` / `forall`,
+- instantiation is capture-avoiding substitution on DBI types,
+- no SSA-in-types binder encoding is used to realize polymorphism.
+
 ## Core DBI discipline
 Specialization uses `instAt(t, tyArg, depth)`:
 - shift `tyArg` by current depth when needed,
@@ -13,6 +19,11 @@ Specialization uses `instAt(t, tyArg, depth)`:
 Implemented with:
 - `DBI.shift`
 - `DBI.subst`
+
+Concretely, this is the System F reduction:
+- `(Λα. t)[A]` becomes `t[α := A]`
+- where `A` is first shifted to account for the current binder depth
+  before substitution descends under nested `forall` / `tlambda`.
 
 ## High-level algorithm
 1. Collect all `TLambda` definitions and `TApply` sites in module.
@@ -105,6 +116,8 @@ Why this preserves type semantics:
 - Capture-avoid type substitution by construction (`shift` + `subst`).
 - SSA use-def consistency via use replacement and local insertion.
 - Region structural assumptions inherited from verifier.
+- No free `!tlam.bvar<k>` should be introduced when eliminating the matched
+  `tapply`; remaining DBI scoping is still enforced by verifier passes.
 
 ## Current limitations
 - Some malformed-IR cases still use hard errors (`sys.error`) in internal helper paths.
@@ -118,6 +131,13 @@ Why this preserves type semantics:
   - regression test remains at:
     `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/top_level_tapply_no_crash.mlir`
 
+## Audit-aligned notes
+- The audit confirmed that this pass is the canonical DBI instantiation engine
+  used by the lowering pipeline.
+- The implementation does not rely on any `!value<%T>`-style binder rewriting.
+- Nested binder depth handling and capture avoidance are now covered by direct
+  unit tests in addition to filechecks.
+
 ## Relevant tests
 - `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/monomorphize.mlir`
 - `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/binder_shift.mlir`
@@ -126,3 +146,4 @@ Why this preserves type semantics:
 - `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/multi_tyargs.mlir`
 - `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/idempotence.mlir`
 - `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/top_level_tapply_no_crash.mlir`
+- `dialects/test/src/TlamDeBruijnTypeParamsTest.scala`

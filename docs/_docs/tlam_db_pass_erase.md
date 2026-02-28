@@ -8,6 +8,10 @@ Erase type-level TLam control after monomorphization:
 - remove `TReturn` terminators,
 - splice value-level body operations outward.
 
+In the DBI-only pipeline, this pass is intentionally a structural cleanup pass,
+not a polymorphism implementation pass. All type instantiation semantics must
+already have been resolved by `monomorphize`.
+
 ## Rewrite strategy
 For each `TLambda`:
 1. Recursively erase nested `TLambda` first.
@@ -65,6 +69,7 @@ Although both passes touch type-level constructs, they solve different problems:
 - SSA value flow from `TLambda` result is rewritten to `TReturn` value.
 - Body operations preserve original order.
 - Works best when input already satisfies verifier invariants.
+- Does not perform or depend on any SSA-in-types binder substitution.
 
 ## Current limitations
 - Assumes structural validity for intended rewrite path; malformed `TLambda` is skipped and left for verifier diagnostics.
@@ -72,14 +77,15 @@ Although both passes touch type-level constructs, they solve different problems:
 - Erases type-level control only; value-level lowering is separate.
 
 ## Recent hardening update
-- Implementation now handles malformed `TLambda` bodies more robustly:
-  - if trailing `TReturn` is missing, `erase-tlam` leaves that op unchanged instead of throwing.
+- Implementation now guards live unresolved type-level binders:
+  - a `TLambda` is only inlined when its body is DBI-free and contains no
+    remaining type-level TLam control.
+- If a `TLambda` is malformed or still semantically needed:
+  - the pass leaves it in place and lets verifier / pipeline staging report the issue.
+- Dead unresolved wrappers can still be removed safely when they have no users.
 - Rationale:
-  - prevents pass-level crash on invalid input,
-  - allows verifier diagnostics to surface structural issues cleanly.
-- Effect:
-  - valid, staged pipelines are unchanged,
-  - invalid IR is handled gracefully.
+  - prevents unsound erasure of still-meaningful type binders,
+  - keeps `erase-tlam` a safe post-instantiation cleanup pass.
 
 ## Recommended usage
 Run after `monomorphize`, before `lower-tlam-to-func`.
@@ -96,3 +102,4 @@ This separation is especially useful in a thesis context because it aligns with 
 - `tests/filecheck/dialects/tlam_de_bruijn/04_erase_lower/no_leftovers.mlir`
 - `tests/filecheck/dialects/tlam_de_bruijn/04_erase_lower/strict_leftovers_extra.mlir`
 - `tests/filecheck/dialects/tlam_de_bruijn/04_erase_lower/unused_poly_cleanup.mlir`
+- `tests/filecheck/dialects/tlam_de_bruijn/04_erase_lower/guard_uninstantiated.mlir`

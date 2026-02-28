@@ -8,6 +8,11 @@ Lower remaining value-level TLam constructs into `func` dialect:
 - `vapply`  -> `func.call_indirect`
 - `vreturn` -> `func.return`
 
+This pass assumes the DBI-only type-level pipeline is already complete:
+- `tapply` has been instantiated away by `monomorphize`,
+- type-level wrappers have been cleaned by `erase-tlam`,
+- only value-level execution constructs remain to be lowered.
+
 ## Phase 1: lambda lifting
 For each `VLambda`:
 1. Create a fresh symbol name (`lifted_N`).
@@ -37,8 +42,11 @@ The pass walks module regions and snapshots operations before rewriting. For eac
 - This value replaces the old `VLambda` result in users.
 
 5. SSA rewiring
-- Uses are replaced by rebuilding user ops with updated operands (not by mutating operand lists in place).
-- This keeps parent links and use-def chains valid in this IR framework.
+- The synthesized `func.constant` is inserted with block-aware rewrite helpers,
+  not by mutating the raw operation list.
+- Uses are then rewritten through the core `replaceValue` helper.
+- This keeps parent links, result ownership, and use-def chains valid in this
+  IR framework.
 
 ## Phase 2: op rewriting
 Pattern-rewrite remaining ops:
@@ -80,6 +88,12 @@ After lambda lifting, value-level TLam ops are lowered by pattern rewriting:
 - `func.constant` values are inserted in place of original lambda sites.
 - Replacing users after insertion ensures all uses see valid dominating defs.
 
+This matters in practice: an earlier version inserted `func.constant` by
+mutating the block op list directly, which left the op textually present but not
+properly attached to its parent block for verifier-side dominance checks. The
+current implementation uses rewrite helpers specifically to avoid that class of
+bug.
+
 ## Current limitations
 - Expects lowered `VApply` callee values to already have builtin `FunctionType`.
 - Throws exception if unexpected callee type remains at rewrite time.
@@ -100,6 +114,15 @@ After lambda lifting, value-level TLam ops are lowered by pattern rewriting:
 - If `erase-tlam` has not run (or did not fully normalize type-level constructs), lowering now no-ops at pass entry.
 - If some callee path still carries TLam type instead of builtin `FunctionType`, lowering throws by design.
 - The pass intentionally prefers explicit failure over silent mis-lowering.
+
+## Audit-aligned runtime note
+The lowered IR is expected to run on the current interpreter using:
+- `func.constant` for first-class function values,
+- `func.call_indirect` for indirect application,
+- `func.return` for function returns.
+
+The end-to-end DBI pipeline regression now exercises the normal verifier path
+without requiring `scair-opt -s`.
 
 ### Why lowering is separate from erasure/monomorphize
 - `monomorphize` resolves type-level polymorphism semantics.
@@ -122,3 +145,4 @@ Run after `monomorphize,erase-tlam`.
 - `tests/filecheck/dialects/tlam_de_bruijn/04_erase_lower/lower_chain_two_vlambdas.mlir`
 - `tests/filecheck/dialects/tlam_de_bruijn/05_pipeline/pipeline.mlir`
 - `tests/filecheck/dialects/tlam_de_bruijn/05_pipeline/pass_order.mlir`
+- `tests/filecheck/interpreter/full-programs/tlam_dbi_pipeline.mlir`
