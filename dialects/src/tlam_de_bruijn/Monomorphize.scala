@@ -165,7 +165,8 @@ object Monomorphize:
 
       case other =>
         val newOperands = other.operands.map(mapOperand)
-        val newRegions = other.regions.map(r => cloneRegionSpec(r, tyArg, depth))
+        val newRegions = other.regions
+          .map(r => cloneRegionSpec(r, tyArg, depth))
 
         val newResults: Seq[Result[Attribute]] =
           other.results.map { r =>
@@ -185,6 +186,23 @@ object Monomorphize:
           properties = other.properties,
           attributes = other.attributes,
         )
+
+  private def isEffectFreeForSpecialization(op: Operation): Boolean =
+    op match
+      case _: NoMemoryEffect                   => true
+      case _: VLambda | _: TLambda | _: TApply =>
+        true
+      case _ =>
+        false
+
+  private def tlambdaPrefixIsEffectFree(tlam: TLambda): Boolean =
+    tlam.body.blocks.headOption match
+      case Some(bodyBlock) =>
+        val bodyOps = bodyBlock.operations.toSeq
+        bodyOps.nonEmpty && bodyOps.last.isInstanceOf[TReturn] &&
+        bodyOps.dropRight(1).forall(isEffectFreeForSpecialization)
+      case None =>
+        false
 
   /** Rewrite of one TApply
     *   - clones the TLambda block ops (unattached) under specialization
@@ -263,37 +281,44 @@ object Monomorphize:
       val tapplies = collectTApplies(mod)
 
       tapplies.foreach { ta =>
-        ta.containerBlock match
-          case None =>
-            ()
-          case Some(blk) =>
+        ta.containerBlock
+          .foreach { blk =>
+            // If tyArg isn’t a TypeAttribute, skip (same as your old code).
             ta.tyArg match
               case tyArg: TypeAttribute =>
-                cache.get((blk, ta.fun, tyArg)) match
-                  case Some(existing) =>
-                    RewriteMethods.replaceOp(
-                      ta,
-                      newOps = Seq.empty,
-                      newResults = Some(
-                        Seq(existing.asInstanceOf[Value[Attribute]])
-                      ),
-                    )
-                    changed = true
+                tlByValue.get(ta.fun) match
+                  case Some(tl) =>
+                    val cacheable = tlambdaPrefixIsEffectFree(tl)
+
+                    if cacheable then
+                      cache.get((blk, ta.fun, tyArg)) match
+                        case Some(existing) =>
+                          // Replace tapply result with cached value and erase tapply.
+                          RewriteMethods.replaceValue(
+                            ta.res.asInstanceOf[Value[Attribute]],
+                            existing.asInstanceOf[Value[Attribute]],
+                          )
+                          blk.eraseOp(ta)
+                          changed = true
+
+                        case None =>
+                          val repl = rewriteOneTApply(ta, tl)
+                          cache += (blk, ta.fun, tyArg) -> repl
+                          changed = true
+                          if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
+                    else
+                      // Not cacheable: always specialize fresh, don’t store/reuse cache.
+                      val _ = rewriteOneTApply(ta, tl)
+                      changed = true
+                      if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
 
                   case None =>
-                    tlByValue.get(ta.fun) match
-                      case Some(tl) =>
-                        val repl = rewriteOneTApply(ta, tl)
-                        cache += (blk, ta.fun, tyArg) -> repl
-                        changed = true
-
-                        if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
-
-                      case None =>
-                        ()
+                    ()
               case _ =>
                 ()
+          }
       }
+
     mod
 
 final class MonomorphizePass(ctx: MLContext) extends ModulePass(ctx):
