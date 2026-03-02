@@ -53,23 +53,6 @@ object Monomorphize:
     mod.regions.foreach(walkRegion)
     out.toSeq
 
-  private def findContainingBlock(
-      mod: ModuleOp,
-      target: Operation,
-  ): Option[Block] =
-    var found: Option[Block] = None
-
-    def walkRegion(r: Region): Unit =
-      if found.isDefined then return
-      r.blocks.foreach { b =>
-        if found.isEmpty then
-          if b.operations.exists(_ eq target) then found = Some(b)
-          else b.operations.foreach(op => if found.isEmpty then op.regions.foreach(walkRegion))
-      }
-
-    mod.regions.foreach(walkRegion)
-    found
-
   /** Clone a region, specializing all TypeAttributes by inst(..., tyArg), while
     * remapping SSA values so operands inside the clone refer to cloned defs.
     */
@@ -280,9 +263,7 @@ object Monomorphize:
       val tapplies = collectTApplies(mod)
 
       tapplies.foreach { ta =>
-        val maybeBlk = ta.containerBlock.orElse(findContainingBlock(mod, ta))
-
-        maybeBlk match
+        ta.containerBlock match
           case None =>
             ()
           case Some(blk) =>
