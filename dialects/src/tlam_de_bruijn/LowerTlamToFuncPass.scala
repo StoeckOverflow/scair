@@ -8,6 +8,7 @@ import scair.transformations.patterns.*
 import scair.dialects.func.*
 import scair.dialects.builtin.*
 import scair.dialects.tlam_de_bruijn.*
+import scala.collection.mutable
 
 final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
   override val name = "lower-tlam-to-func"
@@ -38,8 +39,24 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
     // If not, leave unchanged and let verifier/pipeline staging report issues.
     if hasTypeLevelTLam(m) then return
 
-    var counter = 0
     val top = m.regions.head.blocks.head
+    var counter = 0
+    val usedSymbolNames: mutable.Set[String] =
+      mutable.Set.from(
+        top.operations.collect { case s: Symbol => s.sym_name.stringLiteral }
+      )
+
+    def freshLiftedName(): String =
+      var name = ""
+      var found = false
+      while !found do
+        counter += 1
+        val candidate = s"lifted_$counter"
+        if !usedSymbolNames.contains(candidate) then
+          name = candidate
+          usedSymbolNames += candidate
+          found = true
+      name
 
     /** Lower a TLam function type to a builtin FunctionType. */
     def lowerFunType(ft: tlamFunType): FunctionType =
@@ -60,8 +77,7 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
         opsSnapshot.foreach { op =>
           op match
             case vl: VLambda =>
-              counter += 1
-              val name = s"lifted_$counter"
+              val name = freshLiftedName()
 
               val tlamFT: tlamFunType = vl.res.typ
               val fnTy: FunctionType = lowerFunType(tlamFT)
@@ -76,18 +92,19 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
                 body = bodyMoved,
               )
 
-              // Insert the function at module top
-              RewriteMethods.insertOpsAt(InsertPoint.atStartOf(top), fn)
-
               // Materialize a first-class function value (builtin FunctionType)
               val cst = Constant(
                 value = SymbolRefAttr(name),
                 res = Result(fnTy),
               )
 
-              // Insert constant right before the original VLambda so parent
-              // pointers are attached before later dominance verification.
-              RewriteMethods.insertOpsBefore(vl, cst)
+              // Materialize the constant at module top so it dominates all
+              // rewritten uses, including across nested regions.
+              RewriteMethods.insertOpsAt(InsertPoint.atStartOf(top), cst)
+
+              // Insert the function at module top. Inserting it after the
+              // constant keeps the final module order as func then constant.
+              RewriteMethods.insertOpsAt(InsertPoint.atStartOf(top), fn)
 
               // Replace all uses of the lambda value with the constant value
               // (upcast to Attribute to match helper signature)
