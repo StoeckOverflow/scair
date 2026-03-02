@@ -41,7 +41,7 @@ Call result types are taken from that function type outputs.
 
 ## Use replacement helper behavior
 
-`replaceAllUses(oldV, newV)` updates both:
+Phase 1 now uses `RewriteMethods.replaceValue(oldV, newV)` to update both:
 1. `oldV.typeUses` (embedded value references in attributes/types)
 2. normal operand `uses`
 

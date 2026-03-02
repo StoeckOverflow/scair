@@ -48,24 +48,26 @@ In the current implementation, that substitution is not limited to top-level res
 2. collect `TApply` users (`collectTApplies`)
 3. for each `TApply`:
    - if `(block, fun, tyArg)` already specialized, reuse cached value and erase duplicate apply
+   - cache reuse only happens when the referenced TLambda prefix is effect-free/shareable
    - else, if `fun` resolves to a known `TLambda`, rewrite it via `rewriteOneTApply`
 4. if a rewritten `TLambda` result has no uses left, erase that `TLambda`
 5. repeat while changes happen
 6. if any `tlam.tapply` remains after the fixed point, throw an error
 
 Cache key: `(use block, callee value, tyArg)`.
-So identical specializations in the same block are deduplicated.
+So identical specializations in the same block are deduplicated, but only when the TLambda body prefix before `treturn` is effect-free. Effectful prefixes are always cloned freshly per `tapply`.
 
 ## Rewrite of one `tapply`
 
 `rewriteOneTApply(ta, tl)`:
 1. read tlambda body block and require trailing `tlam.treturn`
 2. read optional binder block argument (`%T : !tlam.type`) for `!value<%T>` substitution
-3. clone all body ops except final `treturn` with type specialization (`cloneOpSpec`)
-4. insert cloned ops immediately before the `tapply`
-5. map original return value to its cloned value
-6. replace all uses of `ta.res` with cloned return (`replaceAllUsesWith`)
-7. erase `ta`
+3. for each body op before the final `treturn`, first clone it with `Operation.deepCopy(using blockMapper, valueMapper)`
+4. then specialize that detached clone via `specializeOpInPlace(...)`
+5. insert cloned ops immediately before the `tapply`
+6. map original return value to its cloned value
+7. replace all uses of `ta.res` with the cloned return via `RewriteMethods.replaceValue(...)`
+8. erase `ta`
 
 If the shape is malformed (missing body/return/mapping), the rewrite bails out for that use.
 
@@ -76,7 +78,7 @@ There is one additional SSA-binder case:
 
 ## Important implementation detail: replacing value uses in types
 
-`replaceAllUsesWith(from, to)` handles two channels:
+`RewriteMethods.replaceValue(from, to)` handles two channels:
 1. normal SSA operand uses (`from.uses`)
 2. embedded value uses in attributes/types (`from.typeUses`)
 
@@ -84,7 +86,11 @@ The second part is essential in SSA-in-types mode, where values can be reference
 
 ## Cloning behavior
 
-`cloneOpSpec` has explicit handling for TLam ops:
+The pass now separates cloning from specialization:
+1. clone detached ops with `Operation.deepCopy(...)`
+2. specialize the clone tree afterward
+
+`specializeOpInPlace` has explicit handling for TLam ops:
 - `VLambda`, `VReturn`, `VApply`
 - `TLambda`, `TReturn`, `TApply`
 
@@ -95,7 +101,9 @@ For each cloned op it:
 4. records old-result -> new-result mapping
 5. rewrites nested type payloads in generic attributes/properties
 
-Other ops are cloned through a generic `updated(...)` fallback with the same specialization/remapping rules.
+Other ops use a generic `updated(...)` fallback with the same specialization/remapping rules.
+
+The explicit TLam-op reconstruction is important because region-carrying derived ops (`VLambda`, `TLambda`) cannot rely on the generic `DerivedOperation.updated(...)` path to swap in newly specialized regions.
 
 ## Example: repeated specialization is deduplicated
 
@@ -113,8 +121,8 @@ Input shape:
 
 After `monomorphize`:
 - both `tapply` ops are gone
-- only one specialized clone is materialized in that block
-- both users point to that specialized result
+- one specialized clone is materialized in that block when the TLambda prefix is effect-free
+- both users point to that specialized result in that pure/shareable case
 
 See: `tests/filecheck/dialects/tlam/06_monomorphize/tlam_monomorphize_ssa_and_dbi.mlir`.
 

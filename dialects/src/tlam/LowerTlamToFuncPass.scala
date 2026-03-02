@@ -42,31 +42,6 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
       // Note: inputs/outputs can still be TLam types (or builtin types). That's fine.
       FunctionType(inputs = Seq(ft.in), outputs = Seq(ft.out))
 
-    /** Replace all uses of `oldV` with `newV` by rebuilding each user operation
-      * and replacing it via RewriteMethods (so parent pointers stay valid).
-      */
-    def replaceAllUses(oldV: Value[Attribute], newV: Value[Attribute]): Unit =
-      val typeUsesSnapshot = oldV.typeUses.toList
-      typeUsesSnapshot.foreach { tu =>
-        oldV.typeUses -= tu
-        tu.attribute.replaceValue(oldV, newV)
-        val v = tu.attribute.getVal()
-        v.typeUses += TypeUse(tu.owner, tu.attribute)
-      }
-
-      val usesSnapshot = oldV.uses.toList
-      val byOp: Map[Operation, List[Int]] =
-        usesSnapshot.groupMap(_.operation)(_.index)
-
-      byOp.foreach { case (userOp, indices0) =>
-        if userOp.containerBlock.nonEmpty then
-          val indices = indices0.distinct
-          val newOperands =
-            indices.foldLeft(userOp.operands)((ops, idx) => ops.updated(idx, newV))
-          val rebuilt = userOp.updated(operands = newOperands)
-          RewriteMethods.replaceOp(userOp, rebuilt)
-      }
-
     // ---------------------------
     // Phase 1: lift every VLambda
     //   - create func.func @lifted_n with MOVED body
@@ -111,7 +86,7 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
 
               // Replace all uses of the lambda value with the constant value
               // (upcast to Attribute to match helper signature)
-              replaceAllUses(vl.res, cst.res)
+              RewriteMethods.replaceValue(vl.res, cst.res)
 
               // Erase the original VLambda
               RewriteMethods.eraseOp(vl)
