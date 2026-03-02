@@ -29,7 +29,7 @@ Concretely, this is the System F reduction:
 1. Collect all `TLambda` definitions and `TApply` sites in module.
 2. Iterate to fixed point:
    - For each `TApply(fun, tyArg)`:
-     - Resolve insertion block from `containerBlock`, or fallback to containing block lookup.
+     - Use its current `containerBlock` as the rewrite location.
      - If cached specialization `(block, fun, tyArg)` exists, reuse it.
      - Else, find `TLambda` producer and rewrite one site.
 3. Optional cleanup: erase `TLambda` when unused.
@@ -41,12 +41,12 @@ The implementation is a rewrite-to-fixed-point loop over the module:
    - `collectTLambdas(mod)` returns a map from `Value[TypeAttribute]` to `TLambda`.
    - `collectTApplies(mod)` returns all current `TApply` operations.
 2. Process each `TApply` in snapshot order:
-   - Resolve insertion block from `ta.containerBlock.orElse(findContainingBlock(...))`.
-   - If no containing block can be found, skip.
+   - Read `ta.containerBlock`.
+   - If the op is detached (`containerBlock == None`), skip it.
    - If `ta.tyArg` is not a `TypeAttribute`, skip (verifier should catch invalid IR).
    - Compute cache key `(block, ta.fun, tyArg)`.
 3. Cache behavior:
-   - Cache hit: replace all uses of `ta.res` with previously specialized value, erase `ta`.
+   - Cache hit: replace `ta` with no new ops and reuse the previously specialized value.
    - Cache miss: resolve producer of `ta.fun`:
      - If producer is a `TLambda`, call `rewriteOneTApply`.
      - Record rewritten result in cache and mark pass as changed.
@@ -60,15 +60,16 @@ Why fixed-point is needed:
 What the cache guarantees:
 - Within the same insertion block, identical `(fun, tyArg)` requests reuse one specialization result.
 - This prevents redundant cloning for repeated identical `tapply` sites.
+- The cache is block-local on purpose; the pass does not attempt cross-block
+  dominance reasoning for specialization reuse.
 
 ## Rewriting one `TApply`
 For matched `TLambda`:
 1. Read lambda body block; require trailing `TReturn`.
 2. Clone all body ops except `TReturn`, specializing types recursively.
-3. Insert cloned ops before `TApply` site.
+3. Replace the `TApply` with those cloned ops.
 4. Resolve mapped `TReturn` value.
-5. Replace all uses of `TApply` result with mapped return value.
-6. Erase original `TApply`.
+5. Rewire the `TApply` result to the mapped return value.
 
 ### `TApply` rewriting (detailed mechanics)
 Given `ta: TApply` and producer `tl: TLambda`, `rewriteOneTApply` performs:
@@ -77,30 +78,25 @@ Given `ta: TApply` and producer `tl: TLambda`, `rewriteOneTApply` performs:
    - Must have a body block.
    - Must be non-empty.
    - Last op must be `TReturn(v)`.
-2. Determine insertion location:
-   - `useBlock` is provided by caller and resolved from either:
-     - `ta.containerBlock`, or
-     - fallback containing-block lookup for module-scope/top-level `tapply`.
-   - Cloned operations are inserted immediately before `ta` to preserve dominance.
-3. Initialize a fresh `valueMapper`:
+2. Initialize a fresh `valueMapper`:
    - Maps old SSA values (from lambda body) to cloned/new SSA values.
    - Used by recursive clone routines to remap operands/results consistently.
-4. Clone non-terminator source ops:
+3. Clone non-terminator source ops:
    - `origOps.dropRight(1)` are cloned with `cloneOpSpec(op, ta.tyArg, depth = 0)`.
    - `cloneOpSpec` specializes every embedded type via `instAt`.
    - Region contents and nested ops are recursively cloned/remapped.
-5. Materialize clones:
-   - Insert cloned ops in original order before `ta`.
-6. Compute replacement result:
+4. Compute replacement result:
    - Look up `retVal` from source `TReturn` in `valueMapper`.
    - This is the specialized value that semantically replaces `ta.res`.
-7. Rewrite uses and erase call:
-   - Replace all uses of `ta.res` with mapped return value.
-   - Erase original `ta`.
+5. Replace the original `ta`:
+   - `RewriteMethods.replaceOp` inserts the cloned ops before `ta`,
+   - rewires `ta.res` to the mapped return value,
+   - and erases the original `ta`.
 
 Why this preserves SSA correctness:
 - Cloned defs are inserted before all rewritten uses at the same site.
-- Users are rebuilt with updated operands (`replaceAllUsesWith`) instead of mutating in-place.
+- Users are rebuilt through the shared rewriter (`RewriteMethods.replaceOp` /
+  `replaceValue`) rather than mutating operands in place.
 - Value mapping ensures references inside cloned regions never point back to old defs.
 
 Why this preserves type semantics:
@@ -111,6 +107,8 @@ Why this preserves type semantics:
 - Region/block/op cloning is recursive with a value mapper.
 - Types are specialized in operands/results/region arg types.
 - Entering `TLambda` increases specialization depth (`depth + 1`).
+- This is still custom logic; generic `deepCopy` is not sufficient because it
+  does not perform DBI-aware type instantiation.
 
 ## Preserved invariants
 - Capture-avoid type substitution by construction (`shift` + `subst`).
@@ -122,14 +120,14 @@ Why this preserves type semantics:
 ## Current limitations
 - Some malformed-IR cases still use hard errors (`sys.error`) in internal helper paths.
 - No global dead-specialization elimination pass beyond existing cleanup opportunities.
+- If a `TApply` is detached by the time the iteration reaches it, the pass skips
+  it rather than trying to rediscover a parent block.
 
-## Recent hardening update
-- Module-scope/top-level `TApply` is now supported in rewrite path:
-  - when `containerBlock` is absent, pass performs containing-block lookup and still rewrites.
-- Effect:
-  - previous “no crash but no rewrite” behavior is replaced by actual specialization in this case.
-  - regression test remains at:
-    `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/top_level_tapply_no_crash.mlir`
+## Operational notes
+- The pass now uses the shared operation rewriter helpers (`RewriteMethods`) for
+  `TApply` replacement instead of a local custom RAUW helper.
+- That keeps insertion, SSA rewiring, and erasure consistent with the rest of
+  the codebase.
 
 ## Audit-aligned notes
 - The audit confirmed that this pass is the canonical DBI instantiation engine

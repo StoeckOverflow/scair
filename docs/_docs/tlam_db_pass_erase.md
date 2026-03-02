@@ -3,39 +3,52 @@
 File: `dialects/src/tlam_de_bruijn/EraseTlamPass.scala`
 
 ## Goal
-Erase type-level TLam control after monomorphization:
-- remove `TLambda` wrappers,
-- remove `TReturn` terminators,
-- splice value-level body operations outward.
+Conservatively erase type-level TLam control after monomorphization:
+- inline safe `TLambda` wrappers,
+- remove the trailing `TReturn` only when that `TLambda` is inlined,
+- splice body operations outward when doing so is known to be safe.
 
 In the DBI-only pipeline, this pass is intentionally a structural cleanup pass,
 not a polymorphism implementation pass. All type instantiation semantics must
 already have been resolved by `monomorphize`.
 
+This is not a strict normalization pass. If a `TLambda` is still semantically
+meaningful, malformed, or contains forbidden residual type-level structure, the
+pass may leave it in place.
+
 ## Rewrite strategy
 For each `TLambda`:
 1. Recursively erase nested `TLambda` first.
 2. Read its single body block.
-3. Require last op to be `TReturn`.
-4. Detach all non-terminator body ops and insert before the `TLambda`.
-5. Replace `TLambda` result with the `TReturn` operand.
-6. Erase `TLambda` op.
+3. Check whether the last op is `TReturn`.
+4. If the shape is valid and the body is type-safe to erase:
+   detach all non-terminator body ops and insert them before the `TLambda`.
+5. Replace the `TLambda` result with the `TReturn` operand.
+6. Erase the `TLambda` op.
+7. If the `TLambda` is not safe to inline:
+   - erase it only when it has no users, or
+   - otherwise leave it untouched.
 
 ### Rewrite strategy (detailed walkthrough)
 The pass performs a region walk and handles `TLambda` nodes in a post-order style:
 
 1. On each `TLambda`, it first rewrites nested `TLambda` operations in `tl.body`.
    - This guarantees inner type-level control is removed before outer wrappers are rewritten.
-2. It then inspects the lambda body block and snapshots its operations.
-3. The final operation must be `TReturn`; otherwise the pass throws.
-4. All body operations except the final `TReturn` are detached from the body block.
-5. Those detached operations are inserted directly before the `TLambda` in the parent block.
-6. The `TLambda` operation is replaced with no new operations and one new result:
-   - the operand carried by `TReturn`.
-7. Net effect:
-   - type-level wrapper nodes disappear,
-   - useful payload operations are preserved in original order,
-   - users of the old `TLambda` result now use the returned value.
+2. It then checks the lambda body shape.
+3. If the body ends in `TReturn` and the body contains no forbidden residual
+   type-level structure:
+   - all body operations except the final `TReturn` are detached from the body block,
+   - those detached operations are inserted directly before the `TLambda`,
+   - the `TLambda` is replaced with no new operations and one new result:
+     the operand carried by `TReturn`.
+4. If the body is not safe to erase but the `TLambda` result is dead, the pass
+   may still erase the wrapper.
+5. If the body is not safe to erase and the result is still used, the pass
+   leaves the `TLambda` in place.
+6. Net effect:
+   - safe type-level wrapper nodes disappear,
+   - useful payload operations are preserved in original order when inlined,
+   - unsafe or unresolved wrappers remain for later diagnostics.
 
 Why this exact ordering matters:
 - Rewriting inner lambdas first avoids dangling references if outer erasure depends on inner rewritten values.
@@ -66,20 +79,27 @@ Although both passes touch type-level constructs, they solve different problems:
 - Separation keeps each transform smaller and easier to reason about in proofs, audits, and tests.
 
 ## Preserved invariants
-- SSA value flow from `TLambda` result is rewritten to `TReturn` value.
-- Body operations preserve original order.
-- Works best when input already satisfies verifier invariants.
+- When a `TLambda` is inlined, SSA value flow from its result is rewritten to
+  the `TReturn` value.
+- When a `TLambda` is inlined, body operations preserve original order.
+- The pass never invents new specialization semantics; it only removes wrappers
+  already proven unnecessary.
 - Does not perform or depend on any SSA-in-types binder substitution.
 
 ## Current limitations
-- Assumes structural validity for intended rewrite path; malformed `TLambda` is skipped and left for verifier diagnostics.
-- Does not itself verify DBI/region structure; relies on verifier/pipeline discipline.
+- It does not guarantee that all type-level TLam constructs are gone after the
+  pass; unresolved wrappers can remain.
+- Malformed `TLambda` is not force-rewritten; it is either skipped or removed
+  only when dead.
+- It does not itself verify DBI/region structure; relies on verifier/pipeline
+  discipline.
 - Erases type-level control only; value-level lowering is separate.
 
 ## Recent hardening update
 - Implementation now guards live unresolved type-level binders:
-  - a `TLambda` is only inlined when its body is DBI-free and contains no
-    remaining type-level TLam control.
+  - a `TLambda` is only inlined when its body contains no remaining
+    type-level TLam control and no forbidden post-erase types
+    (`tlamForAllType`, `tlamBVarType`) in block args, operands, or results.
 - If a `TLambda` is malformed or still semantically needed:
   - the pass leaves it in place and lets verifier / pipeline staging report the issue.
 - Dead unresolved wrappers can still be removed safely when they have no users.
@@ -89,6 +109,9 @@ Although both passes touch type-level constructs, they solve different problems:
 
 ## Recommended usage
 Run after `monomorphize`, before `lower-tlam-to-func`.
+
+If you need a strict stage-boundary assertion that no type-level TLam structure
+or forbidden DBI types remain, run `check-post-erase-tlam` after this pass.
 
 ### Practical intuition
 Think of the two-stage transition as:
