@@ -13,7 +13,6 @@ import scair.passes.MonomorphizePass
 import scair.passes.LowerTLamToFuncPass
 import scair.passes.EraseTLamPass
 import scair.passes.BetaReduceTLamPass
-import scair.passes.CheckPostEraseTLamPass
 
 //
 // ░█████╗░ ██╗░░░░░ ██╗░░░░░
@@ -35,7 +34,6 @@ val allPasses: Seq[MLContext => ModulePass] =
   Seq(
     BenchmarkConstantFolding(_),
     BetaReduceTLamPass(_),
-    CheckPostEraseTLamPass(_),
     CommonSubexpressionElimination(_),
     DummyPass(_),
     EraseTLamPass(_),

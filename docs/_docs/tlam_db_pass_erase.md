@@ -95,24 +95,6 @@ Although both passes touch type-level constructs, they solve different problems:
   discipline.
 - Erases type-level control only; value-level lowering is separate.
 
-## Recent hardening update
-- Implementation now guards live unresolved type-level binders:
-  - a `TLambda` is only inlined when its body contains no remaining
-    type-level TLam control and no forbidden post-erase types
-    (`tlamForAllType`, `tlamBVarType`) in block args, operands, or results.
-- If a `TLambda` is malformed or still semantically needed:
-  - the pass leaves it in place and lets verifier / pipeline staging report the issue.
-- Dead unresolved wrappers can still be removed safely when they have no users.
-- Rationale:
-  - prevents unsound erasure of still-meaningful type binders,
-  - keeps `erase-tlam` a safe post-instantiation cleanup pass.
-
-## Recommended usage
-Run after `monomorphize`, before `lower-tlam-to-func`.
-
-If you need a strict stage-boundary assertion that no type-level TLam structure
-or forbidden DBI types remain, run `check-post-erase-tlam` after this pass.
-
 ### Practical intuition
 Think of the two-stage transition as:
 - Stage A (`monomorphize`): decide *what* concrete type-level computation means.
