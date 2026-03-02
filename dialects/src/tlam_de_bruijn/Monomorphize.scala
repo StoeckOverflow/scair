@@ -19,39 +19,6 @@ object Monomorphize:
       else DBI.shift(depth, 0, tyArg)
     DBI.subst(depth, shiftedArg, t)
 
-  private def replaceAllUsesWith(
-      from: Value[Attribute],
-      to: Value[Attribute],
-  ): Unit =
-    val usesSnapshot = from.uses.toList
-
-    val byOp: Map[Operation, List[Int]] =
-      usesSnapshot.groupMap(_.operation)(_.index)
-
-    byOp.foreach { case (userOp, indices0) =>
-      val blk = userOp.containerBlock
-        .getOrElse {
-          sys.error("monomorphize: use has no container block (unexpected)")
-        }
-
-      val indices = indices0.distinct
-      val newOperands =
-        indices.foldLeft(userOp.operands)((ops, idx) => ops.updated(idx, to))
-
-      val newUserOp =
-        userOp.updated(
-          operands = newOperands,
-          successors = userOp.successors,
-          results = userOp.results,
-          regions = userOp.detachedRegions,
-          properties = userOp.properties,
-          attributes = userOp.attributes,
-        )
-
-      blk.insertOpBefore(userOp, newUserOp)
-      blk.eraseOp(userOp, safeErase = false)
-    }
-
   private def collectTLambdas(
       mod: ModuleOp
   ): Map[Value[TypeAttribute], TLambda] =
@@ -247,7 +214,6 @@ object Monomorphize:
   private def rewriteOneTApply(
       ta: TApply,
       tl: TLambda,
-      useBlock: Block,
   ): Value[TypeAttribute] =
     val origBlock =
       tl.body.blocks.headOption
@@ -280,8 +246,6 @@ object Monomorphize:
             )
       )
 
-    clonedOpsUnattached.foreach(op => useBlock.insertOpBefore(ta, op))
-
     val newRetAny =
       valueMapper.getOrElse(
         retVal.asInstanceOf[Value[Attribute]],
@@ -293,12 +257,11 @@ object Monomorphize:
 
     val newRet = newRetAny.asInstanceOf[Value[TypeAttribute]]
 
-    replaceAllUsesWith(
-      ta.res.asInstanceOf[Value[Attribute]],
-      newRet.asInstanceOf[Value[Attribute]],
+    RewriteMethods.replaceOp(
+      ta,
+      newOps = clonedOpsUnattached,
+      newResults = Some(Seq(newRet.asInstanceOf[Value[Attribute]])),
     )
-
-    useBlock.eraseOp(ta)
 
     newRet
 
@@ -327,17 +290,19 @@ object Monomorphize:
               case tyArg: TypeAttribute =>
                 cache.get((blk, ta.fun, tyArg)) match
                   case Some(existing) =>
-                    replaceAllUsesWith(
-                      ta.res.asInstanceOf[Value[Attribute]],
-                      existing.asInstanceOf[Value[Attribute]],
+                    RewriteMethods.replaceOp(
+                      ta,
+                      newOps = Seq.empty,
+                      newResults = Some(
+                        Seq(existing.asInstanceOf[Value[Attribute]])
+                      ),
                     )
-                    blk.eraseOp(ta)
                     changed = true
 
                   case None =>
                     tlByValue.get(ta.fun) match
                       case Some(tl) =>
-                        val repl = rewriteOneTApply(ta, tl, blk)
+                        val repl = rewriteOneTApply(ta, tl)
                         cache += (blk, ta.fun, tyArg) -> repl
                         changed = true
 
