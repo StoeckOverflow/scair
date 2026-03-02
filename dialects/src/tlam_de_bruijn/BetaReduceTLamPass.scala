@@ -58,7 +58,7 @@ final class BetaReduceTLamPass(ctx: MLContext) extends ModulePass(ctx):
           case Some(op: Operation) =>
             if !isMemoryEffectFree(op) && countUsesInLambda(blockArg, vl) > 1
             then return
-          case _ => false
+          case _ => ()
 
         given valueMapper: mutable.Map[Value[Attribute], Value[Attribute]] =
           mutable.Map.empty
@@ -89,7 +89,14 @@ final class BetaReduceTLamPass(ctx: MLContext) extends ModulePass(ctx):
       case _ => false
 
   private def isMemoryEffectFree(op: Operation): Boolean =
-    op.isInstanceOf[NoMemoryEffect] && op.regions.forall(r =>
+    val selfOk =
+      op match
+        case _: NoMemoryEffect => true
+        // Treat these as “compile-time / structural” even if not marked NoMemoryEffect.
+        case _: VLambda | _: TLambda | _: TApply => true
+        case _                                   => false
+
+    selfOk && op.regions.forall(r =>
       r.blocks.forall(b => b.operations.forall(isMemoryEffectFree))
     )
 

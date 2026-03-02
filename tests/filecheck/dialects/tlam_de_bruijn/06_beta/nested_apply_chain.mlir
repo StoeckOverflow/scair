@@ -17,5 +17,5 @@ builtin.module {
   "test.use"(%z) : (i32) -> ()
 }
 // CHECK-LABEL: "test.case.nested_chain"() : () -> ()
-// CHECK: "tlam.vapply"
+// CHECK-NOT: "tlam.vapply"
 // CHECK: "test.use"
