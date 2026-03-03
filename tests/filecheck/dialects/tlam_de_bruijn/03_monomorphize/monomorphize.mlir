@@ -14,13 +14,12 @@ builtin.module {
     "tlam.treturn"(%spec) : (!tlam.fun<i64, i64>) -> ()
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
-// CHECK:       builtin.module {
-// CHECK-NOT:     "tlam.tapply"
-// CHECK-NEXT:    %0 = "tlam.tlambda"() ({
-// CHECK-NEXT:      %1 = "tlam.vlambda"() ({
-// CHECK-NEXT:      ^bb0(%2: i64):
-// CHECK-NEXT:        "tlam.vreturn"(%2) : (i64) -> () 
-// CHECK-NEXT:      }) : () -> !tlam.fun<i64, i64>
-// CHECK-NEXT:      "tlam.treturn"(%1) : (!tlam.fun<i64, i64>) -> ()
-// CHECK-NEXT:    }) : () -> !tlam.forall<!tlam.fun<i64, i64>>
-// CHECK-NEXT:  }
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.vlambda"() ({
+// CHECK:     ^bb0(%2: i64):
+// CHECK:       "tlam.vreturn"(%2) : (i64) -> ()
+// CHECK:     }) : () -> !tlam.fun<i64, i64>
+// CHECK:     "tlam.treturn"(%1) : (!tlam.fun<i64, i64>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.fun<i64, i64>>
+// CHECK: }

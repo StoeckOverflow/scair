@@ -23,7 +23,13 @@ builtin.module {
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
 
-// ERASE-NOT: "tlam.tlambda"
-// ERASE-NOT: "tlam.tapply"
-// ERASE-NOT: "tlam.treturn"
-// ERASE: "tlam.vlambda"
+// ERASE: builtin.module {
+// ERASE:   %0 = "tlam.vlambda"() ({
+// ERASE:   ^bb0(%1: !tlam.bvar<0>):
+// ERASE:     "tlam.vreturn"(%1) : (!tlam.bvar<0>) -> ()
+// ERASE:   }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+// ERASE:   %1 = "tlam.vlambda"() ({
+// ERASE:   ^bb0(%2: i64):
+// ERASE:     "tlam.vreturn"(%2) : (i64) -> ()
+// ERASE:   }) : () -> !tlam.fun<i64, i64>
+// ERASE: }

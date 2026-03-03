@@ -17,7 +17,19 @@ builtin.module {
     "tlam.treturn"(%spec) : (!tlam.fun<i64, i64>) -> ()
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
-// CHECK: "tlam.tlambda"
-// CHECK: "tlam.tapply"
-// CHECK: "tlam.vapply"
-// CHECK: "tlam.treturn"
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.tlambda"() ({
+// CHECK:       %2 = "tlam.vlambda"() ({
+// CHECK:       ^bb0(%3: !tlam.bvar<0>):
+// CHECK:         "tlam.vreturn"(%3) : (!tlam.bvar<0>) -> ()
+// CHECK:       }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+// CHECK:       "tlam.treturn"(%2) : (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>) -> ()
+// CHECK:     }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// CHECK:     %2 = "tlam.tapply"(%1) <{tyArg = i64}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> !tlam.fun<i64, i64>
+// CHECK:     %3 = "arith.constant"() <{value = 11}> : () -> i64
+// CHECK:     %4 = "tlam.vapply"(%2, %3) : (!tlam.fun<i64, i64>, i64) -> i64
+// CHECK:     "test.use"(%4) : (i64) -> ()
+// CHECK:     "tlam.treturn"(%2) : (!tlam.fun<i64, i64>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.fun<i64, i64>>
+// CHECK: }

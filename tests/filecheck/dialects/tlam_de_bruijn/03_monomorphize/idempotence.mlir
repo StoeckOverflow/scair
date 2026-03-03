@@ -17,10 +17,38 @@ builtin.module {
     "tlam.treturn"(%a) : (!tlam.fun<i64, i64>) -> ()
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
-// MONO-NOT: "tlam.tapply"
-// MONO: !tlam.fun<i64, i64>
-// MONO2-NOT: "tlam.tapply"
-// MONO2: !tlam.fun<i64, i64>
+// MONO: builtin.module {
+// MONO:   %0 = "tlam.tlambda"() ({
+// MONO:     %1 = "tlam.tlambda"() ({
+// MONO:       %2 = "tlam.vlambda"() ({
+// MONO:       ^bb0(%3: !tlam.bvar<0>):
+// MONO:         "tlam.vreturn"(%3) : (!tlam.bvar<0>) -> ()
+// MONO:       }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+// MONO:       "tlam.treturn"(%2) : (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>) -> ()
+// MONO:     }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// MONO:     %2 = "tlam.vlambda"() ({
+// MONO:     ^bb0(%3: i64):
+// MONO:       "tlam.vreturn"(%3) : (i64) -> ()
+// MONO:     }) : () -> !tlam.fun<i64, i64>
+// MONO:     "tlam.treturn"(%2) : (!tlam.fun<i64, i64>) -> ()
+// MONO:   }) : () -> !tlam.forall<!tlam.fun<i64, i64>>
+// MONO: }
+// MONO2: builtin.module {
+// MONO2:   %0 = "tlam.tlambda"() ({
+// MONO2:     %1 = "tlam.tlambda"() ({
+// MONO2:       %2 = "tlam.vlambda"() ({
+// MONO2:       ^bb0(%3: !tlam.bvar<0>):
+// MONO2:         "tlam.vreturn"(%3) : (!tlam.bvar<0>) -> ()
+// MONO2:       }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+// MONO2:       "tlam.treturn"(%2) : (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>) -> ()
+// MONO2:     }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// MONO2:     %2 = "tlam.vlambda"() ({
+// MONO2:     ^bb0(%3: i64):
+// MONO2:       "tlam.vreturn"(%3) : (i64) -> ()
+// MONO2:     }) : () -> !tlam.fun<i64, i64>
+// MONO2:     "tlam.treturn"(%2) : (!tlam.fun<i64, i64>) -> ()
+// MONO2:   }) : () -> !tlam.forall<!tlam.fun<i64, i64>>
+// MONO2: }
 
 // -----
 

@@ -18,5 +18,18 @@ builtin.module {
   %y = "tlam.vapply"(%driver, %id) : (!tlam.fun<!tlam.fun<i32, i32>, i32>, !tlam.fun<i32, i32>) -> (i32)
   "test.use"(%y) : (i32) -> ()
 }
-// CHECK-LABEL: "test.case.block_arg_callee"() : () -> ()
-// CHECK: "tlam.vapply"(%{{.*}}, %{{.*}}) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK: builtin.module {
+// CHECK:   "test.case.block_arg_callee"() : () -> ()
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: !tlam.fun<i32, i32>):
+// CHECK:     %2 = "arith.constant"() <{value = 2 : i32}> : () -> i32
+// CHECK:     %3 = "tlam.vapply"(%1, %2) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK:     "tlam.vreturn"(%3) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<!tlam.fun<i32, i32>, i32>
+// CHECK:   %1 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%2: i32):
+// CHECK:     "tlam.vreturn"(%2) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<!tlam.fun<i32, i32>, i32>, !tlam.fun<i32, i32>) -> i32
+// CHECK:   "test.use"(%2) : (i32) -> ()
+// CHECK: }

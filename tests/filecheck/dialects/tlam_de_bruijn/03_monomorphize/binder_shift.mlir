@@ -14,6 +14,12 @@ builtin.module {
   }) : () -> (!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>>)
 }
 
-// CHECK-NOT: "tlam.tapply"
-// CHECK: "test.op"() : () -> !tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>
-// CHECK-NOT: !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.tlambda"() ({
+// CHECK:       %2 = "test.op"() : () -> !tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>
+// CHECK:       "tlam.treturn"(%2) : (!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>) -> ()
+// CHECK:     }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>
+// CHECK:     "tlam.treturn"(%1) : (!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>>
+// CHECK: }

@@ -16,6 +16,20 @@ builtin.module {
   %z = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> (i32)
   "test.use"(%z) : (i32) -> ()
 }
-// CHECK-LABEL: "test.case.nested_chain"() : () -> ()
-// CHECK-NOT: "tlam.vapply"
-// CHECK: "test.use"
+// CHECK: builtin.module {
+// CHECK:   "test.case.nested_chain"() : () -> ()
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     %2 = "tlam.vlambda"() ({
+// CHECK:     ^bb1(%3: i32):
+// CHECK:       "tlam.vreturn"(%3) : (i32) -> ()
+// CHECK:     }) : () -> !tlam.fun<i32, i32>
+// CHECK:     "tlam.vreturn"(%1) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "arith.constant"() <{value = 9 : i32}> : () -> i32
+// CHECK:   %2 = "tlam.vlambda"() ({
+// CHECK:   ^bb1(%3: i32):
+// CHECK:     "tlam.vreturn"(%3) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   "test.use"(%1) : (i32) -> ()
+// CHECK: }

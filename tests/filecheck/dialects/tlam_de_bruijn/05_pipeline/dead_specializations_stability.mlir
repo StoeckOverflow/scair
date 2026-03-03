@@ -26,7 +26,29 @@ builtin.module {
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
 
-// FULL-NOT: "tlam."
-// FULL: func.func
-// FULL2-NOT: "tlam."
-// FULL2: func.func
+// FULL: builtin.module {
+// FULL:   func.func @lifted_2(%0: i64) -> i64 {
+// FULL:     func.return %0 : i64
+// FULL:   }
+// FULL:   %0 = func.constant @lifted_2 : (i64) -> i64
+// FULL:   func.func @lifted_1(%1: i64) -> i64 {
+// FULL:     func.return %1 : i64
+// FULL:   }
+// FULL:   %1 = func.constant @lifted_1 : (i64) -> i64
+// FULL:   %2 = "arith.constant"() <{value = 6}> : () -> i64
+// FULL:   %3 = "func.call_indirect"(%1, %2) : ((i64) -> i64, i64) -> i64
+// FULL:   "test.use"(%3) : (i64) -> ()
+// FULL: }
+// FULL2: builtin.module {
+// FULL2:   func.func @lifted_2(%0: i64) -> i64 {
+// FULL2:     func.return %0 : i64
+// FULL2:   }
+// FULL2:   %0 = func.constant @lifted_2 : (i64) -> i64
+// FULL2:   func.func @lifted_1(%1: i64) -> i64 {
+// FULL2:     func.return %1 : i64
+// FULL2:   }
+// FULL2:   %1 = func.constant @lifted_1 : (i64) -> i64
+// FULL2:   %2 = "arith.constant"() <{value = 6}> : () -> i64
+// FULL2:   %3 = "func.call_indirect"(%1, %2) : ((i64) -> i64, i64) -> i64
+// FULL2:   "test.use"(%3) : (i64) -> ()
+// FULL2: }

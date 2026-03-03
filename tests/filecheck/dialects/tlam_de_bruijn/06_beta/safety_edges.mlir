@@ -11,9 +11,15 @@ builtin.module {
   %y = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> (i32)
   "test.use"(%y) : (i32) -> ()
 }
-// CHECK-LABEL: "test.case.effect_arg_single_use"() : () -> ()
-// CHECK-NOT: "tlam.vapply"
-// CHECK: "test.use"
+// CHECK: builtin.module {
+// CHECK:   "test.case.effect_arg_single_use"() : () -> ()
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     "tlam.vreturn"(%1) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "test.effect"() : () -> i32
+// CHECK:   "test.use"(%1) : (i32) -> ()
+// CHECK: }
 
 // -----
 
@@ -43,5 +49,14 @@ builtin.module {
   %y = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> (i32)
   "test.use"(%y) : (i32) -> ()
 }
-// CHECK-LABEL: "test.case.effect_body_no_reduce"() : () -> ()
-// CHECK: "tlam.vapply"
+// CHECK: builtin.module {
+// CHECK:   "test.case.effect_body_no_reduce"() : () -> ()
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     %2 = "test.effect"() : () -> i32
+// CHECK:     "tlam.vreturn"(%2) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+// CHECK:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK:   "test.use"(%2) : (i32) -> ()
+// CHECK: }

@@ -22,8 +22,28 @@ builtin.module {
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
 
-// ORDER1-NOT: "tlam."
-// ORDER1: func.func
+// ORDER1: builtin.module {
+// ORDER1:   func.func @lifted_2(%0: i64) -> i64 {
+// ORDER1:     func.return %0 : i64
+// ORDER1:   }
+// ORDER1:   %0 = func.constant @lifted_2 : (i64) -> i64
+// ORDER1:   func.func @lifted_1(%1: i64) -> i64 {
+// ORDER1:     func.return %1 : i64
+// ORDER1:   }
+// ORDER1:   %1 = func.constant @lifted_1 : (i64) -> i64
+// ORDER1:   %2 = "arith.constant"() <{value = 5}> : () -> i64
+// ORDER1:   %3 = "func.call_indirect"(%1, %2) : ((i64) -> i64, i64) -> i64
+// ORDER1:   "test.use"(%3) : (i64) -> ()
+// ORDER1: }
 
-// ORDER2-NOT: "tlam."
-// ORDER2: func.func
+// ORDER2: builtin.module {
+// ORDER2:   func.func @lifted_2(%0: i64) -> i64 {
+// ORDER2:     func.return %0 : i64
+// ORDER2:   }
+// ORDER2:   %0 = func.constant @lifted_2 : (i64) -> i64
+// ORDER2:   func.func @lifted_1(%1: i64) -> i64 {
+// ORDER2:     func.return %1 : i64
+// ORDER2:   }
+// ORDER2:   %1 = "arith.constant"() <{value = 5}> : () -> i64
+// ORDER2:   "test.use"(%1) : (i64) -> ()
+// ORDER2: }

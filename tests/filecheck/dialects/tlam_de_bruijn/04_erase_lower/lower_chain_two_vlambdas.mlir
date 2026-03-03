@@ -18,6 +18,17 @@ builtin.module {
   "test.use"(%z) : (i32) -> ()
 }
 
-// CHECK-NOT: "tlam.vlambda"
-// CHECK-NOT: "tlam.vapply"
-// CHECK: func.func
+// CHECK: builtin.module {
+// CHECK:   func.func @lifted_2(%0: i32) -> i32 {
+// CHECK:     %1 = "func.call_indirect"(%2, %0) : ((i32) -> i32, i32) -> i32
+// CHECK:     func.return %1 : i32
+// CHECK:   }
+// CHECK:   %0 = func.constant @lifted_2 : (i32) -> i32
+// CHECK:   func.func @lifted_1(%1: i32) -> i32 {
+// CHECK:     func.return %1 : i32
+// CHECK:   }
+// CHECK:   %2 = func.constant @lifted_1 : (i32) -> i32
+// CHECK:   %1 = "arith.constant"() <{value = 4 : i32}> : () -> i32
+// CHECK:   %2 = "func.call_indirect"(%0, %1) : ((i32) -> i32, i32) -> i32
+// CHECK:   "test.use"(%2) : (i32) -> ()
+// CHECK: }

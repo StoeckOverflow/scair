@@ -14,8 +14,42 @@ builtin.module {
     "tlam.treturn"(%f) : (!tlam.fun<i32, i32>) -> ()
   }) : () -> (!tlam.forall<!tlam.fun<i32, i32>>)
 }
-// VERIFY: builtin.module
-// BETA: builtin.module
-// MONO: builtin.module
-// ERASE: builtin.module
-// LOWER: builtin.module
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "tlam.tlambda"() ({
+// VERIFY:     %1 = "tlam.vlambda"() ({
+// VERIFY:     ^bb0(%2: i32, %3: i32):
+// VERIFY:       "tlam.vreturn"(%2) : (i32) -> ()
+// VERIFY:     }) : () -> !tlam.fun<i32, i32>
+// VERIFY:     "tlam.treturn"(%1) : (!tlam.fun<i32, i32>) -> ()
+// VERIFY:   }) : () -> !tlam.forall<!tlam.fun<i32, i32>>
+// VERIFY: }
+// BETA: builtin.module {
+// BETA:   %0 = "tlam.tlambda"() ({
+// BETA:     %1 = "tlam.vlambda"() ({
+// BETA:     ^bb0(%2: i32, %3: i32):
+// BETA:       "tlam.vreturn"(%2) : (i32) -> ()
+// BETA:     }) : () -> !tlam.fun<i32, i32>
+// BETA:     "tlam.treturn"(%1) : (!tlam.fun<i32, i32>) -> ()
+// BETA:   }) : () -> !tlam.forall<!tlam.fun<i32, i32>>
+// BETA: }
+// MONO: builtin.module {
+// MONO:   %0 = "tlam.tlambda"() ({
+// MONO:     %1 = "tlam.vlambda"() ({
+// MONO:     ^bb0(%2: i32, %3: i32):
+// MONO:       "tlam.vreturn"(%2) : (i32) -> ()
+// MONO:     }) : () -> !tlam.fun<i32, i32>
+// MONO:     "tlam.treturn"(%1) : (!tlam.fun<i32, i32>) -> ()
+// MONO:   }) : () -> !tlam.forall<!tlam.fun<i32, i32>>
+// MONO: }
+// ERASE: builtin.module {
+// ERASE:   %0 = "tlam.vlambda"() ({
+// ERASE:   ^bb0(%1: i32, %2: i32):
+// ERASE:     "tlam.vreturn"(%1) : (i32) -> ()
+// ERASE:   }) : () -> !tlam.fun<i32, i32>
+// ERASE: }
+// LOWER: builtin.module {
+// LOWER:   func.func @lifted_1(%0: i32, %1: i32) -> i32 {
+// LOWER:     func.return %0 : i32
+// LOWER:   }
+// LOWER:   %0 = func.constant @lifted_1 : (i32) -> i32
+// LOWER: }

@@ -24,16 +24,32 @@ builtin.module {
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
 
-// ERASE-NOT: "tlam.tlambda"
-// ERASE-NOT: "tlam.tapply"
-// ERASE-NOT: "tlam.treturn"
-// ERASE: "tlam.vlambda"
-// ERASE: "tlam.vapply"
+// ERASE: builtin.module {
+// ERASE:   %0 = "tlam.vlambda"() ({
+// ERASE:   ^bb0(%1: i64):
+// ERASE:     "tlam.vreturn"(%1) : (i64) -> ()
+// ERASE:   }) : () -> !tlam.fun<i64, i64>
+// ERASE:   %1 = "arith.constant"() <{value = 1}> : () -> i64
+// ERASE:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i64, i64>, i64) -> i64
+// ERASE:   %3 = "tlam.vlambda"() ({
+// ERASE:   ^bb0(%4: i64):
+// ERASE:     "tlam.vreturn"(%4) : (i64) -> ()
+// ERASE:   }) : () -> !tlam.fun<i64, i64>
+// ERASE:   %4 = "tlam.vapply"(%3, %2) : (!tlam.fun<i64, i64>, i64) -> i64
+// ERASE:   "test.use"(%4) : (i64) -> ()
+// ERASE: }
 
-// LOWER-NOT: "tlam.tlambda"
-// LOWER-NOT: "tlam.tapply"
-// LOWER-NOT: "tlam.vlambda"
-// LOWER-NOT: "tlam.vapply"
-// LOWER-DAG: func.func
-// LOWER-DAG: "func.call_indirect"
-// LOWER-DAG: func.return
+// LOWER: builtin.module {
+// LOWER:   func.func @lifted_2(%0: i64) -> i64 {
+// LOWER:     func.return %0 : i64
+// LOWER:   }
+// LOWER:   %0 = func.constant @lifted_2 : (i64) -> i64
+// LOWER:   func.func @lifted_1(%1: i64) -> i64 {
+// LOWER:     func.return %1 : i64
+// LOWER:   }
+// LOWER:   %1 = func.constant @lifted_1 : (i64) -> i64
+// LOWER:   %2 = "arith.constant"() <{value = 1}> : () -> i64
+// LOWER:   %3 = "func.call_indirect"(%1, %2) : ((i64) -> i64, i64) -> i64
+// LOWER:   %4 = "func.call_indirect"(%0, %3) : ((i64) -> i64, i64) -> i64
+// LOWER:   "test.use"(%4) : (i64) -> ()
+// LOWER: }

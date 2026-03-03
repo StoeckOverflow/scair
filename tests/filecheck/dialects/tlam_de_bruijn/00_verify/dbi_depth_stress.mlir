@@ -16,7 +16,21 @@ builtin.module {
     "tlam.treturn"(%b) : (!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<2>, !tlam.bvar<2>>>>) -> ()
   }) : () -> (!tlam.forall<!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<2>, !tlam.bvar<2>>>>>)
 }
-// CHECK: !tlam.bvar<2>
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.tlambda"() ({
+// CHECK:       %2 = "tlam.tlambda"() ({
+// CHECK:         %3 = "tlam.vlambda"() ({
+// CHECK:         ^bb0(%4: !tlam.bvar<2>):
+// CHECK:           "tlam.vreturn"(%4) : (!tlam.bvar<2>) -> ()
+// CHECK:         }) : () -> !tlam.fun<!tlam.bvar<2>, !tlam.bvar<2>>
+// CHECK:         "tlam.treturn"(%3) : (!tlam.fun<!tlam.bvar<2>, !tlam.bvar<2>>) -> ()
+// CHECK:       }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<2>, !tlam.bvar<2>>>
+// CHECK:       "tlam.treturn"(%2) : (!tlam.forall<!tlam.fun<!tlam.bvar<2>, !tlam.bvar<2>>>) -> ()
+// CHECK:     }) : () -> !tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<2>, !tlam.bvar<2>>>>
+// CHECK:     "tlam.treturn"(%1) : (!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<2>, !tlam.bvar<2>>>>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<2>, !tlam.bvar<2>>>>>
+// CHECK: }
 
 // -----
 

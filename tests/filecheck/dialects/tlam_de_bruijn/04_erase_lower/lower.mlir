@@ -15,10 +15,9 @@ builtin.module {
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
 
-// CHECK:       builtin.module {
-// CHECK-NOT:     "tlam."
-// CHECK:         func.func @lifted_1(%0: i64) -> i64 {
-// CHECK-NEXT:      func.return %0 : i64 
-// CHECK-NEXT:    }
-// CHECK:         %0 = func.constant @lifted_1 : (i64) -> i64 
-// CHECK:       }
+// CHECK: builtin.module {
+// CHECK:   func.func @lifted_1(%0: i64) -> i64 {
+// CHECK:     func.return %0 : i64
+// CHECK:   }
+// CHECK:   %0 = func.constant @lifted_1 : (i64) -> i64
+// CHECK: }

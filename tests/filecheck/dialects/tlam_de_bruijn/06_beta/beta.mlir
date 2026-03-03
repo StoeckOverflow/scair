@@ -11,9 +11,15 @@ builtin.module {
   %y = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> (i32)
   "test.use"(%y) : (i32) -> ()
 }
-// CHECK-LABEL: "test.case.identity"() : () -> ()
-// CHECK: %[[A:.*]] = "arith.constant"() <{value = 1 : i32}> : () -> i32
-// CHECK: "test.use"(%[[A]]) : (i32) -> ()
+// CHECK: builtin.module {
+// CHECK:   "test.case.identity"() : () -> ()
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     "tlam.vreturn"(%1) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+// CHECK:   "test.use"(%1) : (i32) -> ()
+// CHECK: }
 
 // -----
 
@@ -29,10 +35,17 @@ builtin.module {
   %y = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> (i32)
   "test.use"(%y) : (i32) -> ()
 }
-// CHECK-LABEL: "test.case.pure_clone"() : () -> ()
-// CHECK: %[[A:.*]] = "arith.constant"() <{value = 1 : i32}> : () -> i32
-// CHECK: %[[SUM:.*]] = "arith.addi"(%[[A]], %[[A]]) : (i32, i32) -> i32
-// CHECK: "test.use"(%[[SUM]]) : (i32) -> ()
+// CHECK: builtin.module {
+// CHECK:   "test.case.pure_clone"() : () -> ()
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     %2 = "arith.addi"(%1, %1) : (i32, i32) -> i32
+// CHECK:     "tlam.vreturn"(%2) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+// CHECK:   %2 = "arith.addi"(%1, %1) : (i32, i32) -> i32
+// CHECK:   "test.use"(%2) : (i32) -> ()
+// CHECK: }
 
 // -----
 
@@ -44,8 +57,13 @@ builtin.module {
   %y = "tlam.vapply"(%fun, %a) : (!tlam.fun<i32, i32>, i32) -> (i32)
   "test.use"(%y) : (i32) -> ()
 }
-// CHECK-LABEL: "test.case.indirect"() : () -> ()
-// CHECK: "tlam.vapply"
+// CHECK: builtin.module {
+// CHECK:   "test.case.indirect"() : () -> ()
+// CHECK:   %0 = "test.op"() : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "test.op"() : () -> i32
+// CHECK:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK:   "test.use"(%2) : (i32) -> ()
+// CHECK: }
 
 // -----
 
@@ -61,8 +79,17 @@ builtin.module {
   %y = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> (i32)
   "test.use"(%y) : (i32) -> ()
 }
-// CHECK-LABEL: "test.case.effect_body"() : () -> ()
-// CHECK: "tlam.vapply"
+// CHECK: builtin.module {
+// CHECK:   "test.case.effect_body"() : () -> ()
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     %2 = "test.effect"() : () -> i32
+// CHECK:     "tlam.vreturn"(%2) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "test.op"() : () -> i32
+// CHECK:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK:   "test.use"(%2) : (i32) -> ()
+// CHECK: }
 
 // -----
 
@@ -78,5 +105,14 @@ builtin.module {
   %y = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> (i32)
   "test.use"(%y) : (i32) -> ()
 }
-// CHECK-LABEL: "test.case.effect_arg_dup"() : () -> ()
-// CHECK: "tlam.vapply"
+// CHECK: builtin.module {
+// CHECK:   "test.case.effect_arg_dup"() : () -> ()
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     %2 = "arith.addi"(%1, %1) : (i32, i32) -> i32
+// CHECK:     "tlam.vreturn"(%2) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "test.effect"() : () -> i32
+// CHECK:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK:   "test.use"(%2) : (i32) -> ()
+// CHECK: }

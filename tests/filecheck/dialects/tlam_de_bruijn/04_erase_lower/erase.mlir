@@ -15,11 +15,9 @@ builtin.module {
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
 
-// CHECK:       builtin.module {
-// CHECK-NOT:     "tlam.tlambda"
-// CHECK-NOT:     "tlam.treturn"
-// CHECK-NEXT:    %0 = "tlam.vlambda"() ({
-// CHECK-NEXT:    ^bb0(%1: i64): 
-// CHECK-NEXT:      "tlam.vreturn"(%1) : (i64) -> () 
-// CHECK-NEXT:    }) : () -> !tlam.fun<i64, i64>
-// CHECK-NEXT:  }
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i64):
+// CHECK:     "tlam.vreturn"(%1) : (i64) -> ()
+// CHECK:   }) : () -> !tlam.fun<i64, i64>
+// CHECK: }

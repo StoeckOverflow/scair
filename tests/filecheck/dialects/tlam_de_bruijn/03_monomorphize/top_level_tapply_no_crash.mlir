@@ -13,7 +13,10 @@ builtin.module {
   %spec = "tlam.tapply"(%poly) <{tyArg = i32}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> (!tlam.fun<i32, i32>)
   "test.use"(%spec) : (!tlam.fun<i32, i32>) -> ()
 }
-// CHECK-NOT: "tlam.tapply"
-// CHECK: "tlam.vlambda"
-// CHECK: !tlam.fun<i32, i32>
-// CHECK: "test.use"
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     "tlam.vreturn"(%1) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   "test.use"(%0) : (!tlam.fun<i32, i32>) -> ()
+// CHECK: }

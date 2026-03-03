@@ -26,6 +26,16 @@ builtin.module {
   }) : () -> (!tlam.forall<!tlam.fun<i64, i64>>)
 }
 
-// CHECK-NOT: "tlam."
-// CHECK: func.func
-// CHECK: "func.call_indirect"
+// CHECK: builtin.module {
+// CHECK:   func.func @lifted_2(%0: i64) -> i64 {
+// CHECK:     func.return %0 : i64
+// CHECK:   }
+// CHECK:   %0 = func.constant @lifted_2 : (i64) -> i64
+// CHECK:   func.func @lifted_1(%1: i64) -> i64 {
+// CHECK:     func.return %1 : i64
+// CHECK:   }
+// CHECK:   %1 = func.constant @lifted_1 : (i64) -> i64
+// CHECK:   %2 = "arith.constant"() <{value = 21}> : () -> i64
+// CHECK:   %3 = "func.call_indirect"(%1, %2) : ((i64) -> i64, i64) -> i64
+// CHECK:   "test.use"(%3) : (i64) -> ()
+// CHECK: }

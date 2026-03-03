@@ -11,9 +11,14 @@ builtin.module {
   }) : () -> (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
 }
 // CHECK: builtin.module {
-// CHECK: "tlam.tlambda"
-// CHECK: "tlam.vlambda"
-// CHECK: "tlam.treturn"
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.vlambda"() ({
+// CHECK:     ^bb0(%2: !tlam.bvar<0>):
+// CHECK:       "tlam.vreturn"(%2) : (!tlam.bvar<0>) -> ()
+// CHECK:     }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+// CHECK:     "tlam.treturn"(%1) : (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// CHECK: }
 
 // -----
 
@@ -28,8 +33,16 @@ builtin.module {
     "tlam.treturn"(%id) : (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>) -> ()
   }) : () -> (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
 }
-// CHECK: %[[POLY:.+]] = "tlam.tlambda"
-// CHECK: !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// CHECK: // -----
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.vlambda"() ({
+// CHECK:     ^bb0(%2: !tlam.bvar<0>):
+// CHECK:       "tlam.vreturn"(%2) : (!tlam.bvar<0>) -> ()
+// CHECK:     }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+// CHECK:     "tlam.treturn"(%1) : (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// CHECK: }
 
 // -----
 
@@ -46,8 +59,17 @@ builtin.module {
 
   %spec = "tlam.tapply"(%poly_id) <{tyArg = i32}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> (!tlam.fun<i32, i32>)
 }
-// CHECK: "tlam.tapply"
-// CHECK: !tlam.fun<i32, i32>
+// CHECK: // -----
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.vlambda"() ({
+// CHECK:     ^bb0(%2: !tlam.bvar<0>):
+// CHECK:       "tlam.vreturn"(%2) : (!tlam.bvar<0>) -> ()
+// CHECK:     }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+// CHECK:     "tlam.treturn"(%1) : (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// CHECK:   %1 = "tlam.tapply"(%0) <{tyArg = i32}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> !tlam.fun<i32, i32>
+// CHECK: }
 
 // -----
 
@@ -69,8 +91,24 @@ builtin.module {
   %r = "tlam.vapply"(%two, %c1) : (!tlam.fun<i32, i32>, i32) -> (i32)
   "test.use"(%r) : (i32) -> ()
 }
-// CHECK: "tlam.tapply"
-// CHECK: "tlam.vapply"
+// CHECK: // -----
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.tlambda"() ({
+// CHECK:       %2 = "tlam.vlambda"() ({
+// CHECK:       ^bb0(%3: !tlam.bvar<0>):
+// CHECK:         "tlam.vreturn"(%3) : (!tlam.bvar<0>) -> ()
+// CHECK:       }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+// CHECK:       "tlam.treturn"(%2) : (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>) -> ()
+// CHECK:     }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// CHECK:     "tlam.treturn"(%1) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>>
+// CHECK:   %1 = "tlam.tapply"(%0) <{tyArg = i32}> : (!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>>) -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// CHECK:   %2 = "tlam.tapply"(%1) <{tyArg = i32}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> !tlam.fun<i32, i32>
+// CHECK:   %3 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+// CHECK:   %4 = "tlam.vapply"(%2, %3) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK:   "test.use"(%4) : (i32) -> ()
+// CHECK: }
 
 // -----
 
@@ -86,8 +124,17 @@ builtin.module {
 
   %spec = "tlam.tapply"(%poly) <{tyArg = i64}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> (!tlam.fun<i64, i64>)
 }
-// CHECK: "tlam.tapply"
-// CHECK: !tlam.fun<i64, i64>
+// CHECK: // -----
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.vlambda"() ({
+// CHECK:     ^bb0(%2: !tlam.bvar<0>):
+// CHECK:       "tlam.vreturn"(%2) : (!tlam.bvar<0>) -> ()
+// CHECK:     }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
+// CHECK:     "tlam.treturn"(%1) : (!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// CHECK:   %1 = "tlam.tapply"(%0) <{tyArg = i64}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> !tlam.fun<i64, i64>
+// CHECK: }
 
 // -----
 
@@ -100,7 +147,15 @@ builtin.module {
   %x = "test.op"() : () -> (i32)
   %r = "tlam.vapply"(%id, %x) : (!tlam.fun<i32, i32>, i32) -> (i32)
 }
-// CHECK: "tlam.vapply"
+// CHECK: // -----
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     "tlam.vreturn"(%1) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "test.op"() : () -> i32
+// CHECK:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK: }
 
 // -----
 
@@ -140,8 +195,7 @@ builtin.module {
   }) : () -> (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
   %bad = "tlam.tapply"(%poly) <{tyArg = i64}> : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>) -> (!tlam.fun<i64, i32>)
 }
-// CHECK: tapply: result
-// CHECK: instantiated
+// CHECK: tapply: result !tlam.fun<i64, i32> != instantiated !tlam.fun<i64, i64>
 
 // -----
 
@@ -165,7 +219,8 @@ builtin.module {
     "test.op"() : () -> ()
   }) : () -> (!tlam.fun<i32, i32>)
 }
-// CHECK: vlambda: last op must be tlam.vreturn
+// CHECK: // -----
+// CHECK: vlambda: last op must be tlam.vreturn, got 'test.op'
 
 // -----
 
@@ -175,7 +230,7 @@ builtin.module {
     "test.op"() : () -> ()
   }) : () -> (!tlam.forall<i32>)
 }
-// CHECK: tlambda: last op must be tlam.treturn
+// CHECK: tlambda: last op must be tlam.treturn, got 'test.op'
 
 // -----
 
@@ -239,8 +294,18 @@ builtin.module {
     "tlam.treturn"(%inner) : (!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<1>>>) -> ()
   }) : () -> (!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<1>>>>)
 }
-// CHECK: "tlam.tlambda"
-// CHECK: !tlam.bvar<1>
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.tlambda"() ({
+// CHECK:       %2 = "tlam.vlambda"() ({
+// CHECK:       ^bb0(%3: !tlam.bvar<1>):
+// CHECK:         "tlam.vreturn"(%3) : (!tlam.bvar<1>) -> ()
+// CHECK:       }) : () -> !tlam.fun<!tlam.bvar<1>, !tlam.bvar<1>>
+// CHECK:       "tlam.treturn"(%2) : (!tlam.fun<!tlam.bvar<1>, !tlam.bvar<1>>) -> ()
+// CHECK:     }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<1>>>
+// CHECK:     "tlam.treturn"(%1) : (!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<1>>>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<1>>>>
+// CHECK: }
 
 // -----
 
@@ -326,7 +391,7 @@ builtin.module {
   }) : () -> (!tlam.fun<i32, i32>)
   %bad = "tlam.tapply"(%id) <{tyArg = i32}> : (!tlam.fun<i32, i32>) -> (i32)
 }
-// CHECK: tapply: expected operand of type tlam.forall
+// CHECK: tapply: expected operand of type tlam.forall, got !tlam.fun<i32, i32>
 
 // -----
 
@@ -359,4 +424,16 @@ builtin.module {
     "tlam.treturn"(%spec) : (!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>) -> ()
   }) : () -> (!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>>)
 }
-// CHECK: !tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:     %1 = "tlam.tlambda"() ({
+// CHECK:       %2 = "tlam.tlambda"() ({
+// CHECK:         %3 = "test.op"() : () -> !tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>
+// CHECK:         "tlam.treturn"(%3) : (!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>) -> ()
+// CHECK:       }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>
+// CHECK:       "tlam.treturn"(%2) : (!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>) -> ()
+// CHECK:     }) : () -> !tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>>
+// CHECK:     %2 = "tlam.tapply"(%1) <{tyArg = !tlam.bvar<0>}> : (!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>>) -> !tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>
+// CHECK:     "tlam.treturn"(%2) : (!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<1>, !tlam.bvar<0>>>>
+// CHECK: }
