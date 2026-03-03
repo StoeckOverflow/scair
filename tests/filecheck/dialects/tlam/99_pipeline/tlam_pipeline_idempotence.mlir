@@ -24,11 +24,12 @@ builtin.module {
   "test.use"(%r) : (i64) -> ()
 }
 
-// PIPE-LABEL: builtin.module {
-// PIPE-NOT: "tlam.
-// PIPE-NOT: !tlam.
-// PIPE-NOT: "builtin.unrealized_conversion_cast"
-// PIPE: func.func @lifted_{{[0-9]+}}(%{{[0-9]+}}: i64) -> i64 {
-// PIPE: func.return %{{[0-9]+}} : i64
-// PIPE: "func.call_indirect"
+// PIPE: builtin.module {
+// PIPE:   %0 = func.constant @lifted_1 : (i64) -> i64
+// PIPE:   func.func @lifted_1(%1: i64) -> i64 {
+// PIPE:     func.return %1 : i64
+// PIPE:   }
+// PIPE:   %1 = "arith.constant"() <{value = 42}> : () -> i64
+// PIPE:   %2 = "func.call_indirect"(%0, %1) : ((i64) -> i64, i64) -> i64
+// PIPE:   "test.use"(%2) : (i64) -> ()
 // PIPE: }

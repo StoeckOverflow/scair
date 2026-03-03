@@ -19,9 +19,17 @@ builtin.module {
   "test.use"(%f) : (!tlam.fun<i32, i32>) -> ()
 }
 
-// ERASESAFE-LABEL: builtin.module {
-// ERASESAFE: "tlam.tlambda"
-// ERASESAFE: "tlam.tapply"
+// ERASESAFE: builtin.module {
+// ERASESAFE:   %0 = "tlam.tlambda"() ({
+// ERASESAFE:   ^bb0(%1: !tlam.type):
+// ERASESAFE:     %2 = "tlam.vlambda"() ({
+// ERASESAFE:     ^bb1(%3: i32):
+// ERASESAFE:       "tlam.vreturn"(%3) : (i32) -> ()
+// ERASESAFE:     }) : () -> !tlam.fun<i32, i32>
+// ERASESAFE:     "tlam.treturn"(%2) : (!tlam.fun<i32, i32>) -> ()
+// ERASESAFE:   }) : () -> !tlam.forall<!tlam.fun<i32, i32>>
+// ERASESAFE:   %1 = "tlam.tapply"(%0) <{tyArg = i32}> : (!tlam.forall<!tlam.fun<i32, i32>>) -> !tlam.fun<i32, i32>
+// ERASESAFE:   "test.use"(%1) : (!tlam.fun<i32, i32>) -> ()
 // ERASESAFE: }
 
 // -----
@@ -39,9 +47,13 @@ builtin.module {
   }) : () -> !tlam.forall<i64>
 }
 
-// ERASESAFE-LABEL: builtin.module {
-// ERASESAFE: "tlam.tlambda"
-// ERASESAFE: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) {dep = !tlam.forall<!value<%{{[0-9]+}}>>} : (!tlam.type) -> !value<%{{[0-9]+}}>
+// ERASESAFE: builtin.module {
+// ERASESAFE:   %0 = "tlam.tlambda"() ({
+// ERASESAFE:   ^bb0(%1: !tlam.type):
+// ERASESAFE:     %2 = "builtin.unrealized_conversion_cast"(%1) {dep = !tlam.forall<!value<%1>>} : (!tlam.type) -> !value<%1>
+// ERASESAFE:     %3 = "test.make_i64"() : () -> i64
+// ERASESAFE:     "tlam.treturn"(%3) : (i64) -> ()
+// ERASESAFE:   }) : () -> !tlam.forall<i64>
 // ERASESAFE: }
 
 // -----

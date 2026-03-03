@@ -10,9 +10,10 @@ builtin.module {
   "test.use"() {dep = !tlam.forall<!value<%T>>} : () -> ()
 }
 
-// CANON-LABEL: builtin.module {
-// CANON: [[T:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// CANON: "test.use"() {dep = !tlam.forall<!value<[[T]]>>} : () -> ()
+// CANON: builtin.module {
+// CANON:   %0 = "arith.constant"() <{value = 0 : i32}> : () -> i32
+// CANON:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
+// CANON:   "test.use"() {dep = !tlam.forall<!value<%1>>} : () -> ()
 // CANON: }
 
 // -----
@@ -24,7 +25,8 @@ builtin.module {
   "test.use"() {dep = !tlam.forall<!tlam.fun<!value<%T>, !tlam.forall<!value<%T>>>>} : () -> ()
 }
 
-// CANON-LABEL: builtin.module {
-// CANON: [[T:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// CANON: "test.use"() {dep = !tlam.forall<!tlam.fun<!value<[[T]]>, !tlam.forall<!value<[[T]]>>>>} : () -> ()
+// CANON: builtin.module {
+// CANON:   %0 = "arith.constant"() <{value = 5 : i32}> : () -> i32
+// CANON:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
+// CANON:   "test.use"() {dep = !tlam.forall<!tlam.fun<!value<%1>, !tlam.forall<!value<%1>>>>} : () -> ()
 // CANON: }

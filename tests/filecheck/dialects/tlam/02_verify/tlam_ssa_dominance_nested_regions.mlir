@@ -16,16 +16,22 @@ builtin.module {
   }) : () -> ()
 }
 
-// VERIFY-LABEL: builtin.module {
-// VERIFY: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// VERIFY: "scf.execute_region"() ({
-// VERIFY: "test.use"() {dep = !tlam.forall<!value<%{{[0-9]+}}>>} : () -> ()
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "arith.constant"() <{value = 0 : i32}> : () -> i32
+// VERIFY:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
+// VERIFY:   "scf.execute_region"() ({
+// VERIFY:     "test.use"() {dep = !tlam.forall<!value<%1>>} : () -> ()
+// VERIFY:     "scf.yield"() : () -> ()
+// VERIFY:   }) : () -> ()
 // VERIFY: }
 
-// PIPE-LABEL: builtin.module {
-// PIPE: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// PIPE: "scf.execute_region"() ({
-// PIPE: "test.use"() {dep = !tlam.forall<!value<%{{[0-9]+}}>>} : () -> ()
+// PIPE: builtin.module {
+// PIPE:   %0 = "arith.constant"() <{value = 0 : i32}> : () -> i32
+// PIPE:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
+// PIPE:   "scf.execute_region"() ({
+// PIPE:     "test.use"() {dep = !tlam.forall<!value<%1>>} : () -> ()
+// PIPE:     "scf.yield"() : () -> ()
+// PIPE:   }) : () -> ()
 // PIPE: }
 
 // -----

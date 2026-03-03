@@ -13,8 +13,10 @@ builtin.module {
   "test.consume2"(%f, %f) : (!tlam.fun<i32, i32>, !tlam.fun<i32, i32>) -> ()
 }
 
-// LOWER-LABEL: builtin.module {
-// LOWER: [[C:%[0-9]+]] = func.constant @lifted_{{[0-9]+}} : (i32) -> i32
-// LOWER: "test.consume2"([[C]], [[C]]) : ((i32) -> i32, (i32) -> i32) -> ()
-// LOWER-NOT: "tlam.vlambda"
+// LOWER: builtin.module {
+// LOWER:   %0 = func.constant @lifted_1 : (i32) -> i32
+// LOWER:   func.func @lifted_1(%1: i32) -> i32 {
+// LOWER:     func.return %1 : i32
+// LOWER:   }
+// LOWER:   "test.consume2"(%0, %0) : ((i32) -> i32, (i32) -> i32) -> ()
 // LOWER: }

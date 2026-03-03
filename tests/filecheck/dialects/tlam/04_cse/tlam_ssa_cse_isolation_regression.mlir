@@ -18,11 +18,18 @@ builtin.module {
   }
 }
 
-// ISO-LABEL: builtin.module {
-// ISO: func.func @left() -> !tlam.type {
-// ISO: "builtin.unrealized_conversion_cast"
-// ISO: func.func @right() -> !tlam.type {
-// ISO: "builtin.unrealized_conversion_cast"
+// ISO: builtin.module {
+// ISO:   func.func @left() -> !tlam.type {
+// ISO:     %0 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+// ISO:     %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
+// ISO:     func.return %1 : !tlam.type
+// ISO:   }
+// ISO:   func.func @right() -> !tlam.type {
+// ISO:     %0 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+// ISO:     %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
+// ISO:     func.return %1 : !tlam.type
+// ISO:   }
+// ISO: }
 
 // -----
 
@@ -34,7 +41,8 @@ builtin.module {
   "test.use"() {a = !value<%t0>, b = !value<%t1>} : () -> ()
 }
 
-// ISO-LABEL: builtin.module {
-// ISO: [[T:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// ISO-NOT: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// ISO: "test.use"() {a = !value<[[T]]>, b = !value<[[T]]>} : () -> ()
+// ISO: builtin.module {
+// ISO:   %0 = "arith.constant"() <{value = 3 : i32}> : () -> i32
+// ISO:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
+// ISO:   "test.use"() {a = !value<%1>, b = !value<%1>} : () -> ()
+// ISO: }

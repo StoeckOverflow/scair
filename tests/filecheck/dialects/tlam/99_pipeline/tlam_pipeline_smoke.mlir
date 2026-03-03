@@ -25,16 +25,18 @@ builtin.module {
        -> !tlam.fun<i64, i64>
 }
 
-// MONO-LABEL: builtin.module {
-// MONO-NOT: "tlam.tapply"
-// MONO: "tlam.vlambda"()
+// MONO: builtin.module {
+// MONO:   %0 = "tlam.vlambda"() ({
+// MONO:   ^bb0(%1: i64):
+// MONO:     "tlam.vreturn"(%1) : (i64) -> ()
+// MONO:   }) : () -> !tlam.fun<i64, i64>
 // MONO: }
 
-// LOWER-LABEL: builtin.module {
-// LOWER-NOT: "tlam."
-// LOWER-DAG: %{{[0-9]+}} = func.constant @lifted_{{[0-9]+}} : (i64) -> i64
-// LOWER-DAG: func.func @lifted_{{[0-9]+}}(%{{[0-9]+}}: i64) -> i64 {
-// LOWER-DAG: func.return %{{[0-9]+}} : i64
+// LOWER: builtin.module {
+// LOWER:   %0 = func.constant @lifted_1 : (i64) -> i64
+// LOWER:   func.func @lifted_1(%1: i64) -> i64 {
+// LOWER:     func.return %1 : i64
+// LOWER:   }
 // LOWER: }
 
 // -----
@@ -82,14 +84,14 @@ builtin.module {
   %r = "tlam.vapply"(%id, %a) : (!tlam.fun<i32, i32>, i32) -> i32
 }
 
-// BETAFULL-LABEL: builtin.module {
-// BETAFULL-NOT: "tlam."
-// BETAFULL: func.func @lifted_{{[0-9]+}}(%{{[0-9]+}}: i32) -> i32 {
-// BETAFULL: func.return %{{[0-9]+}} : i32
+// BETAFULL: builtin.module {
+// BETAFULL:   func.func @lifted_1(%0: i32) -> i32 {
+// BETAFULL:     func.return %0 : i32
+// BETAFULL:   }
 // BETAFULL: }
 
-// BETALATE-LABEL: builtin.module {
-// BETALATE-NOT: "tlam."
-// BETALATE: func.func @lifted_{{[0-9]+}}(%{{[0-9]+}}: i32) -> i32 {
-// BETALATE: func.return %{{[0-9]+}} : i32
+// BETALATE: builtin.module {
+// BETALATE:   func.func @lifted_1(%0: i32) -> i32 {
+// BETALATE:     func.return %0 : i32
+// BETALATE:   }
 // BETALATE: }

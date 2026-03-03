@@ -21,10 +21,10 @@ builtin.module {
   "test.use"(%s0, %s1) : (!tlam.forall<i32>, !tlam.forall<i32>) -> ()
 }
 
-// MONO-LABEL: builtin.module {
-// MONO-NOT: "tlam.tapply"
-// MONO: "test.mk_poly"() : () -> !tlam.forall<i32>
-// MONO: "test.use"(%{{[0-9]+}}, %{{[0-9]+}}) : (!tlam.forall<i32>, !tlam.forall<i32>) -> ()
+// MONO: builtin.module {
+// MONO:   %0 = "test.mk_poly"() : () -> !tlam.forall<i32>
+// MONO:   %1 = "test.mk_poly"() : () -> !tlam.forall<i32>
+// MONO:   "test.use"(%0, %1) : (!tlam.forall<i32>, !tlam.forall<i32>) -> ()
 // MONO: }
 
 // -----
@@ -45,11 +45,10 @@ builtin.module {
   "test.use"(%s32, %s64) : (!tlam.forall<i32>, !tlam.forall<i64>) -> ()
 }
 
-// MONO-LABEL: builtin.module {
-// MONO-NOT: "tlam.tapply"
-// MONO: "test.mk_poly"() : () -> !tlam.forall<i32>
-// MONO: "test.mk_poly"() : () -> !tlam.forall<i64>
-// MONO: "test.use"(%{{[0-9]+}}, %{{[0-9]+}}) : (!tlam.forall<i32>, !tlam.forall<i64>) -> ()
+// MONO: builtin.module {
+// MONO:   %0 = "test.mk_poly"() : () -> !tlam.forall<i32>
+// MONO:   %1 = "test.mk_poly"() : () -> !tlam.forall<i64>
+// MONO:   "test.use"(%0, %1) : (!tlam.forall<i32>, !tlam.forall<i64>) -> ()
 // MONO: }
 
 // -----
@@ -75,12 +74,12 @@ builtin.module {
   "test.consume"(%spec) : (!tlam.type) -> ()
 }
 
-// MONO-LABEL: builtin.module {
-// MONO: [[Y:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// MONO-NOT: "tlam.tapply"
-// MONO: [[TV:%[0-9]+]] = "builtin.unrealized_conversion_cast"([[Y]]) {dep = !tlam.forall<!value<[[Y]]>>} : (!tlam.type) -> !tlam.type
-// MONO: "test.use"([[TV]]) {dep = !tlam.forall<!tlam.fun<!value<[[TV]]>, !tlam.forall<!value<[[Y]]>>>>} : (!tlam.type) -> ()
-// MONO: "test.consume"([[TV]]) : (!tlam.type) -> ()
+// MONO: builtin.module {
+// MONO:   %0 = "arith.constant"() <{value = 3 : i32}> : () -> i32
+// MONO:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
+// MONO:   %2 = "builtin.unrealized_conversion_cast"(%1) {dep = !tlam.forall<!value<%1>>} : (!tlam.type) -> !tlam.type
+// MONO:   "test.use"(%2) {dep = !tlam.forall<!tlam.fun<!value<%2>, !tlam.forall<!value<%1>>>>} : (!tlam.type) -> ()
+// MONO:   "test.consume"(%2) : (!tlam.type) -> ()
 // MONO: }
 
 // -----

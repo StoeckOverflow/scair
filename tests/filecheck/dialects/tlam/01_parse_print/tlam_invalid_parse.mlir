@@ -9,7 +9,10 @@ builtin.module {
   %y = "test.make"() : () -> !value<%x>
 }
 
-// CHECK: !value<%{{[0-9]+}}>
+// CHECK: builtin.module {
+// CHECK:   %0 = "arith.constant"() <{value = 0 : i32}> : () -> i32
+// CHECK:   %1 = "test.make"() : () -> !value<%0>
+// CHECK: }
 
 // -----
 
@@ -26,4 +29,12 @@ builtin.module {
        : (!tlam.forall<i64>) -> i64
 }
 
-// CHECK: !value<%{{[0-9]+}}>
+// CHECK: builtin.module {
+// CHECK:   %0 = "arith.constant"() <{value = 0 : i32}> : () -> i32
+// CHECK:   %1 = "tlam.tlambda"() ({
+// CHECK:   ^bb0(%2: !tlam.type):
+// CHECK:     %3 = "test.make_i64"() : () -> i64
+// CHECK:     "tlam.treturn"(%3) : (i64) -> ()
+// CHECK:   }) : () -> !tlam.forall<i64>
+// CHECK:   %2 = "tlam.tapply"(%1) <{tyArg = !value<%0>}> : (!tlam.forall<i64>) -> i64
+// CHECK: }

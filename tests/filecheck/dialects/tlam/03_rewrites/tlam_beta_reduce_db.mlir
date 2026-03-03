@@ -18,9 +18,13 @@ builtin.module {
   "test.use"(%r) : (i32) -> ()
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK-NOT: "tlam.vapply"
-// CHECK: "test.use"(%{{[0-9]+}}) : (i32) -> ()
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     "tlam.vreturn"(%1) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "arith.constant"() <{value = 7 : i32}> : () -> i32
+// CHECK:   "test.use"(%1) : (i32) -> ()
 // CHECK: }
 
 // -----
@@ -41,13 +45,21 @@ builtin.module {
   "test.use_fun"(%g) : (!tlam.fun<i32, i32>) -> ()
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK-NOT: "tlam.vapply"
-// CHECK: "tlam.vlambda"() ({
-// CHECK: ^bb{{[0-9]+}}(%{{[0-9]+}}: i32):
-// CHECK: "tlam.vreturn"(%{{[0-9]+}}) : (i32) -> ()
-// CHECK: }) : () -> !tlam.fun<i32, i32>
-// CHECK: "test.use_fun"(%{{[0-9]+}}) : (!tlam.fun<i32, i32>) -> ()
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     %2 = "tlam.vlambda"() ({
+// CHECK:     ^bb1(%3: i32):
+// CHECK:       "tlam.vreturn"(%3) : (i32) -> ()
+// CHECK:     }) : () -> !tlam.fun<i32, i32>
+// CHECK:     "tlam.vreturn"(%2) : (!tlam.fun<i32, i32>) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, !tlam.fun<i32, i32>>
+// CHECK:   %1 = "arith.constant"() <{value = 11 : i32}> : () -> i32
+// CHECK:   %2 = "tlam.vlambda"() ({
+// CHECK:   ^bb1(%3: i32):
+// CHECK:     "tlam.vreturn"(%3) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   "test.use_fun"(%2) : (!tlam.fun<i32, i32>) -> ()
 // CHECK: }
 
 // -----
@@ -66,11 +78,17 @@ builtin.module {
   "test.use"(%r) : (i32) -> ()
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK: "arith.constant"() <{value = 1 : i32}> : () -> i32
-// CHECK: "arith.addi"(%{{[0-9]+}}, %{{[0-9]+}}) : (i32, i32) -> i32
-// CHECK-NOT: "tlam.vapply"
-// CHECK: "test.use"(%{{[0-9]+}}) : (i32) -> ()
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     %2 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+// CHECK:     %3 = "arith.addi"(%1, %2) : (i32, i32) -> i32
+// CHECK:     "tlam.vreturn"(%3) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "arith.constant"() <{value = 9 : i32}> : () -> i32
+// CHECK:   %2 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+// CHECK:   %3 = "arith.addi"(%1, %2) : (i32, i32) -> i32
+// CHECK:   "test.use"(%3) : (i32) -> ()
 // CHECK: }
 
 // -----
@@ -82,8 +100,10 @@ builtin.module {
   %r = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> i32
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK: "tlam.vapply"
+// CHECK: builtin.module {
+// CHECK:   %0 = "test.fun_source"() : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "arith.constant"() <{value = 3 : i32}> : () -> i32
+// CHECK:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i32, i32>, i32) -> i32
 // CHECK: }
 
 // -----
@@ -100,9 +120,14 @@ builtin.module {
   %r = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> i32
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK: "test.effect"
-// CHECK: "tlam.vapply"
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     %2 = "test.effect"(%1) : (i32) -> i32
+// CHECK:     "tlam.vreturn"(%2) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "arith.constant"() <{value = 5 : i32}> : () -> i32
+// CHECK:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i32, i32>, i32) -> i32
 // CHECK: }
 
 // -----
@@ -120,9 +145,15 @@ builtin.module {
   %r = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> i32
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK: "tlam.vapply"(%{{[0-9]+}}, %{{[0-9]+}}) : (!tlam.fun<i32, i32>, i32) -> i32
-// CHECK: "tlam.vapply"(%{{[0-9]+}}, %{{[0-9]+}}) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK: builtin.module {
+// CHECK:   %0 = "test.fun_source"() : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%2: i32):
+// CHECK:     %3 = "tlam.vapply"(%0, %2) : (!tlam.fun<i32, i32>, i32) -> i32
+// CHECK:     "tlam.vreturn"(%3) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %2 = "arith.constant"() <{value = 5 : i32}> : () -> i32
+// CHECK:   %3 = "tlam.vapply"(%1, %2) : (!tlam.fun<i32, i32>, i32) -> i32
 // CHECK: }
 
 // -----
@@ -139,7 +170,12 @@ builtin.module {
   %r = "tlam.vapply"(%f, %a) : (!tlam.fun<i32, i32>, i32) -> i32
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK: "test.effect_i32"() : () -> i32
-// CHECK: "tlam.vapply"
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     %2 = "arith.addi"(%1, %1) : (i32, i32) -> i32
+// CHECK:     "tlam.vreturn"(%2) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   %1 = "test.effect_i32"() : () -> i32
+// CHECK:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i32, i32>, i32) -> i32
 // CHECK: }

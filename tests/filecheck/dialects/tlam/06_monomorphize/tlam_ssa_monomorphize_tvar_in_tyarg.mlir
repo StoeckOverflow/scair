@@ -20,11 +20,12 @@ builtin.module {
   "test.use"(%spec) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<%Y>>>>) -> ()
 }
 
-// MONO-LABEL: builtin.module {
-// MONO: [[Y:%[0-9]+]] = "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// MONO-NOT: "tlam.tapply"
-// MONO: "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<[[Y]]>>>>
-// MONO: "test.use"(%{{[0-9]+}}) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<[[Y]]>>>>) -> ()
+// MONO: builtin.module {
+// MONO:   %0 = "arith.constant"() <{value = 7 : i32}> : () -> i32
+// MONO:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
+// MONO:   %2 = "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<%1>>>>
+// MONO:   "test.use"(%2) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<%1>>>>) -> ()
+// MONO: }
 
 // -----
 

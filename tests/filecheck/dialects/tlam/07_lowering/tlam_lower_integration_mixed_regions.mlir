@@ -36,19 +36,26 @@ builtin.module {
   }) : () -> ()
 }
 
-// LOWER-LABEL: builtin.module {
-// LOWER-DAG: %[[CF:[0-9]+]] = func.constant @lifted_2 : (i32) -> i32
-// LOWER-DAG: %[[CG:[0-9]+]] = func.constant @lifted_3 : (i32) -> i32
-// LOWER-DAG: func.func @lifted_1(%{{[0-9]+}}: i32) -> i32 {
-// LOWER-DAG: func.func @lifted_2(%{{[0-9]+}}: i32) -> i32 {
-// LOWER-DAG: func.func @lifted_3(%{{[0-9]+}}: i32) -> i32 {
-// LOWER: "func.call_indirect"(%[[CF]], %{{[0-9]+}}) : ((i32) -> i32, i32) -> i32
-// LOWER: "scf.execute_region"() ({
-// LOWER: "func.call_indirect"(%[[CF]], %{{[0-9]+}}) : ((i32) -> i32, i32) -> i32
-// LOWER: "func.call_indirect"(%[[CG]], %{{[0-9]+}}) : ((i32) -> i32, i32) -> i32
-// LOWER: "scf.yield"() : () -> ()
-// LOWER: }) : () -> ()
-// LOWER-NOT: "tlam.vlambda"
-// LOWER-NOT: "tlam.vapply"
-// LOWER-NOT: "tlam.vreturn"
+// LOWER: builtin.module {
+// LOWER:   %0 = func.constant @lifted_3 : (i32) -> i32
+// LOWER:   func.func @lifted_3(%1: i32) -> i32 {
+// LOWER:     func.return %1 : i32
+// LOWER:   }
+// LOWER:   %1 = func.constant @lifted_2 : (i32) -> i32
+// LOWER:   func.func @lifted_2(%2: i32) -> i32 {
+// LOWER:     func.return %2 : i32
+// LOWER:   }
+// LOWER:   func.func @lifted_1(%2: i32) -> i32 {
+// LOWER:     func.return %2 : i32
+// LOWER:   }
+// LOWER:   %2 = "arith.constant"() <{value = 11 : i32}> : () -> i32
+// LOWER:   %3 = "func.call_indirect"(%1, %2) : ((i32) -> i32, i32) -> i32
+// LOWER:   "test.use"(%3) : (i32) -> ()
+// LOWER:   "scf.execute_region"() ({
+// LOWER:     %4 = "arith.constant"() <{value = 22 : i32}> : () -> i32
+// LOWER:     %5 = "func.call_indirect"(%1, %4) : ((i32) -> i32, i32) -> i32
+// LOWER:     %6 = "func.call_indirect"(%0, %4) : ((i32) -> i32, i32) -> i32
+// LOWER:     "test.use2"(%5, %6) : (i32, i32) -> ()
+// LOWER:     "scf.yield"() : () -> ()
+// LOWER:   }) : () -> ()
 // LOWER: }

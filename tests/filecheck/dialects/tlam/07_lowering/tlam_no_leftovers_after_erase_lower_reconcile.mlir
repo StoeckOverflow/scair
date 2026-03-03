@@ -24,13 +24,18 @@ builtin.module {
   "test.use"(%r) : (i32) -> ()
 }
 
-// LOWER-LABEL: builtin.module {
-// LOWER-NOT: "tlam.
-// LOWER-NOT: !tlam.
-// LOWER-NOT: "builtin.unrealized_conversion_cast"
-// LOWER: func.func @lifted_{{[0-9]+}}(%{{[0-9]+}}: i32) -> i32 {
-// LOWER: func.return %{{[0-9]+}} : i32
-// LOWER: "func.call_indirect"
+// LOWER: builtin.module {
+// LOWER:   %0 = func.constant @lifted_2 : (i32) -> i32
+// LOWER:   func.func @lifted_2(%1: i32) -> i32 {
+// LOWER:     func.return %1 : i32
+// LOWER:   }
+// LOWER:   %1 = func.constant @lifted_1 : (i32) -> i32
+// LOWER:   func.func @lifted_1(%2: i32) -> i32 {
+// LOWER:     func.return %2 : i32
+// LOWER:   }
+// LOWER:   %2 = "arith.constant"() <{value = 7 : i32}> : () -> i32
+// LOWER:   %3 = "func.call_indirect"(%0, %2) : ((i32) -> i32, i32) -> i32
+// LOWER:   "test.use"(%3) : (i32) -> ()
 // LOWER: }
 
 // -----
@@ -50,11 +55,15 @@ builtin.module {
   }) : () -> ()
 }
 
-// LOWER-LABEL: builtin.module {
-// LOWER-NOT: "tlam.
-// LOWER-NOT: !tlam.
-// LOWER-NOT: "builtin.unrealized_conversion_cast"
-// LOWER: "scf.execute_region"() ({
-// LOWER: "func.call_indirect"
-// LOWER: "scf.yield"() : () -> ()
+// LOWER: builtin.module {
+// LOWER:   %0 = func.constant @lifted_1 : (i64) -> i64
+// LOWER:   func.func @lifted_1(%1: i64) -> i64 {
+// LOWER:     func.return %1 : i64
+// LOWER:   }
+// LOWER:   "scf.execute_region"() ({
+// LOWER:     %1 = "arith.constant"() <{value = 3}> : () -> i64
+// LOWER:     %2 = "func.call_indirect"(%0, %1) : ((i64) -> i64, i64) -> i64
+// LOWER:     "test.use"(%2) : (i64) -> ()
+// LOWER:     "scf.yield"() : () -> ()
+// LOWER:   }) : () -> ()
 // LOWER: }

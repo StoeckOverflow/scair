@@ -13,9 +13,10 @@ builtin.module {
   "test.use"(%tv) : (!value<%T>) -> ()
 }
 
-// VERIFY-LABEL: builtin.module {
-// VERIFY: "test.make_type"() : () -> !tlam.type
-// VERIFY: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) {dep = !tlam.forall<!tlam.fun<!value<%{{[0-9]+}}>, !tlam.forall<!value<%{{[0-9]+}}>>>>, nested = [!value<%{{[0-9]+}}>, [!tlam.forall<!value<%{{[0-9]+}}>>, !value<%{{[0-9]+}}>]]} : (!tlam.type) -> !value<%{{[0-9]+}}>
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "test.make_type"() : () -> !tlam.type
+// VERIFY:   %1 = "builtin.unrealized_conversion_cast"(%0) {dep = !tlam.forall<!tlam.fun<!value<%0>, !tlam.forall<!value<%0>>>>, nested = [!value<%0>, [!tlam.forall<!value<%0>>, !value<%0>]]} : (!tlam.type) -> !value<%0>
+// VERIFY:   "test.use"(%1) : (!value<%0>) -> ()
 // VERIFY: }
 
 // -----

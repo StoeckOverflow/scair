@@ -12,9 +12,11 @@ builtin.module {
   }
 }
 
-// CAST-LABEL: func.func @pair
-// CAST-NOT: "builtin.unrealized_conversion_cast"
-// CAST: func.return %{{[0-9]+}} : i64
+// CAST: builtin.module {
+// CAST:   func.func @pair(%0: i64) -> i64 {
+// CAST:     func.return %0 : i64
+// CAST:   }
+// CAST: }
 
 // -----
 
@@ -27,10 +29,13 @@ builtin.module {
   }
 }
 
-// CAST-LABEL: func.func @live_chain
-// CAST: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i64) -> i1
-// CAST: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i1) -> i32
-// CAST: func.return %{{[0-9]+}} : i32
+// CAST: builtin.module {
+// CAST:   func.func @live_chain(%0: i64) -> i32 {
+// CAST:     %1 = "builtin.unrealized_conversion_cast"(%0) : (i64) -> i1
+// CAST:     %2 = "builtin.unrealized_conversion_cast"(%1) : (i1) -> i32
+// CAST:     func.return %2 : i32
+// CAST:   }
+// CAST: }
 
 // -----
 

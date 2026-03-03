@@ -11,9 +11,9 @@ builtin.module {
   "test.use"() {dep = !tlam.forall<!tlam.fun<i32, !value<%T>>>} : () -> ()
 }
 
-// VERIFY-LABEL: builtin.module {
-// VERIFY: "test.make_type"() : () -> !tlam.type
-// VERIFY: "test.use"() {dep = !tlam.forall<!tlam.fun<i32, !value<%{{[0-9]+}}>>>
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "test.make_type"() : () -> !tlam.type
+// VERIFY:   "test.use"() {dep = !tlam.forall<!tlam.fun<i32, !value<%0>>>} : () -> ()
 // VERIFY: }
 
 // -----
@@ -41,8 +41,14 @@ builtin.module {
        : (!tlam.forall<i64>) -> i64
 }
 
-// VERIFY-LABEL: builtin.module {
-// VERIFY: "tlam.tapply"(%{{[0-9]+}}) <{tyArg = !value<%{{[0-9]+}}>}> : (!tlam.forall<i64>) -> i64
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "test.make_type"() : () -> !tlam.type
+// VERIFY:   %1 = "tlam.tlambda"() ({
+// VERIFY:   ^bb0(%2: !tlam.type):
+// VERIFY:     %3 = "test.make_i64"() : () -> i64
+// VERIFY:     "tlam.treturn"(%3) : (i64) -> ()
+// VERIFY:   }) : () -> !tlam.forall<i64>
+// VERIFY:   %2 = "tlam.tapply"(%1) <{tyArg = !value<%0>}> : (!tlam.forall<i64>) -> i64
 // VERIFY: }
 
 // -----

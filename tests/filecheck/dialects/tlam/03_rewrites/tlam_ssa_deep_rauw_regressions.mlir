@@ -31,10 +31,16 @@ builtin.module {
        : (!tlam.forall<i64>) -> i64
 }
 
-// CSE-LABEL: builtin.module {
-// CSE: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !tlam.type
-// CSE: "builtin.unrealized_conversion_cast"(%{{[0-9]+}}) : (i32) -> !value<%{{[0-9]+}}>
-// CSE: "test.consume"(%{{[0-9]+}}) : (!value<%{{[0-9]+}}>) -> ()
-// CSE: "test.use"(%{{[0-9]+}}) {dep = !tlam.forall<!tlam.fun<!value<%{{[0-9]+}}>, !tlam.forall<!value<%{{[0-9]+}}>>>>}
-// CSE: "tlam.tapply"(%{{[0-9]+}}) <{tyArg = !value<%{{[0-9]+}}>}> : (!tlam.forall<i64>) -> i64
+// CSE: builtin.module {
+// CSE:   %0 = "arith.constant"() <{value = 0 : i32}> : () -> i32
+// CSE:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
+// CSE:   %2 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !value<%1>
+// CSE:   "test.consume"(%2) : (!value<%1>) -> ()
+// CSE:   "test.use"(%2) {dep = !tlam.forall<!tlam.fun<!value<%1>, !tlam.forall<!value<%1>>>>} : (!value<%1>) -> ()
+// CSE:   %3 = "tlam.tlambda"() ({
+// CSE:   ^bb0(%4: !tlam.type):
+// CSE:     %5 = "test.make_i64"() : () -> i64
+// CSE:     "tlam.treturn"(%5) : (i64) -> ()
+// CSE:   }) : () -> !tlam.forall<i64>
+// CSE:   %4 = "tlam.tapply"(%3) <{tyArg = !value<%1>}> : (!tlam.forall<i64>) -> i64
 // CSE: }

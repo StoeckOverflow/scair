@@ -16,11 +16,15 @@ builtin.module {
   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK: "tlam.tlambda"()
-// CHECK: "tlam.vlambda"()
-// CHECK: "tlam.vreturn"
-// CHECK: "tlam.treturn"
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.tlambda"() ({
+// CHECK:   ^bb0(%1: !tlam.type):
+// CHECK:     %2 = "tlam.vlambda"() ({
+// CHECK:     ^bb1(%3: !value<%1>):
+// CHECK:       "tlam.vreturn"(%3) : (!value<%1>) -> ()
+// CHECK:     }) : () -> !tlam.fun<!value<%1>, !value<%1>>
+// CHECK:     "tlam.treturn"(%2) : (!tlam.fun<!value<%1>, !value<%1>>) -> ()
+// CHECK:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 // CHECK: }
 
 // -----
@@ -64,9 +68,9 @@ builtin.module {
   "test.use"() {dep = !value<%T>} : () -> ()
 }
 
-// CHECK-LABEL: builtin.module {
-// CHECK: "test.make_type"()
-// CHECK: "test.use"() {dep = !value
+// CHECK: builtin.module {
+// CHECK:   %0 = "test.make_type"() : () -> !tlam.type
+// CHECK:   "test.use"() {dep = !value<%0>} : () -> ()
 // CHECK: }
 
 // -----
