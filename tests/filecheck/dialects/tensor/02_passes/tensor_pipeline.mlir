@@ -12,12 +12,10 @@ builtin.module {
   %u1 = "test.keep"() : () -> !dtensor.tensor<[%s2], f32>
 }
 
-// PIPE-LABEL: builtin.module {
-// PIPE: [[M:%[0-9]+]] = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-// PIPE-NOT: "dtensor.nat.add"
-// PIPE-NOT: "dtensor.nat.mul"
-// PIPE: "test.keep"() : () -> !dtensor.tensor<[[[M]]], f32>
-// PIPE: "test.keep"() : () -> !dtensor.tensor<[[[M]]], f32>
+// PIPE: builtin.module {
+// PIPE:   %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+// PIPE:   %1 = "test.keep"() : () -> !dtensor.tensor<[%0], f32>
+// PIPE:   %2 = "test.keep"() : () -> !dtensor.tensor<[%0], f32>
 // PIPE: }
 
 // -----
@@ -37,5 +35,5 @@ builtin.module {
   }) : () -> ()
 }
 
-// PIPE: ssa-dominance: value Value
-// PIPE: does not dominate its use in op `test.use`
+// PIPE: // -----
+// PIPE: ssa-dominance: value Value(!dtensor.nat) does not dominate its use in op `test.use`

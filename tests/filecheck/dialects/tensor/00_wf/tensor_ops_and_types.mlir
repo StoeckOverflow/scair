@@ -24,16 +24,21 @@ builtin.module {
     : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
 }
 
-// VERIFY-LABEL: builtin.module {
-// VERIFY: "dtensor.nat.const"
-// VERIFY: "dtensor.nat.mul"
-// VERIFY: "dtensor.nat.add"
-// VERIFY: "dtensor.empty"
-// VERIFY: "dtensor.fill"
-// VERIFY: "dtensor.add"
-// VERIFY: "dtensor.mul"
-// VERIFY: "dtensor.dim"
-// VERIFY: "dtensor.cast"
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+// VERIFY:   %1 = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
+// VERIFY:   %2 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
+// VERIFY:   %3 = "dtensor.nat.mul"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// VERIFY:   %4 = "dtensor.nat.add"(%0, %2) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// VERIFY:   %5 = "test.zero"() : () -> f32
+// VERIFY:   %6 = "dtensor.empty"() : () -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %7 = "dtensor.fill"(%5) : (f32) -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %8 = "test.a"() : () -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %9 = "test.b"() : () -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %10 = "dtensor.add"(%8, %9) : (!dtensor.tensor<[%0, %1], f32>, !dtensor.tensor<[%0, %1], f32>) -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %11 = "dtensor.mul"(%8, %9) : (!dtensor.tensor<[%0, %1], f32>, !dtensor.tensor<[%0, %1], f32>) -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %12 = "dtensor.dim"(%8) <{axis = 1 : i32}> : (!dtensor.tensor<[%0, %1], f32>) -> !value<%1>
+// VERIFY:   %13 = "dtensor.cast"(%8) : (!dtensor.tensor<[%0, %1], f32>) -> !dtensor.tensor<[%0, %1], f32>
 // VERIFY: }
 
 // -----
@@ -63,8 +68,11 @@ builtin.module {
   %r = "dtensor.nat.add"(%x, %m) : (i32, !dtensor.nat) -> !dtensor.nat
 }
 
-// VERIFY: dtensor.nat.add
-// VERIFY: !dtensor.nat
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "arith.constant"() <{value = 7 : i32}> : () -> i32
+// VERIFY:   %1 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
+// VERIFY:   %2 = "dtensor.nat.add"(%0, %1) : (i32, !dtensor.nat) -> !dtensor.nat
+// VERIFY: }
 
 // -----
 
@@ -106,7 +114,9 @@ builtin.module {
   %s = "dtensor.empty"() : () -> !dtensor.tensor<[], f32>
 }
 
-// VERIFY: !dtensor.tensor<[], f32>
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.empty"() : () -> !dtensor.tensor<[], f32>
+// VERIFY: }
 
 // -----
 
@@ -205,10 +215,17 @@ builtin.module {
     : (!dtensor.tensor<[%m, %n], f32>, !dtensor.tensor<[%n, %p], f32>) -> !dtensor.tensor<[%m, %p], f32>
 }
 
-// VERIFY: "dtensor.matmul"
-// VERIFY: -> !dtensor.tensor<[%0, %2], f32>
-// VERIFY: "dtensor.matmul"
-// VERIFY: -> !dtensor.tensor<[%0, %3], f32>
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
+// VERIFY:   %1 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
+// VERIFY:   %2 = "dtensor.nat.const"() <{value = 5 : i32}> : () -> !dtensor.nat
+// VERIFY:   %3 = "dtensor.nat.const"() <{value = 7 : i32}> : () -> !dtensor.nat
+// VERIFY:   %4 = "test.A"() : () -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %5 = "test.B"() : () -> !dtensor.tensor<[%1, %2], f32>
+// VERIFY:   %6 = "test.C"() : () -> !dtensor.tensor<[%2, %3], f32>
+// VERIFY:   %7 = "dtensor.matmul"(%4, %5) : (!dtensor.tensor<[%0, %1], f32>, !dtensor.tensor<[%1, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
+// VERIFY:   %8 = "dtensor.matmul"(%7, %6) : (!dtensor.tensor<[%0, %2], f32>, !dtensor.tensor<[%2, %3], f32>) -> !dtensor.tensor<[%0, %3], f32>
+// VERIFY: }
 
 // -----
 
@@ -237,9 +254,13 @@ builtin.module {
   %E = "dtensor.empty"() : () -> !dtensor.tensor<[%d0], f32>
 }
 
-// VERIFY: "dtensor.dim"
-// VERIFY: -> !value<%
-// VERIFY: "dtensor.empty"() : () -> !dtensor.tensor<[%3], f32>
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.nat.const"() <{value = 6 : i32}> : () -> !dtensor.nat
+// VERIFY:   %1 = "dtensor.nat.const"() <{value = 9 : i32}> : () -> !dtensor.nat
+// VERIFY:   %2 = "test.A"() : () -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %3 = "dtensor.dim"(%2) <{axis = 0 : i32}> : (!dtensor.tensor<[%0, %1], f32>) -> !value<%0>
+// VERIFY:   %4 = "dtensor.empty"() : () -> !dtensor.tensor<[%3], f32>
+// VERIFY: }
 
 // -----
 
@@ -255,11 +276,14 @@ builtin.module {
     : (!dtensor.tensor<[%d0, %n], f32>) -> !value<%d0>
 }
 
-// VERIFY: "dtensor.dim"
-// VERIFY: -> !value<%
-// VERIFY: "dtensor.empty"() : () -> !dtensor.tensor<[
-// VERIFY: "dtensor.dim"
-// VERIFY: -> !value<%
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+// VERIFY:   %1 = "dtensor.nat.const"() <{value = 7 : i32}> : () -> !dtensor.nat
+// VERIFY:   %2 = "test.A"() : () -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %3 = "dtensor.dim"(%2) <{axis = 0 : i32}> : (!dtensor.tensor<[%0, %1], f32>) -> !value<%0>
+// VERIFY:   %4 = "dtensor.empty"() : () -> !dtensor.tensor<[%3, %1], f32>
+// VERIFY:   %5 = "dtensor.dim"(%4) <{axis = 0 : i32}> : (!dtensor.tensor<[%3, %1], f32>) -> !value<%3>
+// VERIFY: }
 
 // -----
 
@@ -285,9 +309,8 @@ builtin.module {
 
 // Parse forward-reference diagnostic for SSA shape params.
 builtin.module {
-  %t = "test.bad"() : () -> !tensor.vector<%m, f32>
+  %t = "test.bad"() : () -> !dtensor.vector<%m, f32>
   %m = "dtensor.nat.const"() <{value = 7 : i32}> : () -> !dtensor.nat
 }
 
-// PARSE: Parse error at [[FILE]]
-// PARSE: Type tensor.vector is not defined in any supported Dialect.
+// PARSE: ssa-dominance: value Value(!dtensor.nat) does not dominate its use in op `test.bad`

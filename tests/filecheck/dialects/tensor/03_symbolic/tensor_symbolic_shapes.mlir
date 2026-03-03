@@ -17,30 +17,54 @@ builtin.module {
   %m = "test.mat"() : () -> !dtensor.matrix<%x, %y, f32>
 }
 
-// VERIFY-LABEL: builtin.module {
-// VERIFY: "dtensor.nat.add"
-// VERIFY: "dtensor.nat.mul"
-// VERIFY: !dtensor.tensor<[%2, %3], f32>
-// VERIFY: !dtensor.vector<%0, f32>
-// VERIFY: !dtensor.matrix<%0, %1, f32>
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// VERIFY:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// VERIFY:   %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// VERIFY:   %3 = "dtensor.nat.mul"(%2, %0) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// VERIFY:   %4 = "test.zero"() : () -> f32
+// VERIFY:   %5 = "dtensor.empty"() : () -> !dtensor.tensor<[%2, %3], f32>
+// VERIFY:   %6 = "tensor.fill"(%4) : (f32) -> !dtensor.tensor<[%2, %3], f32>
+// VERIFY:   %7 = "test.vec"() : () -> !dtensor.vector<%0, f32>
+// VERIFY:   %8 = "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
 // VERIFY: }
-// CANON-LABEL: builtin.module {
-// CANON: "dtensor.nat.add"
-// CANON: "dtensor.nat.mul"
-// CANON: "dtensor.empty"() : () -> !dtensor.tensor<[%2, %3], f32>
+// CANON: builtin.module {
+// CANON:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CANON:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CANON:   %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CANON:   %3 = "dtensor.nat.mul"(%2, %0) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CANON:   %4 = "test.zero"() : () -> f32
+// CANON:   %5 = "dtensor.empty"() : () -> !dtensor.tensor<[%2, %3], f32>
+// CANON:   %6 = "tensor.fill"(%4) : (f32) -> !dtensor.tensor<[%2, %3], f32>
+// CANON:   %7 = "test.vec"() : () -> !dtensor.vector<%0, f32>
+// CANON:   %8 = "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
 // CANON: }
-// CSE-LABEL: builtin.module {
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%2, %3], f32>
-// CSE: "tensor.fill"(%4) : (f32) -> !dtensor.tensor<[%2, %3], f32>
+// CSE: builtin.module {
+// CSE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CSE:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CSE:   %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CSE:   %3 = "dtensor.nat.mul"(%2, %0) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CSE:   %4 = "test.zero"() : () -> f32
+// CSE:   %5 = "dtensor.empty"() : () -> !dtensor.tensor<[%2, %3], f32>
+// CSE:   %6 = "tensor.fill"(%4) : (f32) -> !dtensor.tensor<[%2, %3], f32>
+// CSE:   %7 = "test.vec"() : () -> !dtensor.vector<%0, f32>
+// CSE:   %8 = "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
 // CSE: }
-// DCE-LABEL: builtin.module {
-// DCE: "dtensor.nat.add"
-// DCE: "dtensor.nat.mul"
+// DCE: builtin.module {
+// DCE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// DCE:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// DCE:   %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// DCE:   %3 = "dtensor.nat.mul"(%2, %0) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
 // DCE: }
-// PIPE-LABEL: builtin.module {
-// PIPE: "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE: "test.vec"() : () -> !dtensor.vector<%0, f32>
-// PIPE: "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
+// PIPE: builtin.module {
+// PIPE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// PIPE:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// PIPE:   %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// PIPE:   %3 = "dtensor.nat.mul"(%2, %0) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// PIPE:   %4 = "test.zero"() : () -> f32
+// PIPE:   %5 = "tensor.fill"(%4) : (f32) -> !dtensor.tensor<[%2, %3], f32>
+// PIPE:   %6 = "test.vec"() : () -> !dtensor.vector<%0, f32>
+// PIPE:   %7 = "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
 // PIPE: }
 
 // -----
@@ -72,8 +96,15 @@ builtin.module {
     : (!dtensor.tensor<[%m, %k], f32>, !dtensor.tensor<[%k, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
 }
 
-// VERIFY: "dtensor.matmul"
-// VERIFY: !dtensor.tensor<[%0, %2], f32>
+// VERIFY: // -----
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// VERIFY:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// VERIFY:   %2 = "dtensor.nat.param"() : () -> !dtensor.nat
+// VERIFY:   %3 = "test.A"() : () -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %4 = "test.B"() : () -> !dtensor.tensor<[%1, %2], f32>
+// VERIFY:   %5 = "dtensor.matmul"(%3, %4) : (!dtensor.tensor<[%0, %1], f32>, !dtensor.tensor<[%1, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
+// VERIFY: }
 
 // -----
 
@@ -101,7 +132,11 @@ builtin.module {
   %u = "test.use"() : () -> !dtensor.tensor<[%s], f32>
 }
 
-// CANONF: "test.use"() : () -> !dtensor.tensor<[%0], f32>
+// CANONF: builtin.module {
+// CANONF:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CANONF:   %1 = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+// CANONF:   %2 = "test.use"() : () -> !dtensor.tensor<[%0], f32>
+// CANONF: }
 
 // -----
 
@@ -115,8 +150,13 @@ builtin.module {
   %E = "dtensor.empty"() : () -> !dtensor.tensor<[%d0], f32>
 }
 
-// CANOND: "dtensor.dim"
-// CANOND: "dtensor.empty"()
+// CANOND: builtin.module {
+// CANOND:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CANOND:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CANOND:   %2 = "test.A"() : () -> !dtensor.tensor<[%0, %1], f32>
+// CANOND:   %3 = "dtensor.dim"(%2) <{axis = 0 : i32}> : (!dtensor.tensor<[%0, %1], f32>) -> !value<%0>
+// CANOND:   %4 = "dtensor.empty"() : () -> !dtensor.tensor<[%3], f32>
+// CANOND: }
 
 // -----
 
@@ -130,6 +170,8 @@ builtin.module {
   %u1 = "test.keep"() : () -> !dtensor.tensor<[%s1], f32>
 }
 
-// PIPESYM: "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPESYM: "test.keep"() : () -> !dtensor.tensor<[%0], f32>
-// PIPESYM: "test.keep"() : () -> !dtensor.tensor<[%0], f32>
+// PIPESYM: builtin.module {
+// PIPESYM:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// PIPESYM:   %1 = "test.keep"() : () -> !dtensor.tensor<[%0], f32>
+// PIPESYM:   %2 = "test.keep"() : () -> !dtensor.tensor<[%0], f32>
+// PIPESYM: }

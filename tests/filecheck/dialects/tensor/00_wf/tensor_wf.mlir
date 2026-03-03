@@ -21,12 +21,20 @@ builtin.module {
     : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
 }
 
-// VERIFY-LABEL: builtin.module {
-// VERIFY: "dtensor.nat.add"
-// VERIFY: "dtensor.nat.mul"
-// VERIFY: "dtensor.matmul"
-// VERIFY: "dtensor.dim"
-// VERIFY: "dtensor.cast"
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+// VERIFY:   %1 = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
+// VERIFY:   %2 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
+// VERIFY:   %3 = "dtensor.nat.add"(%0, %2) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// VERIFY:   %4 = "dtensor.nat.mul"(%3, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// VERIFY:   %5 = "test.zero"() : () -> f32
+// VERIFY:   %6 = "dtensor.fill"(%5) : (f32) -> !dtensor.tensor<[%0, %2], f32>
+// VERIFY:   %7 = "dtensor.empty"() : () -> !dtensor.tensor<[%2, %1], f32>
+// VERIFY:   %8 = "dtensor.matmul"(%6, %7) : (!dtensor.tensor<[%0, %2], f32>, !dtensor.tensor<[%2, %1], f32>) -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %9 = "dtensor.dim"(%8) <{axis = 0 : i32}> : (!dtensor.tensor<[%0, %1], f32>) -> !value<%0>
+// VERIFY:   %10 = "test.v0"() : () -> !dtensor.vector<%0, f32>
+// VERIFY:   %11 = "test.m0"() : () -> !dtensor.matrix<%0, %1, f32>
+// VERIFY:   %12 = "dtensor.cast"(%8) : (!dtensor.tensor<[%0, %1], f32>) -> !dtensor.tensor<[%0, %1], f32>
 // VERIFY: }
 
 // -----
@@ -46,8 +54,8 @@ builtin.module {
   }) : () -> ()
 }
 
-// VERIFY: ssa-dominance: value Value
-// VERIFY: does not dominate its use in op `test.use`
+// VERIFY: // -----
+// VERIFY: ssa-dominance: value Value(!dtensor.nat) does not dominate its use in op `test.use`
 
 // -----
 
@@ -58,4 +66,5 @@ builtin.module {
   %v = "test.bad"() : () -> !dtensor.vector<%m, %n, f32>
 }
 
-// PARSE: Parse error at [[FILE]]
+// PARSE: // -----
+// PARSE: Parse error at /home/dominic/scair/tests/filecheck/dialects/tensor/00_wf/tensor_wf.mlir:66:49:

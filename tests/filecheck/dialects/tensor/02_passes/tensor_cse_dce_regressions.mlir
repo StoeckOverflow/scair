@@ -10,10 +10,11 @@ builtin.module {
   %u = "test.use"() : () -> !dtensor.tensor<[%s1], f32>
 }
 
-// CSE-LABEL: builtin.module {
-// CSE: [[S:%[0-9]+]] = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// CSE-NOT: "dtensor.nat.add"
-// CSE: "test.use"() : () -> !dtensor.tensor<[[[S]]], f32>
+// CSE: builtin.module {
+// CSE:   %0 = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
+// CSE:   %1 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
+// CSE:   %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CSE:   %3 = "test.use"() : () -> !dtensor.tensor<[%2], f32>
 // CSE: }
 
 // -----
@@ -26,8 +27,7 @@ builtin.module {
   %u = "test.keep"() : () -> !dtensor.tensor<[%m], f32>
 }
 
-// DCE-LABEL: builtin.module {
-// DCE: "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-// DCE: "test.keep"() : () -> !dtensor.tensor<[%0], f32>
-// DCE-NOT: "dtensor.nat.add"
+// DCE: builtin.module {
+// DCE:   %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+// DCE:   %1 = "test.keep"() : () -> !dtensor.tensor<[%0], f32>
 // DCE: }

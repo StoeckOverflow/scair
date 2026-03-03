@@ -13,12 +13,36 @@ builtin.module {
   "test.keep_smoke"(%a) : (!dtensor.tensor<[%m], f32>) -> ()
 }
 
-// VERIFY: "test.keep_smoke"
-// CANON: "test.keep_smoke"
-// CN: "test.keep_smoke"
-// CSE: "test.keep_smoke"
-// DCE: "test.keep_smoke"
-// PIPE: "test.keep_smoke"
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// VERIFY:   %1 = "test.a"() : () -> !dtensor.tensor<[%0], f32>
+// VERIFY:   "test.keep_smoke"(%1) : (!dtensor.tensor<[%0], f32>) -> ()
+// VERIFY: }
+// CANON: builtin.module {
+// CANON:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CANON:   %1 = "test.a"() : () -> !dtensor.tensor<[%0], f32>
+// CANON:   "test.keep_smoke"(%1) : (!dtensor.tensor<[%0], f32>) -> ()
+// CANON: }
+// CN: builtin.module {
+// CN:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CN:   %1 = "test.a"() : () -> !dtensor.tensor<[%0], f32>
+// CN:   "test.keep_smoke"(%1) : (!dtensor.tensor<[%0], f32>) -> ()
+// CN: }
+// CSE: builtin.module {
+// CSE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CSE:   %1 = "test.a"() : () -> !dtensor.tensor<[%0], f32>
+// CSE:   "test.keep_smoke"(%1) : (!dtensor.tensor<[%0], f32>) -> ()
+// CSE: }
+// DCE: builtin.module {
+// DCE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// DCE:   %1 = "test.a"() : () -> !dtensor.tensor<[%0], f32>
+// DCE:   "test.keep_smoke"(%1) : (!dtensor.tensor<[%0], f32>) -> ()
+// DCE: }
+// PIPE: builtin.module {
+// PIPE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// PIPE:   %1 = "test.a"() : () -> !dtensor.tensor<[%0], f32>
+// PIPE:   "test.keep_smoke"(%1) : (!dtensor.tensor<[%0], f32>) -> ()
+// PIPE: }
 
 // -----
 

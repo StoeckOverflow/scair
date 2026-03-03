@@ -13,10 +13,12 @@ builtin.module {
   %u = "test.use"() : () -> !dtensor.tensor<[%m], f32>
 }
 
-// CANON: %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CANON-NOT: "dtensor.nat.add"
-// CANON-NOT: "dtensor.nat.mul"
-// CANON: "test.use"() : () -> !dtensor.tensor<[%0], f32>
+// CANON: builtin.module {
+// CANON-NEXT:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CANON-NEXT:   %1 = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+// CANON-NEXT:   %2 = "dtensor.nat.const"() <{value = 1 : i32}> : () -> !dtensor.nat
+// CANON-NEXT:   %3 = "test.use"() : () -> !dtensor.tensor<[%0], f32>
+// CANON-NEXT: }
 
 // -----
 
@@ -28,8 +30,12 @@ builtin.module {
   %u = "test.use"() : () -> !dtensor.tensor<[%s], f32>
 }
 
-// CANON: "dtensor.nat.add"(%0, %1)
-// CANON: "test.use"() : () -> !dtensor.tensor<[%2], f32>
+// CANON: builtin.module {
+// CANON:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CANON:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CANON:   %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CANON:   %3 = "test.use"() : () -> !dtensor.tensor<[%2], f32>
+// CANON: }
 
 // -----
 
@@ -44,8 +50,15 @@ builtin.module {
   %f1 = "dtensor.fill"(%v) : (f32) -> !dtensor.tensor<[%x1], f32>
 }
 
-// CSE: "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// CSE: "dtensor.fill"(%{{[0-9]+}}) : (f32) -> !dtensor.tensor<[%0], f32>
+// CSE: builtin.module {
+// CSE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CSE:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CSE:   %2 = "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
+// CSE:   %3 = "dtensor.empty"() : () -> !dtensor.tensor<[%1], f32>
+// CSE:   %4 = "test.scalar"() : () -> f32
+// CSE:   %5 = "dtensor.fill"(%4) : (f32) -> !dtensor.tensor<[%0], f32>
+// CSE:   %6 = "dtensor.fill"(%4) : (f32) -> !dtensor.tensor<[%1], f32>
+// CSE: }
 
 // -----
 
@@ -67,10 +80,20 @@ builtin.module {
   }) : () -> ()
 }
 
-// CSE: "test.island_a"() ({
-// CSE: "dtensor.nat.add"
-// CSE: "test.island_b"() ({
-// CSE: "dtensor.nat.add"
+// CSE: builtin.module {
+// CSE:   "test.island_a"() ({
+// CSE:     %0 = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
+// CSE:     %1 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
+// CSE:     %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CSE:     "test.yield"() : () -> ()
+// CSE:   }) : () -> ()
+// CSE:   "test.island_b"() ({
+// CSE:     %0 = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
+// CSE:     %1 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
+// CSE:     %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CSE:     "test.yield"() : () -> ()
+// CSE:   }) : () -> ()
+// CSE: }
 
 // -----
 
@@ -82,8 +105,12 @@ builtin.module {
   "test.keep"(%u) : (!dtensor.tensor<[%p], f32>) -> ()
 }
 
-// DCE: "test.id"
-// DCE: "test.keep"
+// DCE: builtin.module {
+// DCE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// DCE:   %1 = "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
+// DCE:   %2 = "test.id"(%1) : (!dtensor.tensor<[%0], f32>) -> !dtensor.tensor<[%0], f32>
+// DCE:   "test.keep"(%2) : (!dtensor.tensor<[%0], f32>) -> ()
+// DCE: }
 
 // -----
 
@@ -97,10 +124,11 @@ builtin.module {
   "test.keep_dead"(%t) : (!dtensor.tensor<[%m], f32>) -> ()
 }
 
-// DCE: "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-// DCE-NOT: "dtensor.nat.add"
-// DCE-NOT: "dtensor.nat.mul"
-// DCE: "test.keep_dead"
+// DCE: builtin.module {
+// DCE:   %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+// DCE:   %1 = "test.use"() : () -> !dtensor.tensor<[%0], f32>
+// DCE:   "test.keep_dead"(%1) : (!dtensor.tensor<[%0], f32>) -> ()
+// DCE: }
 
 // -----
 
@@ -114,6 +142,8 @@ builtin.module {
   %k1 = "test.keep"() : () -> !dtensor.tensor<[%s1], f32>
 }
 
-// PIPE: [[P:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE: "test.keep"() : () -> !dtensor.tensor<[[[P]]], f32>
-// PIPE: "test.keep"() : () -> !dtensor.tensor<[[[P]]], f32>
+// PIPE: builtin.module {
+// PIPE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// PIPE:   %1 = "test.keep"() : () -> !dtensor.tensor<[%0], f32>
+// PIPE:   %2 = "test.keep"() : () -> !dtensor.tensor<[%0], f32>
+// PIPE: }
