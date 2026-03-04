@@ -14,9 +14,9 @@ builtin.module {
 }
 
 // LOWER: builtin.module {
-// LOWER:   %0 = func.constant @lifted_1 : (i32) -> i32
-// LOWER:   func.func @lifted_1(%1: i32) -> i32 {
-// LOWER:     func.return %1 : i32
+// LOWER:   func.func @lifted_1(%0: i32) -> i32 {
+// LOWER:     func.return %0 : i32
 // LOWER:   }
+// LOWER:   %0 = func.constant @lifted_1 : (i32) -> i32
 // LOWER:   "test.consume2"(%0, %0) : ((i32) -> i32, (i32) -> i32) -> ()
 // LOWER: }

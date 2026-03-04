@@ -25,10 +25,10 @@ builtin.module {
 }
 
 // PIPE: builtin.module {
-// PIPE:   %0 = func.constant @lifted_1 : (i64) -> i64
-// PIPE:   func.func @lifted_1(%1: i64) -> i64 {
-// PIPE:     func.return %1 : i64
+// PIPE:   func.func @lifted_1(%0: i64) -> i64 {
+// PIPE:     func.return %0 : i64
 // PIPE:   }
+// PIPE:   %0 = func.constant @lifted_1 : (i64) -> i64
 // PIPE:   %1 = "arith.constant"() <{value = 42}> : () -> i64
 // PIPE:   %2 = "func.call_indirect"(%0, %1) : ((i64) -> i64, i64) -> i64
 // PIPE:   "test.use"(%2) : (i64) -> ()

@@ -106,14 +106,14 @@ builtin.module {
 // ERASE: }
 
 // LOWER: builtin.module {
+// LOWER:   func.func @lifted_2(%0: i64) -> i64 {
+// LOWER:     func.return %0 : i64
+// LOWER:   }
 // LOWER:   %0 = func.constant @lifted_2 : (i64) -> i64
-// LOWER:   func.func @lifted_2(%1: i64) -> i64 {
+// LOWER:   func.func @lifted_1(%1: i64) -> i64 {
 // LOWER:     func.return %1 : i64
 // LOWER:   }
 // LOWER:   %1 = func.constant @lifted_1 : (i64) -> i64
-// LOWER:   func.func @lifted_1(%2: i64) -> i64 {
-// LOWER:     func.return %2 : i64
-// LOWER:   }
 // LOWER:   %2 = "builtin.unrealized_conversion_cast"() : () -> i64
 // LOWER:   %3 = "arith.constant"() <{value = 7}> : () -> i64
 // LOWER:   %4 = "func.call_indirect"(%1, %3) : ((i64) -> i64, i64) -> i64
@@ -243,14 +243,14 @@ builtin.module {
 
 // LOWER: // -----
 // LOWER: builtin.module {
+// LOWER:   func.func @lifted_2(%0: i64) -> i64 {
+// LOWER:     func.return %0 : i64
+// LOWER:   }
 // LOWER:   %0 = func.constant @lifted_2 : (i64) -> i64
-// LOWER:   func.func @lifted_2(%1: i64) -> i64 {
+// LOWER:   func.func @lifted_1(%1: i64) -> i64 {
 // LOWER:     func.return %1 : i64
 // LOWER:   }
 // LOWER:   %1 = func.constant @lifted_1 : (i64) -> i64
-// LOWER:   func.func @lifted_1(%2: i64) -> i64 {
-// LOWER:     func.return %2 : i64
-// LOWER:   }
 // LOWER:   %2 = "builtin.unrealized_conversion_cast"() : () -> i64
 // LOWER:   %3 = "arith.constant"() <{value = 9}> : () -> i64
 // LOWER:   %4 = "func.call_indirect"(%1, %3) : ((i64) -> i64, i64) -> i64

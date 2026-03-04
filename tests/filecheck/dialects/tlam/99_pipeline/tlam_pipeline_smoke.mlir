@@ -33,10 +33,10 @@ builtin.module {
 // MONO: }
 
 // LOWER: builtin.module {
-// LOWER:   %0 = func.constant @lifted_1 : (i64) -> i64
-// LOWER:   func.func @lifted_1(%1: i64) -> i64 {
-// LOWER:     func.return %1 : i64
+// LOWER:   func.func @lifted_1(%0: i64) -> i64 {
+// LOWER:     func.return %0 : i64
 // LOWER:   }
+// LOWER:   %0 = func.constant @lifted_1 : (i64) -> i64
 // LOWER: }
 
 // -----

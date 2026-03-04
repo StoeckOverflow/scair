@@ -25,14 +25,14 @@ builtin.module {
 }
 
 // LOWER: builtin.module {
+// LOWER:   func.func @lifted_2(%0: i32) -> i32 {
+// LOWER:     func.return %0 : i32
+// LOWER:   }
 // LOWER:   %0 = func.constant @lifted_2 : (i32) -> i32
-// LOWER:   func.func @lifted_2(%1: i32) -> i32 {
+// LOWER:   func.func @lifted_1(%1: i32) -> i32 {
 // LOWER:     func.return %1 : i32
 // LOWER:   }
 // LOWER:   %1 = func.constant @lifted_1 : (i32) -> i32
-// LOWER:   func.func @lifted_1(%2: i32) -> i32 {
-// LOWER:     func.return %2 : i32
-// LOWER:   }
 // LOWER:   %2 = "arith.constant"() <{value = 7 : i32}> : () -> i32
 // LOWER:   %3 = "func.call_indirect"(%0, %2) : ((i32) -> i32, i32) -> i32
 // LOWER:   "test.use"(%3) : (i32) -> ()
@@ -56,10 +56,10 @@ builtin.module {
 }
 
 // LOWER: builtin.module {
-// LOWER:   %0 = func.constant @lifted_1 : (i64) -> i64
-// LOWER:   func.func @lifted_1(%1: i64) -> i64 {
-// LOWER:     func.return %1 : i64
+// LOWER:   func.func @lifted_1(%0: i64) -> i64 {
+// LOWER:     func.return %0 : i64
 // LOWER:   }
+// LOWER:   %0 = func.constant @lifted_1 : (i64) -> i64
 // LOWER:   "scf.execute_region"() ({
 // LOWER:     %1 = "arith.constant"() <{value = 3}> : () -> i64
 // LOWER:     %2 = "func.call_indirect"(%0, %1) : ((i64) -> i64, i64) -> i64

@@ -23,9 +23,10 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
     var counter = 0
     val top = m.regions.head.blocks.head
     val usedSymbolNames: mutable.Set[String] =
-      mutable.Set.from(
-        top.operations.collect { case s: Symbol => s.sym_name.stringLiteral }
-      )
+      mutable.Set
+        .from(
+          top.operations.collect { case s: Symbol => s.sym_name.stringLiteral }
+        )
 
     def freshLiftedName(): String =
       var candidate = ""
@@ -82,7 +83,8 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
 
               // Keep the function value definition before any potential nested uses
               // (hierarchical dominance against uses inside lifted function bodies).
-              RewriteMethods.insertOpsAt(InsertPoint.atStartOf(top), cst)
+              // RewriteMethods.insertOpsAt(InsertPoint.atStartOf(top), cst)
+              RewriteMethods.insertOpsAfter(fn, cst)
 
               // Replace all uses of the lambda value with the constant value
               // (upcast to Attribute to match helper signature)
@@ -91,9 +93,7 @@ final class LowerTLamToFuncPass(ctx: MLContext) extends ModulePass(ctx):
               // Erase the original VLambda
               RewriteMethods.eraseOp(vl)
 
-            case _ => ()
-
-          op.regions.foreach(walkRegion)
+            case _ => op.regions.foreach(walkRegion)
         }
       }
 

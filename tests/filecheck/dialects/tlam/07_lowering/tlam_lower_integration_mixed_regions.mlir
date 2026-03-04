@@ -37,14 +37,14 @@ builtin.module {
 }
 
 // LOWER: builtin.module {
+// LOWER:   func.func @lifted_3(%0: i32) -> i32 {
+// LOWER:     func.return %0 : i32
+// LOWER:   }
 // LOWER:   %0 = func.constant @lifted_3 : (i32) -> i32
-// LOWER:   func.func @lifted_3(%1: i32) -> i32 {
+// LOWER:   func.func @lifted_2(%1: i32) -> i32 {
 // LOWER:     func.return %1 : i32
 // LOWER:   }
 // LOWER:   %1 = func.constant @lifted_2 : (i32) -> i32
-// LOWER:   func.func @lifted_2(%2: i32) -> i32 {
-// LOWER:     func.return %2 : i32
-// LOWER:   }
 // LOWER:   func.func @lifted_1(%2: i32) -> i32 {
 // LOWER:     func.return %2 : i32
 // LOWER:   }
