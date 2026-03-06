@@ -21,7 +21,7 @@ func.func @saxpy(%n: !dtensor.nat, %a: f32) {
   func.return %sum : !dtensor.tensor<[%n], f32>
 }
 
-// “No-op cast” sanity (type equality via SSA identity)
+// "No-op cast" sanity (type equality via SSA identity)
 func.func @cast_id(%m: !dtensor.nat, %n: !dtensor.nat) {
   %x = "dtensor.empty"() : () -> !dtensor.tensor<[%m, %n], f32>
   %y = "dtensor.cast"(%x) : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>

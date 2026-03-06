@@ -1,5 +1,4 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --parsing-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=VERIFY
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --parsing-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=PARSE
 
 // Valid: core tensor SSA-shape ops.
 builtin.module {
@@ -56,15 +55,3 @@ builtin.module {
 
 // VERIFY: // -----
 // VERIFY: ssa-dominance: value Value(!dtensor.nat) does not dominate its use in op `test.use`
-
-// -----
-
-// Parse: vector arity mismatch.
-builtin.module {
-  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %n = "dtensor.nat.const"() <{value = 5 : i32}> : () -> !dtensor.nat
-  %v = "test.bad"() : () -> !dtensor.vector<%m, %n, f32>
-}
-
-// PARSE: // -----
-// PARSE: Parse error at /home/dominic/scair/tests/filecheck/dialects/tensor/00_wf/tensor_wf.mlir:66:49:

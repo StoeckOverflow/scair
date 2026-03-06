@@ -21,7 +21,7 @@ func.func @tf_mha_projection_gemm(
   // head_dim = 64 is a very common transformer choice
   %hd64 = "dtensor.nat.const"() <{value = 64 : i32}> : () -> !dtensor.nat
 
-  // BS = B * S  (flatten batch×sequence)
+  // BS = B * S  (flatten batch x sequence)
   %BS = "dtensor.nat.mul" (%B, %S) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
 
   // H = num_heads * head_dim
