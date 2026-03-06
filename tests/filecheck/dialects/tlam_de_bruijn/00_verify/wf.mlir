@@ -23,7 +23,7 @@ builtin.module {
 // -----
 
 // EXPLICIT POLYMORPHISM 1:
-// Valid polymorphic identity value: Λ. (λ(x:#0). x)
+// Valid polymorphic identity value: forall. (lambda(x:#0). x)
 builtin.module {
   %poly_id = "tlam.tlambda"() ({
     %id = "tlam.vlambda"() ({
