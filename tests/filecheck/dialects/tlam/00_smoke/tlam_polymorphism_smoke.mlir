@@ -3,7 +3,7 @@
 
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s
 
-// F : ΛT. λ(x:T). x
+// F : forall T. lambda(x:T). x
 builtin.module {
   %F = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
@@ -30,10 +30,10 @@ builtin.module {
 // -----
 
 builtin.module {
-  // F = ΛT.(define G = ΛU. λ(x:U).x; h := G T; return h)
+  // F = forall T.(define G = forall U. lambda(x:U).x; h := G T; return h)
   %F = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
-    // G = ΛU. λ(x:U).x
+    // G = forall U. lambda(x:U).x
     %G = "tlam.tlambda"() ({
     ^bb0(%U: !tlam.type):
       %v = "tlam.vlambda"() ({
@@ -45,12 +45,12 @@ builtin.module {
         : (!tlam.fun<!value<%U>, !value<%U>>) -> ()
     }) : () -> (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
 
-    // h = G T : T → T
+    // h = G T : T -> T
     %h = "tlam.tapply"(%G) <{tyArg = !value<%T>}>
       : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
         -> (!tlam.fun<!value<%T>, !value<%T>>)
 
-    // return h : T → T
+    // return h : T -> T
     "tlam.treturn"(%h)
       : (!tlam.fun<!value<%T>, !value<%T>>) -> ()
   }) : () -> (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
