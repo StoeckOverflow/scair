@@ -6,6 +6,7 @@ type InterpreterDialect = Seq[OpImpl[? <: Operation]]
 
 val allInterpreterDialects: Seq[InterpreterDialect] =
   Seq(
+    InterpreterBuiltinDialect,
     InterpreterFuncDialect,
     InterpreterArithDialect,
     InterpreterdTensorDialect,
