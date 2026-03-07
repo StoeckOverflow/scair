@@ -8,5 +8,8 @@ val allInterpreterDialects: Seq[InterpreterDialect] =
   Seq(
     InterpreterFuncDialect,
     InterpreterArithDialect,
+    InterpreterdTensorDialect,
     InterpreterMemrefDialect,
+    InterpreterdMemrefDialect,
+    InterpreterdAffineDialect,
   )

@@ -5,6 +5,8 @@ import scair.dialects.arith.ArithDialect
 import scair.dialects.builtin.BuiltinDialect
 import scair.dialects.cmath.cmath
 import scair.dialects.complex.Complex
+import scair.dialects.d_affine.dAffineDialect
+import scair.dialects.d_memref.dMemrefDialect
 import scair.dialects.func.FuncDialect
 import scair.dialects.irdl.IRDL
 import scair.dialects.llvm.LLVMDialect
@@ -41,8 +43,10 @@ val allDialects: Seq[Dialect] =
     IRDL,
     ArithDialect,
     MemrefDialect,
+    dMemrefDialect,
     cmath,
     AffineDialect,
+    dAffineDialect,
     FuncDialect,
     LLVMDialect,
     SCFDialect,
