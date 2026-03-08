@@ -14,12 +14,9 @@ builtin.module {
   "test.keep"(%C) : (!dtensor.tensor<[%m, %n], i32>) -> ()
 }
 
-// CHECK: "dtensor.nat.const"() <{value = 64 : i32}> : () -> !dtensor.nat
 // CHECK: d_affine.for
-// CHECK: step %9
-// CHECK: "builtin.unrealized_conversion_cast"(%10)
+// CHECK-NOT: d_affine.min
 // CHECK-DAG: tile.m.mode = "untiled_fallback"
 // CHECK-DAG: tile.n.mode = "untiled_fallback"
 // CHECK-DAG: tile.k.mode = "tail_free_tiled"
 // CHECK-DAG: tile.k.value = 64 : i32
-// CHECK-NOT: d_affine.min

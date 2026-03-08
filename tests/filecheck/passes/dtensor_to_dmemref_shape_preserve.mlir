@@ -9,4 +9,4 @@ builtin.module {
 }
 
 // CHECK: %2 = "builtin.unrealized_conversion_cast"(%1) : (!dtensor.tensor<[%0], i32>) -> !d_memref.memref<[%0], i32>
-// CHECK: %3 = d_memref.dim %2 {axis = 0 : i32} : !d_memref.memref<[%0], i32> -> !value<%0>
+// CHECK: %3 = d_memref.dim_exact %2 {axis = 0 : i32} : !d_memref.memref<[%0], i32> -> !value<%0>

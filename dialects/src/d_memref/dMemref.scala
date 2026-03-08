@@ -3,6 +3,7 @@ package scair.dialects.d_memref
 import fastparse.*
 import scair.Printer
 import scair.clair.macros.*
+import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.dTensor.*
 import scair.ir.*
@@ -119,11 +120,11 @@ given AttributeCompanion[dMemrefMemrefType]:
         dMemrefMemrefType(params, elem.asInstanceOf[TypeAttribute])
       )
 
-private def parseNatOperands[$: P](names: Seq[String])(using
+private def parseIndexOperands[$: P](names: Seq[String])(using
     p: Parser
-): P[Seq[Operand[dTensorNatType]]] =
-  names.foldLeft(Pass(Seq.empty[Operand[dTensorNatType]]))((acc, n) =>
-    (acc ~ operandP(n, dTensorNatType())).map(_ :+ _)
+): P[Seq[Operand[IndexType]]] =
+  names.foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
+    (acc ~ operandP(n, IndexType())).map(_ :+ _)
   )
 
 final case class Alloc(
@@ -156,28 +157,79 @@ given OperationCustomParser[Dealloc]:
 
 final case class Dim(
     memref: Operand[dMemrefMemrefType],
+    axis: Operand[IndexType],
+    res: Result[IndexType],
+) extends DerivedOperation["d_memref.dim", Dim]
+    with NoMemoryEffect derives DerivedOperationCompanion:
+
+  private def constantAxisValue: Option[BigInt] =
+    axis.owner match
+      case Some(arith.Constant(IntegerAttr(IntData(v), _: IndexType), _)) =>
+        Some(v)
+      case _ =>
+        None
+
+  override def customVerify(): OK[Operation] =
+    if res.typ != IndexType() then
+      Err(s"d_memref.dim: expected result type index, got ${res.typ}")
+    else
+      constantAxisValue match
+        case Some(v) if v < 0 || v >= memref.typ.params.size =>
+          Err(
+            s"d_memref.dim: constant axis $v out of bounds for rank ${memref.typ.params.size}"
+          )
+        case _ => OK(this)
+
+  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+    printer.print(
+      name,
+      " ",
+      memref,
+      ", ",
+      axis,
+      " : ",
+      memref.typ,
+      " -> ",
+      res.typ,
+    )
+
+given OperationCustomParser[Dim]:
+  def parse[$: P](resNames: Seq[String])(using Parser): P[Dim] =
+    P(
+      operandNameP ~ "," ~ operandNameP ~ ":" ~ typeOfP[dMemrefMemrefType] ~
+        "->" ~ typeOfP[IndexType]
+    ).flatMap((mName, axisName, mTyp, rTyp) =>
+      operandP(mName, mTyp).flatMap(m =>
+        operandP(axisName, IndexType()).flatMap(axis =>
+          resultP(resNames.head, rTyp).map(r => Dim(m, axis, r))
+        )
+      )
+    )
+
+final case class DimExact(
+    memref: Operand[dMemrefMemrefType],
     axis: IntegerAttr,
     res: Result[ValueRefType],
-) extends DerivedOperation["d_memref.dim", Dim]
+) extends DerivedOperation["d_memref.dim_exact", DimExact]
     with NoMemoryEffect derives DerivedOperationCompanion:
 
   private def selectedDimValue: OK[Value[Attribute]] =
     val idx = axis.value.value
     val rank = BigInt(memref.typ.params.size)
     if idx < 0 || idx >= rank then
-      Err(s"d_memref.dim: axis $idx out of bounds for rank ${memref.typ.params.size}")
+      Err(s"d_memref.dim_exact: axis $idx out of bounds for rank ${memref.typ.params.size}")
     else OK(memref.typ.params(idx.toInt).getVal())
 
   override def customVerify(): OK[Operation] =
     if axis.typ != I32 then
-      Err(s"d_memref.dim: expected i32 axis attribute, got ${axis.typ}")
+      Err(s"d_memref.dim_exact: expected i32 axis attribute, got ${axis.typ}")
     else
       selectedDimValue.flatMap(sel =>
         if res.typ.ref.getVal() eq sel then
           dTensorTypeUtil.resolveNatValue(res.typ.ref.getVal()).map(_ => this)
         else
           Err(
-            "d_memref.dim: expected result !value<...> to reference the selected embedded dim"
+            "d_memref.dim_exact: expected result !value<...> to reference the selected embedded dim"
           )
       )
 
@@ -194,20 +246,20 @@ final case class Dim(
       res.typ,
     )
 
-given OperationCustomParser[Dim]:
-  def parse[$: P](resNames: Seq[String])(using Parser): P[Dim] =
+given OperationCustomParser[DimExact]:
+  def parse[$: P](resNames: Seq[String])(using Parser): P[DimExact] =
     P(
       operandNameP ~ "{" ~ "axis" ~ "=" ~ attrOfP[IntegerAttr] ~ "}" ~ ":" ~
         typeOfP[dMemrefMemrefType] ~ "->" ~ typeOfP[ValueRefType]
     ).flatMap((mName, axis, mTyp, rTyp) =>
       operandP(mName, mTyp).flatMap(m => resultP(resNames.head, rTyp).map(r =>
-        Dim(m, axis, r)
+        DimExact(m, axis, r)
       ))
     )
 
 final case class Load(
     memref: Operand[dMemrefMemrefType],
-    indices: Seq[Operand[dTensorNatType]],
+    indices: Seq[Operand[IndexType]],
     res: Result[TypeAttribute],
 ) extends DerivedOperation["d_memref.load", Load]
     derives DerivedOperationCompanion:
@@ -235,7 +287,7 @@ given OperationCustomParser[Load]:
         typeOfP[dMemrefMemrefType] ~ "->" ~ typeP
     ).flatMap((mName, idxNames, mTyp, rTyp) =>
       operandP(mName, mTyp).flatMap(m =>
-        parseNatOperands(idxNames).flatMap(idxs =>
+        parseIndexOperands(idxNames).flatMap(idxs =>
           resultP(resNames.head, rTyp.asInstanceOf[TypeAttribute]).map(r =>
             Load(m, idxs, r)
           )
@@ -246,7 +298,7 @@ given OperationCustomParser[Load]:
 final case class Store(
     value: Operand[TypeAttribute],
     memref: Operand[dMemrefMemrefType],
-    indices: Seq[Operand[dTensorNatType]],
+    indices: Seq[Operand[IndexType]],
 ) extends DerivedOperation["d_memref.store", Store]
     derives DerivedOperationCompanion:
 
@@ -274,7 +326,7 @@ given OperationCustomParser[Store]:
     ).flatMap((vName, mName, idxNames, vTyp, mTyp) =>
       operandP(vName, vTyp.asInstanceOf[TypeAttribute]).flatMap(v =>
         operandP(mName, mTyp).flatMap(m =>
-          parseNatOperands(idxNames).map(idxs => Store(v, m, idxs))
+          parseIndexOperands(idxNames).map(idxs => Store(v, m, idxs))
         )
       )
     )
@@ -313,11 +365,33 @@ given OperationCustomParser[Cast]:
 
 final case class Subview(
     src: Operand[dMemrefMemrefType],
-    offsets: Seq[Operand[dTensorNatType]],
-    sizes: Seq[Operand[dTensorNatType]],
+    offsets: Seq[Operand[IndexType]],
+    sizes: Seq[Operand[IndexType]],
+    strides: Seq[Operand[IndexType]],
     res: Result[dMemrefMemrefType],
 ) extends DerivedOperation["d_memref.subview", Subview]
     derives DerivedOperationCompanion:
+
+  private def isUnitStride(v: Value[Attribute]): Boolean =
+    v.owner match
+      case Some(
+            arith.Constant(
+              IntegerAttr(IntData(1), _),
+              _,
+            )
+          ) =>
+        true
+      case _ => false
+
+  private def sameDimAsSizeOperand(
+      dim: ValueAttribute,
+      size: Operand[IndexType],
+  ): Boolean =
+    val dimNat = dTensorTypeUtil.resolveNatValue(dim.getVal())
+    val sizeNat = dTensorTypeUtil.resolveNatFromIndexValue(size)
+    (dimNat, sizeNat) match
+      case (OK(d), OK(s)) => d eq s
+      case _              => false
 
   override def customVerify(): OK[Operation] =
     val srcRank = src.typ.params.size
@@ -328,14 +402,20 @@ final case class Subview(
       Err(s"d_memref.subview: expected $srcRank offsets, got ${offsets.size}")
     else if sizes.size != srcRank then
       Err(s"d_memref.subview: expected $srcRank sizes, got ${sizes.size}")
+    else if strides.size != srcRank then
+      Err(s"d_memref.subview: expected $srcRank strides, got ${strides.size}")
     else if src.typ.elem != res.typ.elem then
       Err(
         s"d_memref.subview: expected equal element types, got ${src.typ.elem} and ${res.typ.elem}"
       )
+    else if !strides.forall(isUnitStride) then
+      Err("d_memref.subview: only unit strides are supported in this version")
     else
-      val sizeRefs = sizes.map(ValueAttribute(_))
-      if !dMemrefTypeUtil.sameDims(res.typ.params, sizeRefs) then
-        Err("d_memref.subview: expected result dims to be exactly the size operands")
+      if !res.typ.params.zip(sizes).forall((d, s) => sameDimAsSizeOperand(d, s))
+      then
+        Err(
+          "d_memref.subview: expected each result dim to match the corresponding size operand via dtensor.shape.to_index provenance"
+        )
       else OK(this)
 
   override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
@@ -343,20 +423,24 @@ final case class Subview(
     printer.printList(offsets)
     printer.print("][")
     printer.printList(sizes)
+    printer.print("][")
+    printer.printList(strides)
     printer.print("] : ", src.typ, " -> ", res.typ)
 
 given OperationCustomParser[Subview]:
   def parse[$: P](resNames: Seq[String])(using Parser): P[Subview] =
     P(
       operandNameP ~ "[" ~ operandNameP.rep(sep = ",") ~ "]" ~ "[" ~
-        operandNameP.rep(sep = ",") ~ "]" ~ ":" ~ typeOfP[dMemrefMemrefType] ~
-        "->" ~ typeOfP[dMemrefMemrefType]
-    ).flatMap((srcName, offNames, sizeNames, srcTyp, resTyp) =>
+        operandNameP.rep(sep = ",") ~ "]" ~ "[" ~ operandNameP.rep(sep = ",") ~
+        "]" ~ ":" ~ typeOfP[dMemrefMemrefType] ~ "->" ~ typeOfP[dMemrefMemrefType]
+    ).flatMap((srcName, offNames, sizeNames, strideNames, srcTyp, resTyp) =>
       operandP(srcName, srcTyp).flatMap(src =>
-        parseNatOperands(offNames).flatMap(offsets =>
-          parseNatOperands(sizeNames).flatMap(sizes =>
-            resultP(resNames.head, resTyp).map(res =>
-              Subview(src, offsets, sizes, res)
+        parseIndexOperands(offNames).flatMap(offsets =>
+          parseIndexOperands(sizeNames).flatMap(sizes =>
+            parseIndexOperands(strideNames).flatMap(strides =>
+              resultP(resNames.head, resTyp).map(res =>
+                Subview(src, offsets, sizes, strides, res)
+              )
             )
           )
         )
@@ -365,5 +449,5 @@ given OperationCustomParser[Subview]:
 
 val dMemrefDialect = summonDialect[
   (dMemrefVectorType, dMemrefMatrixType, dMemrefMemrefType),
-  (Alloc, Dealloc, Dim, Load, Store, Cast, Subview),
+  (Alloc, Dealloc, Dim, DimExact, Load, Store, Cast, Subview),
 ]

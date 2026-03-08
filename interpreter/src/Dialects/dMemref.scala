@@ -67,9 +67,28 @@ object run_d_dim extends OpImpl[d_memref.Dim]:
       ctx: RuntimeCtx,
       args: Seq[Any],
   ): Option[Any] =
+    args match
+      case Seq(memref: ShapedArray, axisAny) =>
+        val axis = asInt(axisAny, "d_memref.dim axis")
+        if axis < 0 || axis >= memref.shape.length then
+          throw new Exception(
+            s"d_memref.dim axis out of bounds: axis=$axis rank=${memref.shape.length}"
+          )
+        Some(memref.shape(axis))
+      case _ =>
+        throw new Exception("d_memref.dim expects (ShapedArray, axis:index)")
+
+object run_d_dim_exact extends OpImpl[d_memref.DimExact]:
+
+  def compute(
+      op: d_memref.DimExact,
+      interpreter: Interpreter,
+      ctx: RuntimeCtx,
+      args: Seq[Any],
+  ): Option[Any] =
     val axis = op.axis.value.toInt
     val dimVal = op.memref.typ.params(axis).getVal()
-    Some(asInt(interpreter.lookup_op(dimVal, ctx), "d_memref.dim result"))
+    Some(asInt(interpreter.lookup_op(dimVal, ctx), "d_memref.dim_exact result"))
 
 object run_d_cast extends OpImpl[d_memref.Cast]:
 
@@ -97,9 +116,14 @@ object run_d_subview extends OpImpl[d_memref.Subview]:
         val all = rest.map(asInt(_, "d_memref.subview operand"))
         val offsets = all.take(rank)
         val sizes = all.drop(rank).take(rank)
+        val strides = all.drop(2 * rank).take(rank)
+        if !strides.forall(_ == 1) then
+          throw new Exception("d_memref.subview only supports unit strides")
         Some(src.subview(offsets, sizes))
       case _ =>
-        throw new Exception("d_memref.subview expects (ShapedArray, offsets..., sizes...)")
+        throw new Exception(
+          "d_memref.subview expects (ShapedArray, offsets..., sizes..., strides...)"
+        )
 
 val InterpreterdMemrefDialect: InterpreterDialect =
   Seq(
@@ -108,6 +132,7 @@ val InterpreterdMemrefDialect: InterpreterDialect =
     run_d_store,
     run_d_load,
     run_d_dim,
+    run_d_dim_exact,
     run_d_cast,
     run_d_subview,
   )

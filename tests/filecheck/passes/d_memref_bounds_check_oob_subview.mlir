@@ -4,8 +4,11 @@ builtin.module {
   %eight = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
   %five = "dtensor.nat.const"() <{value = 5 : i32}> : () -> !dtensor.nat
   %four = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+  %five_idx = "dtensor.shape.to_index"(%five) : (!dtensor.nat) -> index
+  %four_idx = "dtensor.shape.to_index"(%four) : (!dtensor.nat) -> index
+  %one_idx = "arith.constant"() <{value = 1 : index}> : () -> index
   %src = d_memref.alloc : () -> !d_memref.memref<[%eight], i32>
-  %sv = d_memref.subview %src[%five][%four] : !d_memref.memref<[%eight], i32> -> !d_memref.memref<[%four], i32>
+  %sv = d_memref.subview %src[%five_idx][%four_idx][%one_idx] : !d_memref.memref<[%eight], i32> -> !d_memref.memref<[%four], i32>
   "test.keep"(%sv) : (!d_memref.memref<[%four], i32>) -> ()
 }
 

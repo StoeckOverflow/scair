@@ -21,13 +21,16 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
 
   private final case class AxisPlan(
       mode: AxisMode,
-      step: Value[Attribute],
+      loopUb: Value[Attribute],
+      loopStep: IntegerAttr,
+      tileSizeNat: Value[Attribute],
+      tileSizeIdx: Value[Attribute],
       prelude: Seq[Operation],
       chosenTile: Int,
   )
 
-  private def asNat(v: Value[Attribute]): Operand[dTensorNatType] =
-    v.asInstanceOf[Operand[dTensorNatType]]
+  private def asIndex(v: Value[Attribute]): Operand[IndexType] =
+    v.asInstanceOf[Operand[IndexType]]
 
   private def asMemref(v: Value[Attribute]): Operand[d_memref.dMemrefMemrefType] =
     v.asInstanceOf[Operand[d_memref.dMemrefMemrefType]]
@@ -41,24 +44,38 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
   private def i32Const(v: Int): arith.Constant =
     arith.Constant(IntegerAttr(IntData(v), I32), Result(I32))
 
+  private def idxConst(v: Int): arith.Constant =
+    arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
+
+  private def toIndex(nat: Value[Attribute]): ShapeToIndex =
+    ShapeToIndex(nat.asInstanceOf[Operand[dTensorNatType]], Result(IndexType()))
+
   private def chooseAxisPlan(
-      dim: Value[Attribute],
+      dimNat: Value[Attribute],
+      dimIdx: Value[Attribute],
+      oneIdx: Value[Attribute],
       facts: NatDivisibilityFacts,
   ): AxisPlan =
-    TileSizeChooser.chooseLargestGuaranteed(facts, dim) match
+    TileSizeChooser.chooseLargestGuaranteed(facts, dimNat) match
       case Some(tile) if tile > 1 =>
-        val c = natConst(tile)
+        val tileNat = natConst(tile)
+        val tileIdx = toIndex(tileNat.res)
         AxisPlan(
           mode = AxisMode.TailFreeTiled,
-          step = c.res,
-          prelude = Seq(c),
+          loopUb = dimIdx,
+          loopStep = IntegerAttr(IntData(tile), I32),
+          tileSizeNat = tileNat.res,
+          tileSizeIdx = tileIdx.res,
+          prelude = Seq(tileNat, tileIdx),
           chosenTile = tile,
         )
       case _ =>
-        // Explicit untiled fallback: step by full dimension.
         AxisPlan(
           mode = AxisMode.UntiledFallback,
-          step = dim,
+          loopUb = oneIdx,
+          loopStep = IntegerAttr(IntData(1), I32),
+          tileSizeNat = dimNat,
+          tileSizeIdx = dimIdx,
           prelude = Seq.empty,
           chosenTile = 1,
         )
@@ -66,31 +83,35 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
   private def mkFor(
       lb: Value[Attribute],
       ub: Value[Attribute],
-      step: Value[Attribute],
+      step: IntegerAttr,
   )(
       bodyBuilder: Value[Attribute] => Seq[Operation]
   ): d_affine.For =
     val body = Region(
-      Block(dTensorNatType(), iv => bodyBuilder(iv) :+ d_affine.Yield())
+      Block(IndexType(), iv => bodyBuilder(iv) :+ d_affine.Yield())
     )
-    d_affine.For(asNat(lb), asNat(ub), asNat(step), body)
+    d_affine.For(asIndex(lb), asIndex(ub), step, body)
 
   private def mkSubview2D(
       src: Value[Attribute],
       off0: Value[Attribute],
       off1: Value[Attribute],
-      size0: Value[Attribute],
-      size1: Value[Attribute],
+      size0Nat: Value[Attribute],
+      size1Nat: Value[Attribute],
+      size0Idx: Value[Attribute],
+      size1Idx: Value[Attribute],
+      oneIdx: Value[Attribute],
       elem: TypeAttribute,
   ): d_memref.Subview =
     val resTy = d_memref.dMemrefMemrefType(
-      Seq(ValueAttribute(size0), ValueAttribute(size1)),
+      Seq(ValueAttribute(size0Nat), ValueAttribute(size1Nat)),
       elem,
     )
     d_memref.Subview(
       asMemref(src),
-      Seq(asNat(off0), asNat(off1)),
-      Seq(asNat(size0), asNat(size1)),
+      Seq(asIndex(off0), asIndex(off1)),
+      Seq(asIndex(size0Idx), asIndex(size1Idx)),
+      Seq(asIndex(oneIdx), asIndex(oneIdx)),
       Result(resTy),
     )
 
@@ -116,9 +137,15 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
     val kDim = lhsTy.params(1).getVal()
     val nDim = rhsTy.params(1).getVal()
 
-    val mPlan = chooseAxisPlan(mDim, facts)
-    val nPlan = chooseAxisPlan(nDim, facts)
-    val kPlan = chooseAxisPlan(kDim, facts)
+    val mIdx = toIndex(mDim)
+    val kIdx = toIndex(kDim)
+    val nIdx = toIndex(nDim)
+    val idx0 = idxConst(0)
+    val idx1 = idxConst(1)
+
+    val mPlan = chooseAxisPlan(mDim, mIdx.res, idx1.result, facts)
+    val nPlan = chooseAxisPlan(nDim, nIdx.res, idx1.result, facts)
+    val kPlan = chooseAxisPlan(kDim, kIdx.res, idx1.result, facts)
 
     val lhsMemTy = DTensorDMemrefConversion.tensorToMemrefType(lhsTy)
     val rhsMemTy = DTensorDMemrefConversion.tensorToMemrefType(rhsTy)
@@ -128,51 +155,90 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
     val (rhsPrefix, rhsMemV) = DTensorDMemrefConversion.toMemrefValue(mm.rhs, rhsMemTy)
 
     val outAlloc = d_memref.Alloc(Result(outMemTy))
-    val n0 = natConst(0)
-    val n1 = natConst(1)
     val c0 = i32Const(0)
 
-    val outerI = mkFor(n0.res, mDim, mPlan.step) { ii =>
-      val outerJ = mkFor(n0.res, nDim, nPlan.step) { jj =>
-        val cTile =
-          mkSubview2D(outAlloc.res, ii, jj, mPlan.step, nPlan.step, I32)
+    val outerI = mkFor(idx0.result, mPlan.loopUb, mPlan.loopStep) { ii =>
+      val iOff = mPlan.mode match
+        case AxisMode.TailFreeTiled => ii
+        case AxisMode.UntiledFallback => idx0.result
 
-        val initI = mkFor(n0.res, mPlan.step, n1.res) { i =>
+      val outerJ = mkFor(idx0.result, nPlan.loopUb, nPlan.loopStep) { jj =>
+        val jOff = nPlan.mode match
+          case AxisMode.TailFreeTiled => jj
+          case AxisMode.UntiledFallback => idx0.result
+
+        val cTile = mkSubview2D(
+          outAlloc.res,
+          iOff,
+          jOff,
+          mPlan.tileSizeNat,
+          nPlan.tileSizeNat,
+          mPlan.tileSizeIdx,
+          nPlan.tileSizeIdx,
+          idx1.result,
+          I32,
+        )
+
+        val initI = mkFor(idx0.result, mPlan.tileSizeIdx, IntegerAttr(IntData(1), I32)) { i =>
           Seq(
-            mkFor(n0.res, nPlan.step, n1.res) { j =>
+            mkFor(idx0.result, nPlan.tileSizeIdx, IntegerAttr(IntData(1), I32)) { j =>
               Seq(
                 d_memref.Store(
                   c0.result.asInstanceOf[Operand[TypeAttribute]],
                   asMemref(cTile.res),
-                  Seq(asNat(i), asNat(j)),
+                  Seq(asIndex(i), asIndex(j)),
                 )
               )
             }
           )
         }
 
-        val outerK = mkFor(n0.res, kDim, kPlan.step) { kk =>
-          val aTile = mkSubview2D(lhsMemV, ii, kk, mPlan.step, kPlan.step, I32)
-          val bTile = mkSubview2D(rhsMemV, kk, jj, kPlan.step, nPlan.step, I32)
+        val outerK = mkFor(idx0.result, kPlan.loopUb, kPlan.loopStep) { kk =>
+          val kOff = kPlan.mode match
+            case AxisMode.TailFreeTiled => kk
+            case AxisMode.UntiledFallback => idx0.result
 
-          val compI = mkFor(n0.res, mPlan.step, n1.res) { i =>
+          val aTile = mkSubview2D(
+            lhsMemV,
+            iOff,
+            kOff,
+            mPlan.tileSizeNat,
+            kPlan.tileSizeNat,
+            mPlan.tileSizeIdx,
+            kPlan.tileSizeIdx,
+            idx1.result,
+            I32,
+          )
+          val bTile = mkSubview2D(
+            rhsMemV,
+            kOff,
+            jOff,
+            kPlan.tileSizeNat,
+            nPlan.tileSizeNat,
+            kPlan.tileSizeIdx,
+            nPlan.tileSizeIdx,
+            idx1.result,
+            I32,
+          )
+
+          val compI = mkFor(idx0.result, mPlan.tileSizeIdx, IntegerAttr(IntData(1), I32)) { i =>
             Seq(
-              mkFor(n0.res, nPlan.step, n1.res) { j =>
+              mkFor(idx0.result, nPlan.tileSizeIdx, IntegerAttr(IntData(1), I32)) { j =>
                 Seq(
-                  mkFor(n0.res, kPlan.step, n1.res) { k =>
+                  mkFor(idx0.result, kPlan.tileSizeIdx, IntegerAttr(IntData(1), I32)) { k =>
                     val la = d_memref.Load(
                       asMemref(aTile.res),
-                      Seq(asNat(i), asNat(k)),
+                      Seq(asIndex(i), asIndex(k)),
                       Result(I32),
                     )
                     val lb = d_memref.Load(
                       asMemref(bTile.res),
-                      Seq(asNat(k), asNat(j)),
+                      Seq(asIndex(k), asIndex(j)),
                       Result(I32),
                     )
                     val lc = d_memref.Load(
                       asMemref(cTile.res),
-                      Seq(asNat(i), asNat(j)),
+                      Seq(asIndex(i), asIndex(j)),
                       Result(I32),
                     )
                     val mul = arith.MulI(asI32(la.res), asI32(lb.res), Result(I32))
@@ -180,7 +246,7 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
                     val st = d_memref.Store(
                       add.result.asInstanceOf[Operand[TypeAttribute]],
                       asMemref(cTile.res),
-                      Seq(asNat(i), asNat(j)),
+                      Seq(asIndex(i), asIndex(j)),
                     )
                     Seq(la, lb, lc, mul, add, st)
                   }
@@ -204,7 +270,7 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
 
     val modeStr = (m: AxisMode) =>
       m match
-        case AxisMode.TailFreeTiled  => StringData("tail_free_tiled")
+        case AxisMode.TailFreeTiled   => StringData("tail_free_tiled")
         case AxisMode.UntiledFallback => StringData("untiled_fallback")
 
     castBackBase.attributes.addOne("tile.m.mode" -> modeStr(mPlan.mode))
@@ -219,14 +285,14 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
     castBackBase.attributes.addOne(
       "tile.k.value" -> IntegerAttr(IntData(kPlan.chosenTile), I32)
     )
-    val castBack = castBackBase
 
     val newOps: Seq[Operation] =
-      lhsPrefix ++ rhsPrefix ++
+      Seq(mIdx, kIdx, nIdx, idx0, idx1) ++
+        lhsPrefix ++ rhsPrefix ++
         mPlan.prelude ++ nPlan.prelude ++ kPlan.prelude ++
-        Seq(outAlloc, n0, n1, c0, outerI, castBack)
+        Seq(outAlloc, c0, outerI, castBackBase)
 
-    RewriteMethods.replaceOp(mm, newOps, Some(Seq(castBack.outputs.head)))
+    RewriteMethods.replaceOp(mm, newOps, Some(Seq(castBackBase.outputs.head)))
 
   override def transform(op: Operation): Operation =
     val facts = NatDivisibilityFacts(op)

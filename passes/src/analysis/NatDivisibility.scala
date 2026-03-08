@@ -4,6 +4,7 @@ import scair.dialects.dTensor.*
 import scair.dialects.d_affine
 import scair.dialects.builtin.*
 import scair.ir.*
+import scair.utils.OK
 
 import scala.collection.mutable
 
@@ -63,8 +64,10 @@ final class NatDivisibilityFacts private (root: Operation):
               DivBound.gcd(infer(lhs), infer(rhs))
             case Some(NatMul(lhs, rhs, _)) =>
               DivBound.mul(infer(lhs), infer(rhs))
+            case Some(ShapeToIndex(nat, _)) =>
+              infer(nat)
             case Some(d_affine.Min(lhs, rhs, _)) =>
-              DivBound.gcd(infer(lhs), infer(rhs))
+              DivBound.gcd(inferNatProvenance(lhs), inferNatProvenance(rhs))
             case Some(_: Operation) =>
               DivBound.one
             case _ =>
@@ -74,15 +77,20 @@ final class NatDivisibilityFacts private (root: Operation):
       },
     )
 
+  private def inferNatProvenance(v: Value[Attribute]): DivBound =
+    dTensorTypeUtil.resolveNatProvenance(v) match
+      case OK(nat) => infer(nat)
+      case _       => DivBound.one
+
   def guaranteedDivisor(v: Value[Attribute]): BigInt =
-    infer(v) match
+    inferNatProvenance(v) match
       case DivBound.AnyPositive => BigInt(0)
       case DivBound.Finite(d)   => d
 
   def isDivisibleBy(v: Value[Attribute], k: BigInt): Boolean =
     if k <= 0 then false
     else
-      infer(v) match
+      inferNatProvenance(v) match
         case DivBound.AnyPositive => true
         case DivBound.Finite(d)   => d % k == 0
 

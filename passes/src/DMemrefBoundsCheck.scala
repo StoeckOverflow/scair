@@ -1,6 +1,7 @@
 package scair.passes.d_memref_bounds
 
 import scair.MLContext
+import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.dTensor.*
 import scair.dialects.d_affine
@@ -16,7 +17,7 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "d-memref-bounds-check"
 
   private def normalizeNat(v: Value[Attribute]): Value[Attribute] =
-    dTensorTypeUtil.resolveNatValue(v) match
+    dTensorTypeUtil.resolveNatProvenance(v) match
       case OK(base) => base
       case _        => v
 
@@ -37,6 +38,8 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
           val out: Option[BigInt] = n.owner match
             case Some(NatConst(IntegerAttr(IntData(c), _), _)) =>
               Some(c)
+            case Some(ShapeToIndex(nat, _)) =>
+              exactNat(nat, memo, inProgress)
             case Some(NatAdd(lhs, rhs, _)) =>
               for
                 l <- exactNat(lhs, memo, inProgress)
@@ -52,6 +55,8 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
                 l <- exactNat(lhs, memo, inProgress)
                 r <- exactNat(rhs, memo, inProgress)
               yield l.min(r)
+            case Some(arith.Constant(IntegerAttr(IntData(c), _), _)) =>
+              Some(c)
             case _ => None
           inProgress -= n
           out
@@ -83,6 +88,10 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
     val idxConst = exactNat(idx, memo, inProgress)
     val dimConst = exactNat(dim, memo, inProgress)
     (idxConst, dimConst) match
+      case (Some(i), _) if i < 0 =>
+        throw VerifyException(
+          s"d_memref-bounds: `$opName` index $axis provably out of bounds ($i < 0)"
+        )
       case (Some(i), Some(d)) if i >= d =>
         throw VerifyException(
           s"d_memref-bounds: `$opName` index $axis provably out of bounds ($i >= $d)"
@@ -102,6 +111,14 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
     val dimConst = exactNat(dim, memo, inProgress)
 
     (offConst, sizeConst, dimConst) match
+      case (Some(o), _, _) if o < 0 =>
+        throw VerifyException(
+          s"d_memref-bounds: `d_memref.subview` axis $axis provably out of bounds (offset $o < 0)"
+        )
+      case (_, Some(s), _) if s < 0 =>
+        throw VerifyException(
+          s"d_memref-bounds: `d_memref.subview` axis $axis provably out of bounds (size $s < 0)"
+        )
       case (Some(o), Some(s), Some(d)) if o + s > d =>
         throw VerifyException(
           s"d_memref-bounds: `d_memref.subview` axis $axis provably out of bounds ($o + $s > $d)"
@@ -126,7 +143,7 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
         indices.zip(memref.typ.params).zipWithIndex.foreach { case ((idx, d), i) =>
           checkIndexLtDim(idx, d.getVal(), "d_memref.store", i, memo, inProgress)
         }
-      case d_memref.Subview(src, offsets, sizes, _) =>
+      case d_memref.Subview(src, offsets, sizes, _, _) =>
         offsets.zip(sizes).zip(src.typ.params).zipWithIndex.foreach {
           case (((off, size), dim), axis) =>
             checkSubviewBound(off, size, dim.getVal(), axis, memo, inProgress)

@@ -5,5 +5,18 @@ import scair.ir.*
 
 val dTensorDialect = summonDialect[
   (dTensorNatType, dTensorVectorType, dTensorMatrixType, dTensorTensorType),
-  (NatConst, NatParam, NatAdd, NatMul, Empty, Fill, Dim, Add, Mul, Matmul, Cast),
+  (
+    NatConst,
+    NatParam,
+    NatAdd,
+    NatMul,
+    ShapeToIndex,
+    Empty,
+    Fill,
+    Dim,
+    Add,
+    Mul,
+    Matmul,
+    Cast,
+  ),
 ]

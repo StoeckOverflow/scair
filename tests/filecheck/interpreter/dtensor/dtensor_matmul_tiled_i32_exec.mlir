@@ -3,8 +3,9 @@
 builtin.module {
   func.func @main() -> i32 {
     %two = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
-    %zero = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-    %one = "dtensor.nat.const"() <{value = 1 : i32}> : () -> !dtensor.nat
+    %zero_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+    %zero = "dtensor.shape.to_index"(%zero_nat) : (!dtensor.nat) -> index
+    %one = "arith.constant"() <{value = 1 : index}> : () -> index
 
     %A = d_memref.alloc : () -> !d_memref.memref<[%two, %two], i32>
     %B = d_memref.alloc : () -> !d_memref.memref<[%two, %two], i32>

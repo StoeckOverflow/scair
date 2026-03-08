@@ -28,6 +28,30 @@ object dTensorTypeUtil:
   def resolveNatValue(v: Value[Attribute]): OK[Value[Attribute]] =
     resolveNatBase(v)
 
+  def resolveNatFromIndexValue(v: Value[Attribute]): OK[Value[Attribute]] =
+    v.typ match
+      case _: IndexType =>
+        v.owner match
+          case Some(ShapeToIndex(nat, _)) => resolveNatBase(nat)
+          case _                          =>
+            val ownerName = v.owner match
+              case Some(op: Operation) => op.name
+              case Some(_: Block)      => "<block-arg>"
+              case None                => "<unknown>"
+            Err(
+              s"index value does not carry dtensor shape provenance; expected producer `dtensor.shape.to_index`, got `$ownerName`"
+            )
+      case ValueRefType(ref) => resolveNatFromIndexValue(ref.getVal())
+      case other             =>
+        Err(
+          s"expected index value for shape provenance resolution, got ${renderAttr(other)}"
+        )
+
+  def resolveNatProvenance(v: Value[Attribute]): OK[Value[Attribute]] =
+    resolveNatValue(v) match
+      case ok @ OK(_) => ok
+      case _          => resolveNatFromIndexValue(v)
+
   def renderAttr(a: Attribute): String =
     val out = java.io.StringWriter()
     val printer = Printer(p = java.io.PrintWriter(out))

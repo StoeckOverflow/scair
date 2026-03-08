@@ -26,7 +26,7 @@ private val LowerDim = pattern {
   case dtensorDim @ Dim(t, axis, res) =>
     val memType = DTensorDMemrefConversion.tensorToMemrefType(t.typ)
     val (prefix, memValue) = DTensorDMemrefConversion.toMemrefValue(t, memType)
-    val lowered = d_memref.Dim(
+    val lowered = d_memref.DimExact(
       memValue.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
       axis,
       Result(res.typ),
@@ -37,7 +37,7 @@ private val LowerDim = pattern {
 final class DTensorToDMemrefShapePreserving(ctx: MLContext)
     extends WalkerPass(ctx):
   /** Scope (intentionally narrow):
-    *   - lower `dtensor.dim` into `d_memref.dim` while preserving exact dim SSA identity
+    *   - lower `dtensor.dim` into `d_memref.dim_exact` while preserving exact dim SSA identity
     *   - use unrealized cast as a bridge from `!dtensor.tensor` to `!d_memref.memref`
     *
     * This pass is not a full dtensor->d_memref conversion.

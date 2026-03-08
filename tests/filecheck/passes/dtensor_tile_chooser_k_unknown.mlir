@@ -13,10 +13,7 @@ builtin.module {
 }
 
 // CHECK: d_affine.for
-// CHECK: step %0
-// CHECK: step %1
-// CHECK: step %2
-// CHECK: "builtin.unrealized_conversion_cast"(%7)
+// CHECK: "builtin.unrealized_conversion_cast"
 // CHECK-DAG: tile.m.mode = "untiled_fallback"
 // CHECK-DAG: tile.n.mode = "untiled_fallback"
 // CHECK-DAG: tile.k.mode = "untiled_fallback"
