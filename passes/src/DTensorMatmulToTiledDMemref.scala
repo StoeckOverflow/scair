@@ -20,6 +20,16 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
   private enum AxisMode:
     case TailFreeTiled, UntiledFallback
 
+  private final case class MatmulMatch(
+      mm: Matmul,
+      lhsTy: dTensorTensorType,
+      rhsTy: dTensorTensorType,
+      resTy: dTensorTensorType,
+      mDim: Value[Attribute],
+      kDim: Value[Attribute],
+      nDim: Value[Attribute],
+  )
+
   private final case class AxisPlan(
       mode: AxisMode,
       loopUb: Value[Attribute],
@@ -28,6 +38,28 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
       tileSizeIdx: Value[Attribute],
       prelude: Seq[Operation],
       chosenTile: Int,
+  )
+
+  private final case class BridgedMatmul(
+      matched: MatmulMatch,
+      lhsMemTy: d_memref.dMemrefMemrefType,
+      rhsMemTy: d_memref.dMemrefMemrefType,
+      outMemTy: d_memref.dMemrefMemrefType,
+      lhsPrefix: Seq[Operation],
+      rhsPrefix: Seq[Operation],
+      lhsMemV: Value[Attribute],
+      rhsMemV: Value[Attribute],
+      mIdx: ShapeToIndex,
+      kIdx: ShapeToIndex,
+      nIdx: ShapeToIndex,
+      idx0: arith.Constant,
+      idx1: arith.Constant,
+  )
+
+  private final case class MatmulTilingPlan(
+      mPlan: AxisPlan,
+      nPlan: AxisPlan,
+      kPlan: AxisPlan,
   )
 
   private def asIndex(v: Value[Attribute]): Operand[IndexType] =
@@ -138,67 +170,144 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
       case _         => Seq.empty
     here ++ op.regions.flatMap(_.blocks).flatMap(_.operations).flatMap(collectMatmuls)
 
-  private def lowerOne(
-      mm: Matmul,
-      facts: NatDivisibilityFacts,
-  ): Unit =
+  private def matchSupported(mm: Matmul): Option[MatmulMatch] =
     val lhsTy = mm.lhs.typ
     val rhsTy = mm.rhs.typ
     val resTy = mm.res.typ
 
     val isRank2 = lhsTy.params.size == 2 && rhsTy.params.size == 2 && resTy.params.size == 2
     val isI32Elem = lhsTy.elem == I32 && rhsTy.elem == I32 && resTy.elem == I32
-    if !isRank2 || !isI32Elem then return
+    if !isRank2 || !isI32Elem then None
+    else
+      Some(
+        MatmulMatch(
+          mm = mm,
+          lhsTy = lhsTy,
+          rhsTy = rhsTy,
+          resTy = resTy,
+          mDim = lhsTy.params(0).getVal(),
+          kDim = lhsTy.params(1).getVal(),
+          nDim = rhsTy.params(1).getVal(),
+        )
+      )
 
-    val mDim = lhsTy.params(0).getVal()
-    val kDim = lhsTy.params(1).getVal()
-    val nDim = rhsTy.params(1).getVal()
-
-    val mIdx = toIndex(mDim)
-    val kIdx = toIndex(kDim)
-    val nIdx = toIndex(nDim)
+  private def bridgeMatmul(matched: MatmulMatch): BridgedMatmul =
+    val mIdx = toIndex(matched.mDim)
+    val kIdx = toIndex(matched.kDim)
+    val nIdx = toIndex(matched.nDim)
     val idx0 = idxConst(0)
     val idx1 = idxConst(1)
 
-    val mPlan = chooseAxisPlan(mDim, mIdx.res, idx1.result, facts)
-    val nPlan = chooseAxisPlan(nDim, nIdx.res, idx1.result, facts)
-    val kPlan = chooseAxisPlan(kDim, kIdx.res, idx1.result, facts)
+    val lhsMemTy = DTensorDMemrefConversion.tensorToMemrefType(matched.lhsTy)
+    val rhsMemTy = DTensorDMemrefConversion.tensorToMemrefType(matched.rhsTy)
+    val outMemTy = DTensorDMemrefConversion.tensorToMemrefType(matched.resTy)
 
-    val lhsMemTy = DTensorDMemrefConversion.tensorToMemrefType(lhsTy)
-    val rhsMemTy = DTensorDMemrefConversion.tensorToMemrefType(rhsTy)
-    val outMemTy = DTensorDMemrefConversion.tensorToMemrefType(resTy)
+    val (lhsPrefix, lhsMemV) = DTensorDMemrefConversion.toMemrefValue(matched.mm.lhs, lhsMemTy)
+    val (rhsPrefix, rhsMemV) = DTensorDMemrefConversion.toMemrefValue(matched.mm.rhs, rhsMemTy)
 
-    val (lhsPrefix, lhsMemV) = DTensorDMemrefConversion.toMemrefValue(mm.lhs, lhsMemTy)
-    val (rhsPrefix, rhsMemV) = DTensorDMemrefConversion.toMemrefValue(mm.rhs, rhsMemTy)
+    BridgedMatmul(
+      matched = matched,
+      lhsMemTy = lhsMemTy,
+      rhsMemTy = rhsMemTy,
+      outMemTy = outMemTy,
+      lhsPrefix = lhsPrefix,
+      rhsPrefix = rhsPrefix,
+      lhsMemV = lhsMemV,
+      rhsMemV = rhsMemV,
+      mIdx = mIdx,
+      kIdx = kIdx,
+      nIdx = nIdx,
+      idx0 = idx0,
+      idx1 = idx1,
+    )
 
-    val outAlloc = d_memref.Alloc(Result(outMemTy))
+  private def planTiling(
+      bridged: BridgedMatmul,
+      facts: NatDivisibilityFacts,
+  ): MatmulTilingPlan =
+    MatmulTilingPlan(
+      mPlan = chooseAxisPlan(
+        bridged.matched.mDim,
+        bridged.mIdx.res,
+        bridged.idx1.result,
+        facts,
+      ),
+      nPlan = chooseAxisPlan(
+        bridged.matched.nDim,
+        bridged.nIdx.res,
+        bridged.idx1.result,
+        facts,
+      ),
+      kPlan = chooseAxisPlan(
+        bridged.matched.kDim,
+        bridged.kIdx.res,
+        bridged.idx1.result,
+        facts,
+      ),
+    )
+
+  private def attachTileAttrs(
+      castBackBase: UnrealizedConversionCastOp,
+      plan: MatmulTilingPlan,
+  ): Unit =
+    val modeStr = (m: AxisMode) =>
+      m match
+        case AxisMode.TailFreeTiled   => StringData("tail_free_tiled")
+        case AxisMode.UntiledFallback => StringData("untiled_fallback")
+
+    castBackBase.attributes.addOne("tile.m.mode" -> modeStr(plan.mPlan.mode))
+    castBackBase.attributes.addOne("tile.n.mode" -> modeStr(plan.nPlan.mode))
+    castBackBase.attributes.addOne("tile.k.mode" -> modeStr(plan.kPlan.mode))
+    castBackBase.attributes.addOne(
+      "tile.m.value" -> IntegerAttr(IntData(plan.mPlan.chosenTile), I32)
+    )
+    castBackBase.attributes.addOne(
+      "tile.n.value" -> IntegerAttr(IntData(plan.nPlan.chosenTile), I32)
+    )
+    castBackBase.attributes.addOne(
+      "tile.k.value" -> IntegerAttr(IntData(plan.kPlan.chosenTile), I32)
+    )
+
+  private def emitTiledMatmul(
+      bridged: BridgedMatmul,
+      plan: MatmulTilingPlan,
+  ): (Seq[Operation], Value[Attribute]) =
+    val outAlloc = d_memref.Alloc(Result(bridged.outMemTy))
     val c0 = i32Const(0)
 
-    val outerI = mkFor(idx0.result, mPlan.loopUb, mPlan.loopStep) { ii =>
-      val iOff = mPlan.mode match
-        case AxisMode.TailFreeTiled => ii
-        case AxisMode.UntiledFallback => idx0.result
+    val outerI = mkFor(bridged.idx0.result, plan.mPlan.loopUb, plan.mPlan.loopStep) { ii =>
+      val iOff = plan.mPlan.mode match
+        case AxisMode.TailFreeTiled   => ii
+        case AxisMode.UntiledFallback => bridged.idx0.result
 
-      val outerJ = mkFor(idx0.result, nPlan.loopUb, nPlan.loopStep) { jj =>
-        val jOff = nPlan.mode match
-          case AxisMode.TailFreeTiled => jj
-          case AxisMode.UntiledFallback => idx0.result
+      val outerJ = mkFor(bridged.idx0.result, plan.nPlan.loopUb, plan.nPlan.loopStep) { jj =>
+        val jOff = plan.nPlan.mode match
+          case AxisMode.TailFreeTiled   => jj
+          case AxisMode.UntiledFallback => bridged.idx0.result
 
         val cTile = mkSubview2D(
           outAlloc.res,
           iOff,
           jOff,
-          mPlan.tileSizeNat,
-          nPlan.tileSizeNat,
-          mPlan.tileSizeIdx,
-          nPlan.tileSizeIdx,
-          idx1.result,
+          plan.mPlan.tileSizeNat,
+          plan.nPlan.tileSizeNat,
+          plan.mPlan.tileSizeIdx,
+          plan.nPlan.tileSizeIdx,
+          bridged.idx1.result,
           I32,
         )
 
-        val initI = mkFor(idx0.result, mPlan.tileSizeIdx, IntegerAttr(IntData(1), I32)) { i =>
+        val initI = mkFor(
+          bridged.idx0.result,
+          plan.mPlan.tileSizeIdx,
+          IntegerAttr(IntData(1), I32),
+        ) { i =>
           Seq(
-            mkFor(idx0.result, nPlan.tileSizeIdx, IntegerAttr(IntData(1), I32)) { j =>
+            mkFor(
+              bridged.idx0.result,
+              plan.nPlan.tileSizeIdx,
+              IntegerAttr(IntData(1), I32),
+            ) { j =>
               Seq(
                 d_memref.Store(
                   c0.result.asInstanceOf[Operand[TypeAttribute]],
@@ -210,39 +319,51 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
           )
         }
 
-        val outerK = mkFor(idx0.result, kPlan.loopUb, kPlan.loopStep) { kk =>
-          val kOff = kPlan.mode match
-            case AxisMode.TailFreeTiled => kk
-            case AxisMode.UntiledFallback => idx0.result
+        val outerK = mkFor(bridged.idx0.result, plan.kPlan.loopUb, plan.kPlan.loopStep) { kk =>
+          val kOff = plan.kPlan.mode match
+            case AxisMode.TailFreeTiled   => kk
+            case AxisMode.UntiledFallback => bridged.idx0.result
 
           val aTile = mkSubview2D(
-            lhsMemV,
+            bridged.lhsMemV,
             iOff,
             kOff,
-            mPlan.tileSizeNat,
-            kPlan.tileSizeNat,
-            mPlan.tileSizeIdx,
-            kPlan.tileSizeIdx,
-            idx1.result,
+            plan.mPlan.tileSizeNat,
+            plan.kPlan.tileSizeNat,
+            plan.mPlan.tileSizeIdx,
+            plan.kPlan.tileSizeIdx,
+            bridged.idx1.result,
             I32,
           )
           val bTile = mkSubview2D(
-            rhsMemV,
+            bridged.rhsMemV,
             kOff,
             jOff,
-            kPlan.tileSizeNat,
-            nPlan.tileSizeNat,
-            kPlan.tileSizeIdx,
-            nPlan.tileSizeIdx,
-            idx1.result,
+            plan.kPlan.tileSizeNat,
+            plan.nPlan.tileSizeNat,
+            plan.kPlan.tileSizeIdx,
+            plan.nPlan.tileSizeIdx,
+            bridged.idx1.result,
             I32,
           )
 
-          val compI = mkFor(idx0.result, mPlan.tileSizeIdx, IntegerAttr(IntData(1), I32)) { i =>
+          val compI = mkFor(
+            bridged.idx0.result,
+            plan.mPlan.tileSizeIdx,
+            IntegerAttr(IntData(1), I32),
+          ) { i =>
             Seq(
-              mkFor(idx0.result, nPlan.tileSizeIdx, IntegerAttr(IntData(1), I32)) { j =>
+              mkFor(
+                bridged.idx0.result,
+                plan.nPlan.tileSizeIdx,
+                IntegerAttr(IntData(1), I32),
+              ) { j =>
                 Seq(
-                  mkFor(idx0.result, kPlan.tileSizeIdx, IntegerAttr(IntData(1), I32)) { k =>
+                  mkFor(
+                    bridged.idx0.result,
+                    plan.kPlan.tileSizeIdx,
+                    IntegerAttr(IntData(1), I32),
+                  ) { k =>
                     val la = d_memref.Load(
                       asMemref(aTile.res),
                       Seq(asIndex(i), asIndex(k)),
@@ -282,34 +403,34 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
 
     val castBackBase = UnrealizedConversionCastOp(
       inputs = Seq(outAlloc.res),
-      outputs = Seq(Result(resTy)),
+      outputs = Seq(Result(bridged.matched.resTy)),
     )
-
-    val modeStr = (m: AxisMode) =>
-      m match
-        case AxisMode.TailFreeTiled   => StringData("tail_free_tiled")
-        case AxisMode.UntiledFallback => StringData("untiled_fallback")
-
-    castBackBase.attributes.addOne("tile.m.mode" -> modeStr(mPlan.mode))
-    castBackBase.attributes.addOne("tile.n.mode" -> modeStr(nPlan.mode))
-    castBackBase.attributes.addOne("tile.k.mode" -> modeStr(kPlan.mode))
-    castBackBase.attributes.addOne(
-      "tile.m.value" -> IntegerAttr(IntData(mPlan.chosenTile), I32)
-    )
-    castBackBase.attributes.addOne(
-      "tile.n.value" -> IntegerAttr(IntData(nPlan.chosenTile), I32)
-    )
-    castBackBase.attributes.addOne(
-      "tile.k.value" -> IntegerAttr(IntData(kPlan.chosenTile), I32)
-    )
+    attachTileAttrs(castBackBase, plan)
 
     val newOps: Seq[Operation] =
-      Seq(mIdx, kIdx, nIdx, idx0, idx1) ++
-        lhsPrefix ++ rhsPrefix ++
-        mPlan.prelude ++ nPlan.prelude ++ kPlan.prelude ++
+      Seq(
+        bridged.mIdx,
+        bridged.kIdx,
+        bridged.nIdx,
+        bridged.idx0,
+        bridged.idx1,
+      ) ++
+        bridged.lhsPrefix ++ bridged.rhsPrefix ++
+        plan.mPlan.prelude ++ plan.nPlan.prelude ++ plan.kPlan.prelude ++
         Seq(outAlloc, c0, outerI, castBackBase)
 
-    RewriteMethods.replaceOp(mm, newOps, Some(Seq(castBackBase.outputs.head)))
+    (newOps, castBackBase.outputs.head)
+
+  private def lowerOne(
+      mm: Matmul,
+      facts: NatDivisibilityFacts,
+  ): Unit =
+    matchSupported(mm).foreach { matched =>
+      val bridged = bridgeMatmul(matched)
+      val plan = planTiling(bridged, facts)
+      val (newOps, result) = emitTiledMatmul(bridged, plan)
+      RewriteMethods.replaceOp(mm, newOps, Some(Seq(result)))
+    }
 
   override def transform(op: Operation): Operation =
     val facts = NatDivisibilityFacts(op)
