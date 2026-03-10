@@ -1,6 +1,7 @@
 package scair.passes.dtensor_matmul_to_tiled_dmemref
 
 import scair.MLContext
+import scair.dialects.affine.*
 import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.builtin.UnrealizedConversionCastOp
@@ -56,7 +57,7 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
       oneIdx: Value[Attribute],
       facts: NatDivisibilityFacts,
   ): AxisPlan =
-    TileSizeChooser.chooseLargestGuaranteed(facts, dimNat) match
+    TileSizeChooser.chooseLargestGuaranteedFromProvenance(facts, dimIdx) match
       case Some(tile) if tile > 1 =>
         val tileNat = natConst(tile)
         val tileIdx = toIndex(tileNat.res)
@@ -87,10 +88,26 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
   )(
       bodyBuilder: Value[Attribute] => Seq[Operation]
   ): d_affine.For =
-    val body = Region(
-      Block(IndexType(), iv => bodyBuilder(iv) :+ d_affine.Yield())
+    val idMap = AffineMapAttr(
+      AffineMap(
+        dimensions = Seq("d0"),
+        symbols = Seq.empty,
+        affineExprs = Seq(AffineDimExpr("d0")),
+      )
     )
-    d_affine.For(asIndex(lb), asIndex(ub), step, body)
+    val body = Region(
+      Block(IndexType(), iv => bodyBuilder(iv) :+ d_affine.Yield(Seq.empty))
+    )
+    d_affine.For(
+      lowerBoundOperands = Seq(asIndex(lb)),
+      upperBoundOperands = Seq(asIndex(ub)),
+      inits = Seq.empty,
+      res = Seq.empty,
+      lowerBoundMap = idMap,
+      upperBoundMap = idMap,
+      step = step,
+      body = body,
+    )
 
   private def mkSubview2D(
       src: Value[Attribute],

@@ -11,3 +11,13 @@ object TileSizeChooser:
       candidates: Seq[Int] = DefaultCandidates,
   ): Option[Int] =
     facts.largestDivisibleIn(dim, candidates)
+
+  /** Chooses tile size through nat provenance when the queried value is index-typed. */
+  def chooseLargestGuaranteedFromProvenance(
+      facts: NatDivisibilityFacts,
+      dim: Value[Attribute],
+      candidates: Seq[Int] = DefaultCandidates,
+  ): Option[Int] =
+    NatProvenance.resolveNat(dim) match
+      case Some(nat) => chooseLargestGuaranteed(facts, nat, candidates)
+      case None      => chooseLargestGuaranteed(facts, dim, candidates)

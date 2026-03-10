@@ -1,10 +1,10 @@
 package scair.passes.analysis
 
 import scair.dialects.dTensor.*
+import scair.dialects.affine.*
 import scair.dialects.d_affine
 import scair.dialects.builtin.*
 import scair.ir.*
-import scair.utils.OK
 
 import scala.collection.mutable
 
@@ -34,6 +34,9 @@ private object DivBound:
         val p = x * y
         if p <= 0 then one else Finite(p)
 
+/** Conservative divisibility facts derived from nat provenance, scoped to the same
+  * currently supported affine subset as NatProvenance.
+  */
 final class NatDivisibilityFacts private (root: Operation):
 
   private val memo = mutable.Map.empty[Value[Attribute], DivBound]
@@ -43,6 +46,44 @@ final class NatDivisibilityFacts private (root: Operation):
     v.typ match
       case ValueRefType(ref) => normalize(ref.getVal())
       case _                 => v
+
+  private def inferAffineExpr(
+      expr: AffineExpr,
+      dimBounds: Map[String, DivBound],
+      symBounds: Map[String, DivBound],
+  ): DivBound =
+    expr match
+      case AffineDimExpr(position)   => dimBounds.getOrElse(position, DivBound.one)
+      case AffineSymExpr(position)   => symBounds.getOrElse(position, DivBound.one)
+      case AffineConstantExpr(value) => DivBound.fromConst(value)
+      case AffineBinaryOpExpr(op, lhs, rhs) =>
+        op match
+          case AffineBinaryOp.Add | AffineBinaryOp.Minus =>
+            DivBound.gcd(
+              inferAffineExpr(lhs, dimBounds, symBounds),
+              inferAffineExpr(rhs, dimBounds, symBounds),
+            )
+          case AffineBinaryOp.Multiply =>
+            DivBound.mul(
+              inferAffineExpr(lhs, dimBounds, symBounds),
+              inferAffineExpr(rhs, dimBounds, symBounds),
+            )
+          case AffineBinaryOp.CeilDiv | AffineBinaryOp.FloorDiv | AffineBinaryOp.Mod =>
+            DivBound.one
+
+  private def inferAffineApply(
+      args: Seq[Value[Attribute]],
+      map: AffineMapAttr,
+  ): DivBound =
+    val dimNames = map.affineMap.dimensions
+    val symNames = map.affineMap.symbols
+    val dimCount = dimNames.size
+    if map.affineMap.affineExprs.size != 1 then DivBound.one
+    else if args.size != dimCount + symNames.size then DivBound.one
+    else
+      val dimBounds = dimNames.zip(args.take(dimCount).map(inferNatProvenance)).toMap
+      val symBounds = symNames.zip(args.drop(dimCount).map(inferNatProvenance)).toMap
+      inferAffineExpr(map.affineMap.affineExprs.head, dimBounds, symBounds)
 
   private def infer(v: Value[Attribute]): DivBound =
     val n = normalize(v)
@@ -64,10 +105,10 @@ final class NatDivisibilityFacts private (root: Operation):
               DivBound.gcd(infer(lhs), infer(rhs))
             case Some(NatMul(lhs, rhs, _)) =>
               DivBound.mul(infer(lhs), infer(rhs))
-            case Some(ShapeToIndex(nat, _)) =>
-              infer(nat)
-            case Some(d_affine.Min(lhs, rhs, _)) =>
-              DivBound.gcd(inferNatProvenance(lhs), inferNatProvenance(rhs))
+            case Some(d_affine.Min(dimOperands, symbolOperands, map, _)) =>
+              inferAffineApply(dimOperands ++ symbolOperands, map)
+            case Some(d_affine.Apply(dimOperands, symbolOperands, map, _)) =>
+              inferAffineApply(dimOperands ++ symbolOperands, map)
             case Some(_: Operation) =>
               DivBound.one
             case _ =>
@@ -78,9 +119,9 @@ final class NatDivisibilityFacts private (root: Operation):
     )
 
   private def inferNatProvenance(v: Value[Attribute]): DivBound =
-    dTensorTypeUtil.resolveNatProvenance(v) match
-      case OK(nat) => infer(nat)
-      case _       => DivBound.one
+    NatProvenance.resolveNat(v) match
+      case Some(nat) => infer(nat)
+      case None      => DivBound.one
 
   def guaranteedDivisor(v: Value[Attribute]): BigInt =
     inferNatProvenance(v) match
