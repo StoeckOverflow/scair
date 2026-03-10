@@ -1,4 +1,5 @@
-// RUN: scair-run %s | filecheck %s
+// RUN: scair-opt %s | filecheck %s --check-prefix=IR
+// RUN: scair-run %s | filecheck %s --check-prefix=EXEC
 
 builtin.module {
   func.func @main() -> index {
@@ -16,4 +17,17 @@ builtin.module {
   }
 }
 
-// CHECK: Result: 10
+// IR-LABEL: builtin.module {
+// IR: func.func @main() -> index {
+// IR: %0 = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+// IR: %1 = "dtensor.nat.const"() <{value = 5 : i32}> : () -> !dtensor.nat
+// IR: %2 = "dtensor.shape.to_index"(%0) : (!dtensor.nat) -> index
+// IR: %3 = "dtensor.shape.to_index"(%1) : (!dtensor.nat) -> index
+// IR: %4 = "arith.constant"() <{value = 0 : index}> : () -> index
+// IR: %5 = d_affine.for %6 = #map(%2) to #map(%3) step 1 : i32 iter_args(%7 = %4 : index) {
+// IR: %8 = d_affine.apply #map1 (%6)[%7] : (index)[index] -> index
+// IR: d_affine.yield %8 : (index)
+// IR: }
+// IR: func.return %5 : index
+
+// EXEC: Result: 10

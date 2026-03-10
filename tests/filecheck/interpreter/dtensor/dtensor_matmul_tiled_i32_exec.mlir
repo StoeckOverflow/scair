@@ -1,4 +1,5 @@
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p dtensor-matmul-to-tiled-dmemref | scair-run | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p dtensor-matmul-to-tiled-dmemref | filecheck %s -DFILE=%s --check-prefix=LOWER
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p dtensor-matmul-to-tiled-dmemref | scair-run | filecheck %s -DFILE=%s --check-prefix=EXEC
 
 builtin.module {
   func.func @main() -> i32 {
@@ -45,4 +46,38 @@ builtin.module {
   }
 }
 
-// CHECK: Result: 19
+// LOWER-LABEL: builtin.module {
+// LOWER: func.func @main() -> i32 {
+// LOWER: %0 = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
+// LOWER: %1 = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+// LOWER: %2 = "dtensor.shape.to_index"(%1) : (!dtensor.nat) -> index
+// LOWER: %3 = "arith.constant"() <{value = 1 : index}> : () -> index
+// LOWER: %4 = d_memref.alloc : () -> !d_memref.memref<[%0, %0], i32>
+// LOWER: %5 = d_memref.alloc : () -> !d_memref.memref<[%0, %0], i32>
+// LOWER: %14 = "builtin.unrealized_conversion_cast"(%4) : (!d_memref.memref<[%0, %0], i32>) -> !dtensor.tensor<[%0, %0], i32>
+// LOWER: %15 = "builtin.unrealized_conversion_cast"(%5) : (!d_memref.memref<[%0, %0], i32>) -> !dtensor.tensor<[%0, %0], i32>
+// LOWER: %16 = "dtensor.shape.to_index"(%0) : (!dtensor.nat) -> index
+// LOWER: %17 = "dtensor.shape.to_index"(%0) : (!dtensor.nat) -> index
+// LOWER: %18 = "dtensor.shape.to_index"(%0) : (!dtensor.nat) -> index
+// LOWER: %19 = "arith.constant"() <{value = 0 : index}> : () -> index
+// LOWER: %20 = "arith.constant"() <{value = 1 : index}> : () -> index
+// LOWER: %21 = "builtin.unrealized_conversion_cast"(%14) : (!dtensor.tensor<[%0, %0], i32>) -> !d_memref.memref<[%0, %0], i32>
+// LOWER: %22 = "builtin.unrealized_conversion_cast"(%15) : (!dtensor.tensor<[%0, %0], i32>) -> !d_memref.memref<[%0, %0], i32>
+// LOWER: %23 = d_memref.alloc : () -> !d_memref.memref<[%0, %0], i32>
+// LOWER: d_affine.for %25 = #map(%19) to #map(%20) step 1 : i32 {
+// LOWER: %27 = d_memref.subview %23[%19, %19][%16, %18][%20, %20] : !d_memref.memref<[%0, %0], i32> -> !d_memref.memref<[%0, %0], i32>
+// LOWER: %31 = d_memref.subview %21[%19, %19][%16, %17][%20, %20] : !d_memref.memref<[%0, %0], i32> -> !d_memref.memref<[%0, %0], i32>
+// LOWER: %32 = d_memref.subview %22[%19, %19][%17, %18][%20, %20] : !d_memref.memref<[%0, %0], i32> -> !d_memref.memref<[%0, %0], i32>
+// LOWER: %36 = d_memref.load %31[%33, %35] : !d_memref.memref<[%0, %0], i32> -> i32
+// LOWER: %37 = d_memref.load %32[%35, %34] : !d_memref.memref<[%0, %0], i32> -> i32
+// LOWER: %38 = d_memref.load %27[%33, %34] : !d_memref.memref<[%0, %0], i32> -> i32
+// LOWER: %39 = "arith.muli"(%36, %37) : (i32, i32) -> i32
+// LOWER: %40 = "arith.addi"(%38, %39) : (i32, i32) -> i32
+// LOWER: d_memref.store %40, %27[%33, %34] : i32, !d_memref.memref<[%0, %0], i32>
+// LOWER: %41 = "builtin.unrealized_conversion_cast"(%23) {tile.m.mode = "untiled_fallback", tile.n.value = 1 : i32, tile.m.value = 1 : i32, tile.k.mode = "untiled_fallback", tile.k.value = 1 : i32, tile.n.mode = "untiled_fallback"} : (!d_memref.memref<[%0, %0], i32>) -> !dtensor.tensor<[%0, %0], i32>
+// LOWER: %42 = "builtin.unrealized_conversion_cast"(%41) : (!dtensor.tensor<[%0, %0], i32>) -> !d_memref.memref<[%0, %0], i32>
+// LOWER: %43 = d_memref.load %42[%2, %2] : !d_memref.memref<[%0, %0], i32> -> i32
+// LOWER: func.return %43 : i32
+// LOWER-NOT: "dtensor.matmul"
+
+// EXEC: Result: 19

@@ -1,4 +1,5 @@
-// RUN: scair-run %s | filecheck %s
+// RUN: scair-opt %s | filecheck %s --check-prefix=IR
+// RUN: scair-run %s | filecheck %s --check-prefix=EXEC
 
 builtin.module {
   func.func @main() -> i32 {
@@ -13,4 +14,15 @@ builtin.module {
   }
 }
 
-// CHECK: Result: 42
+// IR-LABEL: builtin.module {
+// IR: func.func @main() -> i32 {
+// IR: %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+// IR: %1 = "arith.constant"() <{value = 1 : index}> : () -> index
+// IR: %2 = d_memref.alloc : () -> !d_memref.memref<[%0], i32>
+// IR: %3 = "arith.constant"() <{value = 42 : i32}> : () -> i32
+// IR: d_memref.store %3, %2[%1] : i32, !d_memref.memref<[%0], i32>
+// IR: %4 = d_memref.load %2[%1] : !d_memref.memref<[%0], i32> -> i32
+// IR: d_memref.dealloc %2 : !d_memref.memref<[%0], i32>
+// IR: func.return %4 : i32
+
+// EXEC: Result: 42

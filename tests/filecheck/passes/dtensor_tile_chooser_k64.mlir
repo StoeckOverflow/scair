@@ -14,11 +14,11 @@ builtin.module {
   "test.keep"(%C) : (!dtensor.tensor<[%m, %n], i32>) -> ()
 }
 
-// CHECK: d_affine.for
+// CHECK-LABEL: builtin.module {
+// CHECK: %3 = "dtensor.nat.const"() <{value = 64 : i32}> : () -> !dtensor.nat
+// CHECK: %4 = "dtensor.nat.mul"(%2, %3) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CHECK: %14 = "dtensor.nat.const"() <{value = 64 : i32}> : () -> !dtensor.nat
+// CHECK: %16 = d_memref.alloc : () -> !d_memref.memref<[%0, %1], i32>
+// CHECK: d_affine.for %18 = #map(%10) to #map(%11) step 1 : i32 {
 // CHECK-NOT: d_affine.min
-// CHECK-DAG: tile.m.mode = "untiled_fallback"
-// CHECK-DAG: tile.n.mode = "untiled_fallback"
-// CHECK-DAG: tile.k.mode = "tail_free_tiled"
-// CHECK-DAG: tile.m.value = 1 : i32
-// CHECK-DAG: tile.n.value = 1 : i32
-// CHECK-DAG: tile.k.value = 64 : i32
+// CHECK: %34 = "builtin.unrealized_conversion_cast"(%16) {tile.m.mode = "untiled_fallback", tile.n.value = 1 : i32, tile.m.value = 1 : i32, tile.k.mode = "tail_free_tiled", tile.k.value = 64 : i32, tile.n.mode = "untiled_fallback"} : (!d_memref.memref<[%0, %1], i32>) -> !dtensor.tensor<[%0, %1], i32>
