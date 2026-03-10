@@ -393,6 +393,11 @@ final case class Subview(
       case (OK(d), OK(s)) => d eq s
       case _              => false
 
+  private def firstSizeProvenanceMismatch: Option[Int] =
+    res.typ.params.zip(sizes).zipWithIndex.collectFirst {
+      case ((d, s), axis) if !sameDimAsSizeOperand(d, s) => axis
+    }
+
   override def customVerify(): OK[Operation] =
     val srcRank = src.typ.params.size
     val resRank = res.typ.params.size
@@ -411,12 +416,13 @@ final case class Subview(
     else if !strides.forall(isUnitStride) then
       Err("d_memref.subview: only unit strides are supported in this version")
     else
-      if !res.typ.params.zip(sizes).forall((d, s) => sameDimAsSizeOperand(d, s))
-      then
-        Err(
-          "d_memref.subview: expected each result dim to match the corresponding size operand via dtensor.shape.to_index provenance"
-        )
-      else OK(this)
+      firstSizeProvenanceMismatch match
+        case Some(axis) =>
+          Err(
+            s"d_memref.subview: size provenance mismatch at axis $axis; expected result dim to match size operand via dtensor.shape.to_index"
+          )
+        case None =>
+          OK(this)
 
   override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
     printer.print(name, " ", src, "[")
