@@ -2,13 +2,13 @@
 
 builtin.module {
   %eight = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %four = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %zero = "arith.constant"() <{value = 0 : index}> : () -> index
+  %zero_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+  %zero = "dtensor.shape.to_index"(%zero_nat) : (!dtensor.nat) -> index
   %neg_one = "arith.constant"() <{value = -1 : index}> : () -> index
   %one = "arith.constant"() <{value = 1 : index}> : () -> index
   %src = d_memref.alloc : () -> !d_memref.memref<[%eight], i32>
-  %sv = d_memref.subview %src[%neg_one][%zero][%one] : !d_memref.memref<[%eight], i32> -> !d_memref.memref<[%four], i32>
-  "test.keep"(%sv) : (!d_memref.memref<[%four], i32>) -> ()
+  %sv = d_memref.subview %src[%neg_one][%zero][%one] : !d_memref.memref<[%eight], i32> -> !d_memref.memref<[%zero_nat], i32>
+  "test.keep"(%sv) : (!d_memref.memref<[%zero_nat], i32>) -> ()
 }
 
 // CHECK: d_memref-bounds: `d_memref.subview` axis 0 provably out of bounds (offset -1 < 0)

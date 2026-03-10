@@ -19,4 +19,6 @@ builtin.module {
 // CHECK-DAG: tile.m.mode = "untiled_fallback"
 // CHECK-DAG: tile.n.mode = "untiled_fallback"
 // CHECK-DAG: tile.k.mode = "tail_free_tiled"
+// CHECK-DAG: tile.m.value = 1 : i32
+// CHECK-DAG: tile.n.value = 1 : i32
 // CHECK-DAG: tile.k.value = 64 : i32
