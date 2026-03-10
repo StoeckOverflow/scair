@@ -9,7 +9,7 @@ builtin.module {
     %one = "arith.constant"() <{value = 1 : index}> : () -> index
     %m = d_memref.alloc : () -> !d_memref.memref<[%ub_nat], i32>
     %c7 = "arith.constant"() <{value = 7 : i32}> : () -> i32
-    d_affine.for %iv = %lb to %ub step 1 : i32 {
+    d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 {
       d_memref.store %c7, %m[%iv] : i32, !d_memref.memref<[%ub_nat], i32>
       d_affine.yield
     }

@@ -72,7 +72,7 @@ builtin.module {
   %bad = d_memref.subview %buf[%z_i, %z_i][%m_i, %n_i][%o_i, %o_i] : !d_memref.memref<[%m, %n], f32> -> !d_memref.memref<[%n, %m], f32>
 }
 
-// VERIFY: d_memref.subview: expected each result dim to match the corresponding size operand via dtensor.shape.to_index provenance
+// VERIFY: d_memref.subview: size provenance mismatch at axis 0; expected result dim to match size operand via dtensor.shape.to_index
 
 // -----
 
