@@ -46,6 +46,19 @@ private val LowerMatmul = pattern {
         PatternAction.Abort
 }
 
+/**
+ * This pass rewrites `dtensor.fill` and `dtensor.matmul` into `d_linalg`
+ * operations by materializing explicit destination tensors.
+ *
+ * Rewrite shapes:
+ * `<dtensor.fill %value -> !dtensor.tensor<...>>`
+ * `->`
+ * `<dtensor.empty + d_linalg.fill>`
+ *
+ * `<dtensor.matmul %lhs, %rhs -> !dtensor.tensor<...>>`
+ * `->`
+ * `<zero constant + dtensor.empty + d_linalg.fill + d_linalg.matmul>`
+ */
 final class LowerDTensorToDLinalg(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "lower-dtensor-to-d-linalg"
 

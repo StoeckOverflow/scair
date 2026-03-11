@@ -10,6 +10,23 @@ import scair.ir.*
 import scair.passes.analysis.NatProvenance
 import scair.transformations.ModulePass
 
+/**
+ * Verifies that `d_memref` accesses are provably in bounds.
+ *
+ * This pass walks `d_memref.load`, `d_memref.store`, and `d_memref.subview`
+ * operations, using loop structure and nat provenance to prove simple index and
+ * slice bounds facts. It is a checking pass: safe operations are kept unchanged,
+ * and provably out-of-bounds operations cause verification to fail.
+ *
+ * Rewrite / effect shape:
+ * `<d_memref.load | d_memref.store | d_memref.subview with provably safe bounds>`
+ * `->`
+ * `<same operation preserved>`
+ *
+ * `<d_memref.load | d_memref.store | d_memref.subview with provably out-of-bounds access>`
+ * `->`
+ * `<VerifyException>`
+ */
 final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "d-memref-bounds-check"
 

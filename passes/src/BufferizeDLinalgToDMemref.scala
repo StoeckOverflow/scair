@@ -59,6 +59,23 @@ private val BufferizeMatmul = pattern {
       case _ => PatternAction.Abort
 }
 
+/**
+ * Bufferizes tensor-result `d_linalg` ops into `d_memref` form while preserving a
+ * tensor-facing result through an unrealized cast.
+ *
+ * This pass converts dtensor operands/results to `d_memref` values using the
+ * dtensor-to-dmemref bridge, rewrites the operation to its buffer form with no SSA
+ * result, and then casts the output buffer back to the original tensor type.
+ *
+ * Rewrite shapes:
+ * `<d_linalg.fill %value, %out_tensor -> %res_tensor>`
+ * `->`
+ * `<tensor-to-memref bridge + d_linalg.fill %value, %out_memref + unrealized_conversion_cast %out_memref to tensor>`
+ *
+ * `<d_linalg.matmul %lhs_tensor, %rhs_tensor, %out_tensor -> %res_tensor>`
+ * `->`
+ * `<tensor-to-memref bridges + d_linalg.matmul %lhs_memref, %rhs_memref, %out_memref + unrealized_conversion_cast %out_memref to tensor>`
+ */
 final class BufferizeDLinalgToDMemref(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "bufferize-d-linalg-to-dmemref"
 

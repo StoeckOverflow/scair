@@ -124,6 +124,15 @@ private val LowerFor = pattern {
     (prefix :+ lowered, lowered.results)
 }
 
+/**
+ * This pass rewrites `d_affine.for` loops into `scf.for`, lowering projected
+ * affine bounds to index values and translating region yields to `scf.yield`.
+ *
+ * Rewrite shapes:
+ * `<d_affine.for (%i) = lb to ub step s iter_args(...) -> (...) { ... d_affine.yield ... }>`
+ * `->`
+ * `<bound setup constants + scf.for (%i) = lb to ub step s iter_args(...) -> (...) { ... scf.yield ... }>`
+ */
 final class DAffineToSCF(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "d-affine-to-scf"
 

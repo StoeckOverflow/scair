@@ -144,6 +144,34 @@ private val LowerCast = pattern {
     (prefix ++ Seq(lowered, castBack), Seq(castBack.outputs.head))
 }
 
+/**
+ * Lowers a small shape-preserving subset of `dtensor` ops to `d_memref` while
+ * keeping tensor-typed SSA results via unrealized casts.
+ *
+ * This pass rewrites `dtensor.empty` to buffer allocation, rewrites
+ * `dtensor.fill` to allocate-and-store loop nests, rewrites `dtensor.dim` to
+ * `d_memref.dim_exact`, and rewrites `dtensor.cast` to `d_memref.cast`. In each
+ * case where a tensor result must remain visible, it bridges back with
+ * `unrealized_conversion_cast` so value-dependent shapes are preserved in the
+ * underlying `!d_memref.memref`.
+ *
+ * Rewrite shapes:
+ * `<dtensor.empty -> !dtensor.tensor<...>>`
+ * `->`
+ * `<d_memref.alloc + unrealized_conversion_cast to !dtensor.tensor<...>>`
+ *
+ * `<dtensor.fill %value -> !dtensor.tensor<...>>`
+ * `->`
+ * `<shape-to-index setup + d_memref.alloc + nested d_affine.for + d_memref.store + unrealized_conversion_cast>`
+ *
+ * `<dtensor.dim %tensor, %axis>`
+ * `->`
+ * `<unrealized_conversion_cast to memref + d_memref.dim_exact>`
+ *
+ * `<dtensor.cast %src : !dtensor.tensor<...> to !dtensor.tensor<...>>`
+ * `->`
+ * `<unrealized_conversion_cast to source memref + d_memref.cast + unrealized_conversion_cast back to tensor>`
+ */
 final class DTensorToDMemrefShapePreserving(ctx: MLContext)
     extends WalkerPass(ctx):
   /** Scope (intentionally narrow):

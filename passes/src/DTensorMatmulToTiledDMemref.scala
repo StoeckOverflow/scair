@@ -14,12 +14,26 @@ import scair.passes.dtensor_to_dmemref.DTensorDMemrefConversion
 import scair.transformations.ModulePass
 import scair.transformations.RewriteMethods
 
+/**
+ * Lowers supported `dtensor.matmul` ops to tiled `d_memref` code.
+ *
+ * This pass matches rank-2 `i32` dtensor matmuls, bufferizes the tensor operands
+ * to `d_memref`, chooses per-axis tile sizes from divisibility facts, materializes
+ * tiled `d_memref.subview` slices, and emits explicit `d_affine.for` loop nests
+ * with `d_memref.load` / `d_memref.store` and `arith.muli` / `arith.addi`.
+ *
+ * Rewrite shape:
+ * `<dtensor.matmul : !dtensor.tensor<MxKxi32>, !dtensor.tensor<KxNxi32> -> !dtensor.tensor<MxNxi32>>`
+ * `->`
+ * `<bufferized d_memref operands + d_memref.alloc + tiled d_memref.subview + nested d_affine.for + unrealized_conversion_cast>`
+ */
 final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "dtensor-matmul-to-tiled-dmemref"
 
   private enum AxisMode:
     case TailFreeTiled, UntiledFallback
 
+  // matmul of forms we support
   private final case class MatmulMatch(
       mm: Matmul,
       lhsTy: dTensorTensorType,
@@ -30,6 +44,7 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
       nDim: Value[Attribute],
   )
 
+  // Plan how to tile this axis/dimension of a Matmul
   private final case class AxisPlan(
       mode: AxisMode,
       loopUb: Value[Attribute],
@@ -39,8 +54,8 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
       prelude: Seq[Operation],
       chosenTile: Int,
   )
-
-  private final case class BridgedMatmul(
+  // lowering-ready representation of the matched matmul
+  private final case class PreparedMatMul(
       matched: MatmulMatch,
       lhsMemTy: d_memref.dMemrefMemrefType,
       rhsMemTy: d_memref.dMemrefMemrefType,
@@ -191,7 +206,7 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
         )
       )
 
-  private def bridgeMatmul(matched: MatmulMatch): BridgedMatmul =
+  private def preparedMatmul(matched: MatmulMatch): PreparedMatMul =
     val mIdx = toIndex(matched.mDim)
     val kIdx = toIndex(matched.kDim)
     val nIdx = toIndex(matched.nDim)
@@ -205,7 +220,7 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
     val (lhsPrefix, lhsMemV) = DTensorDMemrefConversion.toMemrefValue(matched.mm.lhs, lhsMemTy)
     val (rhsPrefix, rhsMemV) = DTensorDMemrefConversion.toMemrefValue(matched.mm.rhs, rhsMemTy)
 
-    BridgedMatmul(
+    PreparedMatMul(
       matched = matched,
       lhsMemTy = lhsMemTy,
       rhsMemTy = rhsMemTy,
@@ -222,26 +237,26 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
     )
 
   private def planTiling(
-      bridged: BridgedMatmul,
+      preparedMM: PreparedMatMul,
       facts: NatDivisibilityFacts,
   ): MatmulTilingPlan =
     MatmulTilingPlan(
       mPlan = chooseAxisPlan(
-        bridged.matched.mDim,
-        bridged.mIdx.res,
-        bridged.idx1.result,
+        preparedMM.matched.mDim,
+        preparedMM.mIdx.res,
+        preparedMM.idx1.result,
         facts,
       ),
       nPlan = chooseAxisPlan(
-        bridged.matched.nDim,
-        bridged.nIdx.res,
-        bridged.idx1.result,
+        preparedMM.matched.nDim,
+        preparedMM.nIdx.res,
+        preparedMM.idx1.result,
         facts,
       ),
       kPlan = chooseAxisPlan(
-        bridged.matched.kDim,
-        bridged.kIdx.res,
-        bridged.idx1.result,
+        preparedMM.matched.kDim,
+        preparedMM.kIdx.res,
+        preparedMM.idx1.result,
         facts,
       ),
     )
@@ -268,22 +283,42 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
       "tile.k.value" -> IntegerAttr(IntData(plan.kPlan.chosenTile), I32)
     )
 
+  /*
+  allocate C
+
+  for ii over M tiles
+    for jj over N tiles
+      C_tile = subview(C, ii, jj)
+      zero C_tile
+
+      for kk over K tiles
+        A_tile = subview(A, ii, kk)
+        B_tile = subview(B, kk, jj)
+
+        for i inside tile
+          for j inside tile
+            for k inside tile
+              C_tile[i,j] += A_tile[i,k] * B_tile[k,j]
+
+  cast C back to dtensor
+  */
+
   private def emitTiledMatmul(
-      bridged: BridgedMatmul,
+      preparedMM: PreparedMatMul,
       plan: MatmulTilingPlan,
   ): (Seq[Operation], Value[Attribute]) =
-    val outAlloc = d_memref.Alloc(Result(bridged.outMemTy))
+    val outAlloc = d_memref.Alloc(Result(preparedMM.outMemTy))
     val c0 = i32Const(0)
 
-    val outerI = mkFor(bridged.idx0.result, plan.mPlan.loopUb, plan.mPlan.loopStep) { ii =>
+    val outerI = mkFor(preparedMM.idx0.result, plan.mPlan.loopUb, plan.mPlan.loopStep) { ii =>
       val iOff = plan.mPlan.mode match
         case AxisMode.TailFreeTiled   => ii
-        case AxisMode.UntiledFallback => bridged.idx0.result
+        case AxisMode.UntiledFallback => preparedMM.idx0.result
 
-      val outerJ = mkFor(bridged.idx0.result, plan.nPlan.loopUb, plan.nPlan.loopStep) { jj =>
+      val outerJ = mkFor(preparedMM.idx0.result, plan.nPlan.loopUb, plan.nPlan.loopStep) { jj =>
         val jOff = plan.nPlan.mode match
           case AxisMode.TailFreeTiled   => jj
-          case AxisMode.UntiledFallback => bridged.idx0.result
+          case AxisMode.UntiledFallback => preparedMM.idx0.result
 
         val cTile = mkSubview2D(
           outAlloc.res,
@@ -293,18 +328,18 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
           plan.nPlan.tileSizeNat,
           plan.mPlan.tileSizeIdx,
           plan.nPlan.tileSizeIdx,
-          bridged.idx1.result,
+          preparedMM.idx1.result,
           I32,
         )
 
         val initI = mkFor(
-          bridged.idx0.result,
+          preparedMM.idx0.result,
           plan.mPlan.tileSizeIdx,
           IntegerAttr(IntData(1), I32),
         ) { i =>
           Seq(
             mkFor(
-              bridged.idx0.result,
+              preparedMM.idx0.result,
               plan.nPlan.tileSizeIdx,
               IntegerAttr(IntData(1), I32),
             ) { j =>
@@ -319,48 +354,48 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
           )
         }
 
-        val outerK = mkFor(bridged.idx0.result, plan.kPlan.loopUb, plan.kPlan.loopStep) { kk =>
+        val outerK = mkFor(preparedMM.idx0.result, plan.kPlan.loopUb, plan.kPlan.loopStep) { kk =>
           val kOff = plan.kPlan.mode match
             case AxisMode.TailFreeTiled   => kk
-            case AxisMode.UntiledFallback => bridged.idx0.result
+            case AxisMode.UntiledFallback => preparedMM.idx0.result
 
           val aTile = mkSubview2D(
-            bridged.lhsMemV,
+            preparedMM.lhsMemV,
             iOff,
             kOff,
             plan.mPlan.tileSizeNat,
             plan.kPlan.tileSizeNat,
             plan.mPlan.tileSizeIdx,
             plan.kPlan.tileSizeIdx,
-            bridged.idx1.result,
+            preparedMM.idx1.result,
             I32,
           )
           val bTile = mkSubview2D(
-            bridged.rhsMemV,
+            preparedMM.rhsMemV,
             kOff,
             jOff,
             plan.kPlan.tileSizeNat,
             plan.nPlan.tileSizeNat,
             plan.kPlan.tileSizeIdx,
             plan.nPlan.tileSizeIdx,
-            bridged.idx1.result,
+            preparedMM.idx1.result,
             I32,
           )
 
           val compI = mkFor(
-            bridged.idx0.result,
+            preparedMM.idx0.result,
             plan.mPlan.tileSizeIdx,
             IntegerAttr(IntData(1), I32),
           ) { i =>
             Seq(
               mkFor(
-                bridged.idx0.result,
+                preparedMM.idx0.result,
                 plan.nPlan.tileSizeIdx,
                 IntegerAttr(IntData(1), I32),
               ) { j =>
                 Seq(
                   mkFor(
-                    bridged.idx0.result,
+                    preparedMM.idx0.result,
                     plan.kPlan.tileSizeIdx,
                     IntegerAttr(IntData(1), I32),
                   ) { k =>
@@ -403,19 +438,19 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
 
     val castBackBase = UnrealizedConversionCastOp(
       inputs = Seq(outAlloc.res),
-      outputs = Seq(Result(bridged.matched.resTy)),
+      outputs = Seq(Result(preparedMM.matched.resTy)),
     )
     attachTileAttrs(castBackBase, plan)
 
     val newOps: Seq[Operation] =
       Seq(
-        bridged.mIdx,
-        bridged.kIdx,
-        bridged.nIdx,
-        bridged.idx0,
-        bridged.idx1,
+        preparedMM.mIdx,
+        preparedMM.kIdx,
+        preparedMM.nIdx,
+        preparedMM.idx0,
+        preparedMM.idx1,
       ) ++
-        bridged.lhsPrefix ++ bridged.rhsPrefix ++
+        preparedMM.lhsPrefix ++ preparedMM.rhsPrefix ++
         plan.mPlan.prelude ++ plan.nPlan.prelude ++ plan.kPlan.prelude ++
         Seq(outAlloc, c0, outerI, castBackBase)
 
@@ -426,9 +461,9 @@ final class DTensorMatmulToTiledDMemref(ctx: MLContext) extends ModulePass(ctx):
       facts: NatDivisibilityFacts,
   ): Unit =
     matchSupported(mm).foreach { matched =>
-      val bridged = bridgeMatmul(matched)
-      val plan = planTiling(bridged, facts)
-      val (newOps, result) = emitTiledMatmul(bridged, plan)
+      val preparedMM = preparedMatmul(matched)
+      val plan = planTiling(preparedMM, facts)
+      val (newOps, result) = emitTiledMatmul(preparedMM, plan)
       RewriteMethods.replaceOp(mm, newOps, Some(Seq(result)))
     }
 

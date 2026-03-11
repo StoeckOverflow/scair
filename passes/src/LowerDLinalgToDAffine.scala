@@ -178,6 +178,23 @@ private val LowerMatmul = pattern {
     Seq(zero, mIdx, nIdx, kIdx, body)
 }
 
+/**
+ * Lowers structured `d_linalg` ops on `d_memref` buffers to explicit `d_affine`
+ * loop nests.
+ *
+ * This pass rewrites buffer-based `d_linalg.fill` into nested loops that store the
+ * fill value into every element, and rewrites buffer-based `d_linalg.matmul` into
+ * a triple loop nest that performs `load/load/load -> mul -> add -> store`.
+ *
+ * Rewrite shapes:
+ * `<d_linalg.fill %value, %out : !d.memref<...>>`
+ * `->`
+ * `<shape-to-index setup + nested d_affine.for + d_memref.store>`
+ *
+ * `<d_linalg.matmul %lhs, %rhs, %out : !d.memref<MxK>, !d.memref<KxN>, !d.memref<MxN>>`
+ * `->`
+ * `<shape-to-index setup + d_affine.for i/j/k + d_memref.load + arith.mul* + arith.add* + d_memref.store>`
+ */
 final class LowerDLinalgToDAffine(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "lower-d-linalg-to-d-affine"
 
