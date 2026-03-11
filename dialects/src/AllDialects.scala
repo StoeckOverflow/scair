@@ -6,6 +6,7 @@ import scair.dialects.builtin.BuiltinDialect
 import scair.dialects.cmath.cmath
 import scair.dialects.complex.Complex
 import scair.dialects.d_affine.dAffineDialect
+import scair.dialects.d_linalg.dLinalgDialect
 import scair.dialects.d_memref.dMemrefDialect
 import scair.dialects.func.FuncDialect
 import scair.dialects.irdl.IRDL
@@ -38,6 +39,7 @@ val allDialects: Seq[Dialect] =
     BuiltinDialect,
     Complex,
     dTensorDialect,
+    dLinalgDialect,
     MathDialect,
     Test,
     IRDL,
