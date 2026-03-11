@@ -40,7 +40,7 @@ private val NatMulFold = pattern { case NatMul(lhs, rhs, _) =>
     case _ => PatternAction.Abort
 }
 
-final class dTensorShapeCanonicalize(ctx: MLContext) extends WalkerPass(ctx):
+final class DTensorShapeCanonicalize(ctx: MLContext) extends WalkerPass(ctx):
   override val name = "tensor-shape-canonicalize"
 
   override val walker = PatternRewriteWalker(
