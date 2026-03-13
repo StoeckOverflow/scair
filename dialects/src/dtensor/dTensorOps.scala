@@ -41,6 +41,12 @@ final case class ShapeToIndex(
 ) extends DerivedOperation["dtensor.shape.to_index", ShapeToIndex]
     with NoMemoryEffect derives DerivedOperationCompanion
 
+final case class IndexToNat(
+    index: Operand[IndexType],
+    res: Result[dTensorNatType],
+) extends DerivedOperation["dtensor.index_to_nat", IndexToNat]
+    with NoMemoryEffect derives DerivedOperationCompanion
+
 final case class Empty(
     res: Result[dTensorTensorType]
 ) extends DerivedOperation["dtensor.empty", Empty]

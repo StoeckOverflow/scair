@@ -11,6 +11,7 @@ val dTensorDialect = summonDialect[
     NatAdd,
     NatMul,
     ShapeToIndex,
+    IndexToNat,
     Empty,
     Fill,
     Dim,

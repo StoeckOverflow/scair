@@ -58,6 +58,20 @@ object run_shape_to_index extends OpImpl[dTensor.ShapeToIndex]:
       case Seq(v: Int) => Some(v)
       case _           => throw new Exception("dtensor.shape.to_index expects a nat Int operand")
 
+object run_index_to_nat extends OpImpl[dTensor.IndexToNat]:
+
+  def compute(
+      op: dTensor.IndexToNat,
+      interpreter: Interpreter,
+      ctx: RuntimeCtx,
+      args: Seq[Any],
+  ): Option[Any] =
+    args match
+      case Seq(v: Int) if v >= 0 => Some(v)
+      case Seq(v: Int)           =>
+        throw new Exception(s"dtensor.index_to_nat expects non-negative index operand, got $v")
+      case _                     => throw new Exception("dtensor.index_to_nat expects an index Int operand")
+
 val InterpreterdTensorDialect: InterpreterDialect =
   Seq(
     run_nat_const,
@@ -65,4 +79,5 @@ val InterpreterdTensorDialect: InterpreterDialect =
     run_nat_add,
     run_nat_mul,
     run_shape_to_index,
+    run_index_to_nat,
   )

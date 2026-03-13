@@ -86,6 +86,21 @@ builtin.module {
 
 // -----
 
+// Valid: index_to_nat is an explicit bridge from runtime index to shape-domain nat.
+builtin.module {
+  %idx = "arith.constant"() <{value = 12 : index}> : () -> index
+  %nat = "dtensor.index_to_nat"(%idx) : (index) -> !dtensor.nat
+  %back = "dtensor.shape.to_index"(%nat) : (!dtensor.nat) -> index
+}
+
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "arith.constant"() <{value = 12 : index}> : () -> index
+// VERIFY:   %1 = "dtensor.index_to_nat"(%0) : (index) -> !dtensor.nat
+// VERIFY:   %2 = "dtensor.shape.to_index"(%1) : (!dtensor.nat) -> index
+// VERIFY: }
+
+// -----
+
 // Invalid dtensor dim sort: i32 and f32 are not !dtensor.nat dims.
 builtin.module {
   %i = "arith.constant"() <{value = 4 : i32}> : () -> i32
