@@ -2,18 +2,27 @@ package scair.passes
 
 import scair.MLContext
 import scair.passes.benchmark_constant_folding.BenchmarkConstantFolding
+import scair.passes.canonicalize_dependent_layouts.CanonicalizeDependentLayouts
 import scair.passes.canonicalization.Canonicalize
 import scair.passes.cdt.DummyPass
 import scair.passes.cdt.TestInsertionPass
 import scair.passes.cdt.TestReplacementPass
 import scair.passes.d_affine_to_scf.DAffineToSCF
 import scair.passes.cse.CommonSubexpressionElimination
+import scair.passes.convert_refined_arith_to_llvm.ConvertRefinedArithToLLVM
 import scair.passes.d_affine_min_simplify.DAffineMinSimplify
 import scair.passes.dce.DeadCodeElimination
 import scair.passes.d_linalg_to_d_affine.LowerDLinalgToDAffine
 import scair.passes.d_linalg_to_dmemref.BufferizeDLinalgToDMemref
 import scair.passes.d_memref_bounds.DMemrefBoundsCheck
 import scair.passes.dtensor_matmul_to_tiled_dmemref.DTensorMatmulToTiledDMemref
+import scair.passes.expand_refined_strided_metadata.ExpandRefinedStridedMetadata
+import scair.passes.finalize_refined_dmemref_to_llvm.FinalizeRefinedDMemrefToLLVM
+import scair.passes.lower_refined_control_flow_to_llvm.LowerRefinedControlFlowToLLVM
+import scair.passes.lower_refined_dmemref_to_llvm.LowerRefinedDMemrefToLLVM
+import scair.passes.lower_refined_dmemref_to_llvm.LowerRefinedDMemrefToLLVMPipeline
+import scair.passes.lower_refined_dmemref_to_llvm.NormalizeRefinedDMemref
+import scair.passes.refine_memref_layout_types.RefineMemrefLayoutTypes
 import scair.passes.reconcile.ReconcileUnrealizedCasts
 import scair.passes.dtensor_to_d_linalg.LowerDTensorToDLinalg
 import scair.passes.dtensor_shape_canonicalize.DTensorShapeCanonicalize
@@ -42,9 +51,18 @@ val allPasses: Seq[MLContext => ModulePass] =
     DTensorShapeCanonicalize(_),
     CommonSubexpressionElimination(_),
     DeadCodeElimination(_),
+    RefineMemrefLayoutTypes(_),
+    CanonicalizeDependentLayouts(_),
+    NormalizeRefinedDMemref(_),
     LowerDTensorToDLinalg(_),
     BufferizeDLinalgToDMemref(_),
     LowerDLinalgToDAffine(_),
+    LowerRefinedControlFlowToLLVM(_),
+    ConvertRefinedArithToLLVM(_),
+    ExpandRefinedStridedMetadata(_),
+    FinalizeRefinedDMemrefToLLVM(_),
+    LowerRefinedDMemrefToLLVMPipeline(_),
+    LowerRefinedDMemrefToLLVM(_),
     DAffineMinSimplify(_),
     DAffineToSCF(_),
     DMemrefBoundsCheck(_),
