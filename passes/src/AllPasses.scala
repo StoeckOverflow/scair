@@ -19,7 +19,6 @@ import scair.passes.dtensor_matmul_to_tiled_dmemref.DTensorMatmulToTiledDMemref
 import scair.passes.expand_refined_strided_metadata.ExpandRefinedStridedMetadata
 import scair.passes.finalize_refined_dmemref_to_llvm.FinalizeRefinedDMemrefToLLVM
 import scair.passes.lower_refined_control_flow_to_llvm.LowerRefinedControlFlowToLLVM
-import scair.passes.lower_refined_dmemref_to_llvm.LowerRefinedDMemrefToLLVM
 import scair.passes.lower_refined_dmemref_to_llvm.LowerRefinedDMemrefToLLVMPipeline
 import scair.passes.lower_refined_dmemref_to_llvm.NormalizeRefinedDMemref
 import scair.passes.refine_memref_layout_types.RefineMemrefLayoutTypes
@@ -62,7 +61,6 @@ val allPasses: Seq[MLContext => ModulePass] =
     ExpandRefinedStridedMetadata(_),
     FinalizeRefinedDMemrefToLLVM(_),
     LowerRefinedDMemrefToLLVMPipeline(_),
-    LowerRefinedDMemrefToLLVM(_),
     DAffineMinSimplify(_),
     DAffineToSCF(_),
     DMemrefBoundsCheck(_),

@@ -30,9 +30,3 @@ final class LowerRefinedDMemrefToLLVMPipeline(ctx: MLContext) extends ModulePass
   )
   override def transform(op: Operation): Operation =
     passes.foldLeft(op)((cur, pass) => pass.transform(cur))
-
-final class LowerRefinedDMemrefToLLVM(ctx: MLContext) extends ModulePass(ctx):
-  override val name: String = "lower-refined-dmemref-to-llvm"
-  private val pipeline = LowerRefinedDMemrefToLLVMPipeline(ctx)
-  override def transform(op: Operation): Operation =
-    pipeline.transform(op)

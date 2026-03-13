@@ -1,4 +1,3 @@
-// RUN: scair-opt %s -p lower-refined-dmemref-to-llvm | filecheck %s -dump-input=always
 // RUN: scair-opt %s -p lower-refined-dmemref-to-llvm-pipeline | filecheck %s -dump-input=always
 
 builtin.module {
