@@ -12,6 +12,7 @@ import scair.parse.given
 import scair.utils.*
 
 type DimParam = ValueAttribute
+type LayoutParam = ValueAttribute | IntegerAttr
 
 sealed trait dMemrefType extends ParametrizedAttribute, TypeAttribute
 
@@ -25,6 +26,53 @@ object dMemrefTypeUtil:
 
   def elemOK(elem: TypeAttribute): Boolean = dTensorTypeUtil.elemOK(elem)
 
+  def renderLayoutParam(param: LayoutParam): String =
+    param match
+      case v: ValueAttribute => renderAttr(v)
+      case i: IntegerAttr    => renderAttr(i)
+
+  def printLayoutParam(p: Printer, param: LayoutParam): Unit =
+    param match
+      case v: ValueAttribute => p.print(v)
+      case i: IntegerAttr    => p.print(i)
+
+  def layoutParamAttribute(param: LayoutParam): Attribute =
+    param match
+      case v: ValueAttribute => v
+      case i: IntegerAttr    => i
+
+  def checkLayoutParam(param: LayoutParam): OK[Unit] =
+    param match
+      case v: ValueAttribute =>
+        v.getVal().typ match
+          case _: IndexType      => OK(())
+          case _: dTensorNatType => dTensorTypeUtil.resolveNatValue(v.getVal()).map(_ => ())
+          case ValueRefType(ref) => checkLayoutParam(ValueAttribute(ref.getVal()))
+      case IntegerAttr(_, _: IndexType)   => OK(())
+      case IntegerAttr(_, _: IntegerType) => OK(())
+
+  def sameLayoutParam(lhs: LayoutParam, rhs: LayoutParam): Boolean =
+    (lhs, rhs) match
+      case (l: ValueAttribute, r: ValueAttribute) =>
+        l.getVal() eq r.getVal()
+      case (l: IntegerAttr, r: IntegerAttr) =>
+        l == r
+      case _ => false
+
+  def sameLayout(
+      lhsOffset: Option[LayoutParam],
+      lhsStrides: Option[Seq[LayoutParam]],
+      rhsOffset: Option[LayoutParam],
+      rhsStrides: Option[Seq[LayoutParam]],
+  ): Boolean =
+    (lhsOffset, lhsStrides, rhsOffset, rhsStrides) match
+      case (None, None, None, None) => true
+      case (Some(lo), Some(ls), Some(ro), Some(rs)) =>
+        sameLayoutParam(lo, ro) &&
+        ls.size == rs.size &&
+        ls.zip(rs).forall((l, r) => sameLayoutParam(l, r))
+      case _ => false
+
   def asMemref(t: dMemrefType): dMemrefMemrefType =
     t match
       case dMemrefVectorType(param, elem) =>
@@ -36,6 +84,13 @@ object dMemrefTypeUtil:
 
   def sameDims(lhs: Seq[ValueAttribute], rhs: Seq[ValueAttribute]): Boolean =
     dTensorTypeUtil.sameDims(lhs, rhs)
+
+private def parseLayoutParam[$: P](using Parser): P[LayoutParam] =
+  P(
+    ValueAttributeP.map(v => v: LayoutParam) |
+      attrOfP[IntegerAttr].map(i => i: LayoutParam) |
+      decimalLiteralP.map(v => IntegerAttr(IntData(v), IndexType()): LayoutParam)
+  )
 
 final case class dMemrefVectorType(param: DimParam, elem: TypeAttribute)
     extends dMemrefType:
@@ -90,15 +145,30 @@ given AttributeCompanion[dMemrefMatrixType]:
 final case class dMemrefMemrefType(
     params: Seq[ValueAttribute],
     elem: TypeAttribute,
+    offset: Option[LayoutParam] = None,
+    strides: Option[Seq[LayoutParam]] = None,
 ) extends dMemrefType:
   override def name: String = "d_memref.memref"
 
-  override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(params, elem)
+  override def parameters: Seq[Attribute | Seq[Attribute]] =
+    Seq(params, elem) ++
+      offset.map(dMemrefTypeUtil.layoutParamAttribute) ++
+      strides.toSeq.map(_.map(dMemrefTypeUtil.layoutParamAttribute))
 
   override def printParameters(p: Printer): Unit =
+    given indentLevel: Int = 0
     p.print("<[")
     p.printListF(params, p.print, sep = ", ")
-    p.print("], ", elem, ">")(using indentLevel = 0)
+    p.print("], ", elem)
+    (offset, strides) match
+      case (Some(off), Some(ss)) =>
+        p.print(", offset: ")
+        dMemrefTypeUtil.printLayoutParam(p, off)
+        p.print(", strides: [")
+        p.printListF(ss, s => dMemrefTypeUtil.printLayoutParam(p, s), sep = ", ")
+        p.print("]")
+      case _ => ()
+    p.print(">")
 
   override def customVerify(): OK[Unit] =
     params.foldLeft[OK[Unit]](OK(()))((acc, p) =>
@@ -109,16 +179,43 @@ final case class dMemrefMemrefType(
         Err(
           s"invalid d_memref element type `${dMemrefTypeUtil.renderAttr(elem)}`"
         )
+    ).flatMap(_ =>
+      (offset, strides) match
+        case (None, None) => OK(())
+        case (Some(off), Some(ss)) =>
+          if ss.size != params.size then
+            Err(
+              s"d_memref.memref: expected ${params.size} strides for rank ${params.size}, got ${ss.size}"
+            )
+          else
+            dMemrefTypeUtil.checkLayoutParam(off).flatMap(_ =>
+              ss.foldLeft[OK[Unit]](OK(()))((acc, s) =>
+                acc.flatMap(_ => dMemrefTypeUtil.checkLayoutParam(s))
+              )
+            )
+        case _ =>
+          Err("d_memref.memref: offset and strides must be specified together")
     )
 
 given AttributeCompanion[dMemrefMemrefType]:
   override def name: String = "d_memref.memref"
 
   override def parse[$: P](using Parser): P[dMemrefMemrefType] =
-    P("<" ~ "[" ~ ValueAttributeP.rep(sep = ",") ~ "]" ~ "," ~ typeP ~ ">")
-      .map((params, elem) =>
-        dMemrefMemrefType(params, elem.asInstanceOf[TypeAttribute])
+    P(
+      "<" ~ "[" ~ ValueAttributeP.rep(sep = ",") ~ "]" ~ "," ~ typeP ~
+        ("," ~ "offset:" ~ parseLayoutParam ~ "," ~ "strides:" ~ "[" ~
+          parseLayoutParam.rep(sep = ",") ~ "]").? ~ ">"
+    ).map((params, elem, layoutOpt) =>
+      val (offset, strides) = layoutOpt match
+        case Some((off, ss)) => (Some(off), Some(ss))
+        case None            => (None, None)
+      dMemrefMemrefType(
+        params,
+        elem.asInstanceOf[TypeAttribute],
+        offset,
+        strides,
       )
+    )
 
 private def parseIndexOperands[$: P](names: Seq[String])(using
     p: Parser
@@ -348,6 +445,13 @@ final case class Cast(
       )
     else if !dMemrefTypeUtil.sameDims(src.typ.params, res.typ.params) then
       Err("d_memref.cast: expected pairwise SSA-identical dims")
+    else if !dMemrefTypeUtil.sameLayout(
+        src.typ.offset,
+        src.typ.strides,
+        res.typ.offset,
+        res.typ.strides,
+      )
+    then Err("d_memref.cast: expected identical layout metadata")
     else OK(this)
 
   override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
@@ -372,17 +476,6 @@ final case class Subview(
 ) extends DerivedOperation["d_memref.subview", Subview]
     derives DerivedOperationCompanion:
 
-  private def isUnitStride(v: Value[Attribute]): Boolean =
-    v.owner match
-      case Some(
-            arith.Constant(
-              IntegerAttr(IntData(1), _),
-              _,
-            )
-          ) =>
-        true
-      case _ => false
-
   private def sameDimAsSizeOperand(
       dim: ValueAttribute,
       size: Operand[IndexType],
@@ -391,7 +484,13 @@ final case class Subview(
     val sizeNat = dTensorTypeUtil.resolveNatFromIndexValue(size)
     (dimNat, sizeNat) match
       case (OK(d), OK(s)) => d eq s
-      case _              => false
+      case _              =>
+        (dim.getVal().owner, size.owner) match
+          case (
+                Some(NatConst(IntegerAttr(IntData(d), _), _)),
+                Some(arith.Constant(IntegerAttr(IntData(s), _: IndexType), _)),
+              ) => d == s
+          case _ => false
 
   private def firstSizeProvenanceMismatch: Option[Int] =
     res.typ.params.zip(sizes).zipWithIndex.collectFirst {
@@ -413,8 +512,6 @@ final case class Subview(
       Err(
         s"d_memref.subview: expected equal element types, got ${src.typ.elem} and ${res.typ.elem}"
       )
-    else if !strides.forall(isUnitStride) then
-      Err("d_memref.subview: only unit strides are supported in this version")
     else
       firstSizeProvenanceMismatch match
         case Some(axis) =>
@@ -453,7 +550,87 @@ given OperationCustomParser[Subview]:
       )
     )
 
+final case class ReinterpretCast(
+    src: Operand[dMemrefMemrefType],
+    offset: Operand[IndexType],
+    sizes: Seq[Operand[IndexType]],
+    strides: Seq[Operand[IndexType]],
+    res: Result[dMemrefMemrefType],
+) extends DerivedOperation["d_memref.reinterpret_cast", ReinterpretCast]
+    derives DerivedOperationCompanion:
+
+  private def sameDimAsSizeOperand(
+      dim: ValueAttribute,
+      size: Operand[IndexType],
+  ): Boolean =
+    val dimNat = dTensorTypeUtil.resolveNatValue(dim.getVal())
+    val sizeNat = dTensorTypeUtil.resolveNatFromIndexValue(size)
+    (dimNat, sizeNat) match
+      case (OK(d), OK(s)) => d eq s
+      case _              =>
+        (dim.getVal().owner, size.owner) match
+          case (
+                Some(NatConst(IntegerAttr(IntData(d), _), _)),
+                Some(arith.Constant(IntegerAttr(IntData(s), _: IndexType), _)),
+              ) => d == s
+          case _ => false
+
+  private def firstSizeProvenanceMismatch: Option[Int] =
+    res.typ.params.zip(sizes).zipWithIndex.collectFirst {
+      case ((d, s), axis) if !sameDimAsSizeOperand(d, s) => axis
+    }
+
+  override def customVerify(): OK[Operation] =
+    val resRank = res.typ.params.size
+    if sizes.size != resRank then
+      Err(s"d_memref.reinterpret_cast: expected $resRank sizes, got ${sizes.size}")
+    else if strides.size != resRank then
+      Err(s"d_memref.reinterpret_cast: expected $resRank strides, got ${strides.size}")
+    else if src.typ.elem != res.typ.elem then
+      Err(
+        s"d_memref.reinterpret_cast: expected equal element types, got ${src.typ.elem} and ${res.typ.elem}"
+      )
+    else
+      firstSizeProvenanceMismatch match
+        case Some(axis) =>
+          Err(
+            s"d_memref.reinterpret_cast: size provenance mismatch at axis $axis; expected result dim to match size operand via dtensor.shape.to_index"
+          )
+        case None => OK(this)
+
+  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+    printer.print(name, " ", src, " to\n")
+    printer.print(printer.indent * (indentLevel + 1), "offset: [", offset, "],\n")
+    printer.print(printer.indent * (indentLevel + 1), "sizes: [")
+    printer.printList(sizes)
+    printer.print("],\n")
+    printer.print(printer.indent * (indentLevel + 1), "strides: [")
+    printer.printList(strides)
+    printer.print("]\n")
+    printer.print(printer.indent * indentLevel, ": ", src.typ, " to ", res.typ)
+
+given OperationCustomParser[ReinterpretCast]:
+  def parse[$: P](resNames: Seq[String])(using Parser): P[ReinterpretCast] =
+    P(
+      operandNameP ~ "to" ~ "offset:" ~ "[" ~ operandNameP ~ "]" ~ "," ~
+        "sizes:" ~ "[" ~ operandNameP.rep(sep = ",") ~ "]" ~ "," ~
+        "strides:" ~ "[" ~ operandNameP.rep(sep = ",") ~ "]" ~ ":" ~
+        typeOfP[dMemrefMemrefType] ~ "to" ~ typeOfP[dMemrefMemrefType]
+    ).flatMap((srcName, offName, sizeNames, strideNames, srcTyp, resTyp) =>
+      operandP(srcName, srcTyp).flatMap(src =>
+        operandP(offName, IndexType()).flatMap(offset =>
+          parseIndexOperands(sizeNames).flatMap(sizes =>
+            parseIndexOperands(strideNames).flatMap(strides =>
+              resultP(resNames.head, resTyp).map(res =>
+                ReinterpretCast(src, offset, sizes, strides, res)
+              )
+            )
+          )
+        )
+      )
+    )
+
 val dMemrefDialect = summonDialect[
   (dMemrefVectorType, dMemrefMatrixType, dMemrefMemrefType),
-  (Alloc, Dealloc, Dim, DimExact, Load, Store, Cast, Subview),
+  (Alloc, Dealloc, Dim, DimExact, Load, Store, Cast, Subview, ReinterpretCast),
 ]

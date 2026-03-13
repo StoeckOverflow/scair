@@ -117,12 +117,31 @@ object run_d_subview extends OpImpl[d_memref.Subview]:
         val offsets = all.take(rank)
         val sizes = all.drop(rank).take(rank)
         val strides = all.drop(2 * rank).take(rank)
-        if !strides.forall(_ == 1) then
-          throw new Exception("d_memref.subview only supports unit strides")
-        Some(src.subview(offsets, sizes))
+        Some(src.subview(offsets, sizes, strides))
       case _ =>
         throw new Exception(
           "d_memref.subview expects (ShapedArray, offsets..., sizes..., strides...)"
+        )
+
+object run_d_reinterpret_cast extends OpImpl[d_memref.ReinterpretCast]:
+
+  def compute(
+      op: d_memref.ReinterpretCast,
+      interpreter: Interpreter,
+      ctx: RuntimeCtx,
+      args: Seq[Any],
+  ): Option[Any] =
+    args match
+      case Seq(src: ShapedArray, offsetAny, rest*) =>
+        val rank = op.res.typ.params.size
+        val offset = asInt(offsetAny, "d_memref.reinterpret_cast offset")
+        val all = rest.map(asInt(_, "d_memref.reinterpret_cast operand"))
+        val sizes = all.take(rank)
+        val strides = all.drop(rank).take(rank)
+        Some(src.reinterpret(offset, sizes, strides))
+      case _ =>
+        throw new Exception(
+          "d_memref.reinterpret_cast expects (ShapedArray, offset, sizes..., strides...)"
         )
 
 val InterpreterdMemrefDialect: InterpreterDialect =
@@ -135,4 +154,5 @@ val InterpreterdMemrefDialect: InterpreterDialect =
     run_d_dim_exact,
     run_d_cast,
     run_d_subview,
+    run_d_reinterpret_cast,
   )
