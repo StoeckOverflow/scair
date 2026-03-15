@@ -280,6 +280,29 @@ sealed trait MemrefType
       TypeAttribute,
       ContainerType
 
+final case class StridedLayoutAttr(
+    offset: IntData,
+    strides: ArrayAttribute[IntData],
+) extends ParametrizedAttribute:
+  override def name: String = "builtin.strided_layout"
+
+  override def parameters: Seq[Attribute | Seq[Attribute]] =
+    Seq(offset, strides)
+
+  override def customPrint(p: Printer): Unit =
+    given indentLevel: Int = 0
+    p.print("strided<[")
+    p.printListF(
+      strides.attrValues,
+      stride =>
+        if stride == IntData(-1) then p.print("?")
+        else p.print(stride),
+      sep = ", ",
+    )
+    p.print("], offset: ")
+    if offset == IntData(-1) then p.print("?") else p.print(offset)
+    p.print(">")
+
 final case class RankedMemrefType(
     elementType: Attribute,
     shape: ArrayAttribute[IntData],
@@ -303,8 +326,9 @@ final case class RankedMemrefType(
         case d           => p.print(d)
       p.print("x")
     )
-
-    p.print(elementType, ">")(using indentLevel = 0)
+    p.print(elementType)
+    if encoding.isDefined then p.print(", ", encoding.get)(using indentLevel = 0)
+    p.print(">")
 
 final case class UnrankedMemrefType(elementType: Attribute)
     extends DerivedAttribute["builtin.unranked_memref", UnrankedMemrefType]

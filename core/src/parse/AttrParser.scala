@@ -323,17 +323,28 @@ def memrefTypeP[$: P](using Parser): P[MemrefType] = P(
 )
 
 def rankedMemrefTypeP[$: P](using Parser): P[MemrefType] = P(
-  dimensionListP ~ typeP
-).map((x: (ArrayAttribute[IntData], Attribute)) =>
+  dimensionListP ~ typeP ~ ("," ~ stridedLayoutAttrP).?
+).map((x: (ArrayAttribute[IntData], Attribute, Option[StridedLayoutAttr])) =>
   RankedMemrefType(
     shape = x._1,
     elementType = x._2,
+    encoding = x._3,
   )
 )
 
 def unrankedMemrefTypeP[$: P](using Parser): P[UnrankedMemrefType] =
   P("*" ~ "x" ~ typeP)
     .map((x: Attribute) => UnrankedMemrefType(elementType = x))
+
+private def stridedLayoutSlotP[$: P]: P[IntData] =
+  P("?".map(_ => IntData(-1)) | decimalLiteralP.map(IntData(_)))
+
+def stridedLayoutAttrP[$: P](using Parser): P[StridedLayoutAttr] = P(
+  "strided" ~ "<" ~ "[" ~ stridedLayoutSlotP.rep(sep = ",") ~ "]" ~ "," ~
+    "offset:" ~ stridedLayoutSlotP ~ ">"
+).map((strides, offset) =>
+  StridedLayoutAttr(offset, ArrayAttribute(strides))
+)
 
 def vectorDimensionListP[$: P](using Parser) =
   P(
