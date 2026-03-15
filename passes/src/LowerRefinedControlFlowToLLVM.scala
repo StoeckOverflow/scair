@@ -75,6 +75,10 @@ private final class Builder(val funcOp: func.Func):
   private def deepCopyOp(op: Operation): Operation =
     op.deepCopy(using blockMap, valueMap)
 
+  private def entryArgCaptures(ops: Seq[Operation]): Seq[Value[Attribute]] =
+    val entryArgs = funcOp.body.blocks.head.arguments.toSet
+    ops.flatMap(_.operands.map(_.asInstanceOf[Value[Attribute]])).filter(entryArgs.contains).distinct
+
   private def lowerSimpleOp(op: Operation): Unit =
     op match
       case nested: d_affine.For =>
@@ -88,12 +92,15 @@ private final class Builder(val funcOp: func.Func):
     if op.inits.size != 1 || op.res.size != 1 || op.body.blocks.size != 1 then false
     else
       op.body.blocks.head.operations.toSeq match
-        case Seq(_: d_affine.For, _: d_affine.Yield) => true
-        case _                                       => false
+        case ops if ops.size >= 2 =>
+          ops.last.isInstanceOf[d_affine.Yield] && ops(ops.size - 2).isInstanceOf[d_affine.For]
+        case _ => false
 
   private def lowerNestedFor(op: d_affine.For): Option[Value[Attribute]] =
     val outerBody = op.body.blocks.head
-    val inner = outerBody.operations.head.asInstanceOf[d_affine.For]
+    val outerOps = outerBody.operations.toSeq
+    val prefixOps = outerOps.dropRight(2)
+    val inner = outerOps(outerOps.size - 2).asInstanceOf[d_affine.For]
     val innerBody = inner.body.blocks.head
     for
       outerLb <- lowerBound(op.lowerBoundOperands, op.lowerBoundMap)
@@ -102,29 +109,41 @@ private final class Builder(val funcOp: func.Func):
       innerLb <- lowerBound(inner.lowerBoundOperands, inner.lowerBoundMap)
       innerUb <- lowerBound(inner.upperBoundOperands, inner.upperBoundMap)
     yield
-      val outerHeader = Block(Seq(IndexType(), init.typ), Seq.empty)
+      val captures = entryArgCaptures(prefixOps ++ innerBody.operations.toSeq)
+      val outerHeader = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
       appendBlock(outerHeader)
-      val outerBodyEntry = Block(Seq(IndexType(), init.typ), Seq.empty)
+      val outerBodyEntry = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
       appendBlock(outerBodyEntry)
-      val innerHeader = Block(Seq(IndexType(), IndexType(), init.typ), Seq.empty)
+      val prefixResultTypes = prefixOps.flatMap(_.results.map(_.typ))
+      val innerHeader =
+        Block(Seq(IndexType(), IndexType(), init.typ) ++ prefixResultTypes ++ captures.map(_.typ), Seq.empty)
       appendBlock(innerHeader)
-      val innerBodyEntry = Block(Seq(IndexType(), IndexType(), init.typ), Seq.empty)
+      val innerBodyEntry =
+        Block(Seq(IndexType(), IndexType(), init.typ) ++ prefixResultTypes ++ captures.map(_.typ), Seq.empty)
       appendBlock(innerBodyEntry)
-      val outerLatch = Block(Seq(IndexType(), init.typ), Seq.empty)
+      val outerLatch = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
       appendBlock(outerLatch)
       val exit = Block(Seq(init.typ), Seq.empty)
       appendBlock(exit)
 
-      emit(llvm.Br(Seq(asIndex(outerLb), init.asInstanceOf[Operand[Attribute]]), outerHeader))
+      emit(
+        llvm.Br(
+          Seq(asIndex(outerLb), init.asInstanceOf[Operand[Attribute]]) ++
+            captures.map(remap(_).asInstanceOf[Operand[Attribute]]),
+          outerHeader,
+        )
+      )
 
       val outerIv = outerHeader.arguments.head
       val outerAcc = outerHeader.arguments(1)
+      val outerHeaderCaptures = outerHeader.arguments.drop(2)
       val outerCmp = llvm.ICmp(asIndex(outerIv), asIndex(outerUb), StringData("slt"), Result(I1))
       outerHeader.addOp(outerCmp)
       outerHeader.addOp(
         llvm.CondBr(
           asI1(outerCmp.res),
-          Seq(outerIv.asInstanceOf[Operand[Attribute]], outerAcc.asInstanceOf[Operand[Attribute]]),
+          Seq(outerIv.asInstanceOf[Operand[Attribute]], outerAcc.asInstanceOf[Operand[Attribute]]) ++
+            outerHeaderCaptures.map(_.asInstanceOf[Operand[Attribute]]),
           Seq(outerAcc.asInstanceOf[Operand[Attribute]]),
           outerBodyEntry,
           exit,
@@ -133,13 +152,24 @@ private final class Builder(val funcOp: func.Func):
 
       val outerBodyIv = outerBodyEntry.arguments.head
       val outerBodyAcc = outerBodyEntry.arguments(1)
+      val outerBodyCaptures = outerBodyEntry.arguments.drop(2)
+      current = outerBodyEntry
+      val savedOuter = mutable.Map.from(valueMap)
+      valueMap.addAll(
+        Seq(outerBody.arguments.head -> outerBodyIv, outerBody.arguments(1) -> outerBodyAcc) ++
+          captures.zip(outerBodyCaptures)
+      )
+      prefixOps.foreach(lowerSimpleOp)
+      val prefixValues = prefixOps.flatMap(_.results.map(r => remap(r)))
+      valueMap.clear(); valueMap.addAll(savedOuter)
       outerBodyEntry.addOp(
         llvm.Br(
           Seq(
             outerBodyIv.asInstanceOf[Operand[Attribute]],
             asIndex(innerLb),
             outerBodyAcc.asInstanceOf[Operand[Attribute]],
-          ),
+          ) ++ prefixValues.map(_.asInstanceOf[Operand[Attribute]]) ++
+            outerBodyCaptures.map(_.asInstanceOf[Operand[Attribute]]),
           innerHeader,
         )
       )
@@ -147,6 +177,8 @@ private final class Builder(val funcOp: func.Func):
       val innerOuterIv = innerHeader.arguments.head
       val innerIv = innerHeader.arguments(1)
       val innerAcc = innerHeader.arguments(2)
+      val innerPrefixExtras = innerHeader.arguments.drop(3).take(prefixResultTypes.size)
+      val innerCaptures = innerHeader.arguments.drop(3 + prefixResultTypes.size)
       val innerCmp = llvm.ICmp(asIndex(innerIv), asIndex(innerUb), StringData("slt"), Result(I1))
       innerHeader.addOp(innerCmp)
       innerHeader.addOp(
@@ -156,11 +188,12 @@ private final class Builder(val funcOp: func.Func):
             innerOuterIv.asInstanceOf[Operand[Attribute]],
             innerIv.asInstanceOf[Operand[Attribute]],
             innerAcc.asInstanceOf[Operand[Attribute]],
-          ),
+          ) ++ innerPrefixExtras.map(_.asInstanceOf[Operand[Attribute]]) ++
+            innerCaptures.map(_.asInstanceOf[Operand[Attribute]]),
           Seq(
             innerOuterIv.asInstanceOf[Operand[Attribute]],
             innerAcc.asInstanceOf[Operand[Attribute]],
-          ),
+          ) ++ innerCaptures.map(_.asInstanceOf[Operand[Attribute]]),
           innerBodyEntry,
           outerLatch,
         )
@@ -174,7 +207,8 @@ private final class Builder(val funcOp: func.Func):
           op.body.blocks.head.arguments(1) -> outerBodyAcc,
           innerBody.arguments.head -> innerBodyEntry.arguments(1),
           innerBody.arguments(1) -> innerBodyEntry.arguments(2),
-        )
+        ) ++ prefixOps.flatMap(_.results).zip(innerBodyEntry.arguments.drop(3).take(prefixResultTypes.size)) ++
+          captures.zip(innerBodyEntry.arguments.drop(3 + prefixResultTypes.size))
       )
       var yielded: Option[Value[Attribute]] = None
       innerBody.operations.foreach {
@@ -197,13 +231,14 @@ private final class Builder(val funcOp: func.Func):
               innerBodyEntry.arguments.head.asInstanceOf[Operand[Attribute]],
               nextIv.res.asInstanceOf[Operand[Attribute]],
               y.asInstanceOf[Operand[Attribute]],
-            ),
+            ) ++ innerBodyEntry.arguments.drop(3).map(_.asInstanceOf[Operand[Attribute]]),
             innerHeader,
           )
         )
       }
 
       current = outerLatch
+      val outerLatchCaptures = outerLatch.arguments.drop(2)
       val outerStep = emitIndexConstant(op.step.value.value)
       val nextOuter = llvm.Add(
         asIndex(outerLatch.arguments.head),
@@ -214,7 +249,8 @@ private final class Builder(val funcOp: func.Func):
       emit(nextOuter)
       emit(
         llvm.Br(
-          Seq(nextOuter.res.asInstanceOf[Operand[Attribute]], outerLatch.arguments(1).asInstanceOf[Operand[Attribute]]),
+          Seq(nextOuter.res.asInstanceOf[Operand[Attribute]], outerLatch.arguments(1).asInstanceOf[Operand[Attribute]]) ++
+            outerLatchCaptures.map(_.asInstanceOf[Operand[Attribute]]),
           outerHeader,
         )
       )
