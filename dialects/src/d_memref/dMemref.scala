@@ -6,6 +6,7 @@ import scair.clair.macros.*
 import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.dTensor.*
+import scair.dialects.llvm
 import scair.ir.*
 import scair.parse.*
 import scair.parse.given
@@ -392,6 +393,132 @@ given OperationCustomParser[Load]:
       )
     )
 
+final case class LinearizedLoad(
+    memref: Operand[dMemrefMemrefType],
+    linearIndex: Operand[IndexType],
+    res: Result[TypeAttribute],
+) extends DerivedOperation["d_memref.linearized_load", LinearizedLoad]
+    derives DerivedOperationCompanion:
+
+  override def customVerify(): OK[Operation] =
+    if memref.typ.params.isEmpty then
+      Err("d_memref.linearized_load: expected ranked memref")
+    else if res.typ != memref.typ.elem then
+      Err(
+        s"d_memref.linearized_load: expected result type ${memref.typ.elem}, got ${res.typ}"
+      )
+    else OK(this)
+
+  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+    printer.print(name, " ", memref, "[", linearIndex, "] : ", memref.typ, " -> ", res.typ)
+
+given OperationCustomParser[LinearizedLoad]:
+  def parse[$: P](resNames: Seq[String])(using Parser): P[LinearizedLoad] =
+    P(
+      operandNameP ~ "[" ~ operandNameP ~ "]" ~ ":" ~
+        typeOfP[dMemrefMemrefType] ~ "->" ~ typeP
+    ).flatMap((mName, idxName, mTyp, rTyp) =>
+      operandP(mName, mTyp).flatMap(m =>
+        operandP(idxName, IndexType()).flatMap(idx =>
+          resultP(resNames.head, rTyp.asInstanceOf[TypeAttribute]).map(r =>
+            LinearizedLoad(m, idx, r)
+          )
+        )
+      )
+    )
+
+final case class BasePtr(
+    memref: Operand[dMemrefMemrefType],
+    res: Result[llvm.Ptr],
+) extends DerivedOperation["d_memref.base_ptr", BasePtr]
+    with NoMemoryEffect derives DerivedOperationCompanion:
+
+  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+    printer.print(name, " ", memref, " : ", memref.typ, " -> ", res.typ)
+
+given OperationCustomParser[BasePtr]:
+  def parse[$: P](resNames: Seq[String])(using Parser): P[BasePtr] =
+    P(
+      operandNameP ~ ":" ~ typeOfP[dMemrefMemrefType] ~ "->" ~ typeOfP[llvm.Ptr]
+    ).flatMap((mName, mTyp, rTyp) =>
+      operandP(mName, mTyp).flatMap(m =>
+        resultP(resNames.head, rTyp).map(r => BasePtr(m, r))
+      )
+    )
+
+final case class LinearizedLoadFromBase(
+    base: Operand[llvm.Ptr],
+    linearIndex: Operand[IndexType],
+    res: Result[TypeAttribute],
+) extends DerivedOperation["d_memref.linearized_load_from_base", LinearizedLoadFromBase]
+    derives DerivedOperationCompanion:
+
+  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+    printer.print(name, " ", base, "[", linearIndex, "] : ", base.typ, " -> ", res.typ)
+
+given OperationCustomParser[LinearizedLoadFromBase]:
+  def parse[$: P](resNames: Seq[String])(using Parser): P[LinearizedLoadFromBase] =
+    P(
+      operandNameP ~ "[" ~ operandNameP ~ "]" ~ ":" ~
+        typeOfP[llvm.Ptr] ~ "->" ~ typeP
+    ).flatMap((bName, idxName, bTyp, rTyp) =>
+      operandP(bName, bTyp).flatMap(base =>
+        operandP(idxName, IndexType()).flatMap(idx =>
+          resultP(resNames.head, rTyp.asInstanceOf[TypeAttribute]).map(r =>
+            LinearizedLoadFromBase(base, idx, r)
+          )
+        )
+      )
+    )
+
+final case class DescriptorAlloc(
+    dynamicSizes: Seq[Operand[Attribute]],
+    descriptor: Result[Attribute],
+    source_type: Attribute,
+) extends DerivedOperation["d_memref.descriptor_alloc", DescriptorAlloc]
+    derives DerivedOperationCompanion
+
+final case class DescriptorReinterpret(
+    _operands: Seq[Operand[Attribute]],
+    descriptor: Result[Attribute],
+    source_type: Attribute,
+    target_type: Attribute,
+) extends DerivedOperation["d_memref.descriptor_reinterpret", DescriptorReinterpret]
+    derives DerivedOperationCompanion
+
+final case class DescriptorLoad(
+    _operands: Seq[Operand[Attribute]],
+    result: Result[Attribute],
+    source_type: Attribute,
+) extends DerivedOperation["d_memref.descriptor_load", DescriptorLoad]
+    derives DerivedOperationCompanion
+
+final case class DescriptorLinearizedLoad(
+    _operands: Seq[Operand[Attribute]],
+    result: Result[Attribute],
+    source_type: Attribute,
+) extends DerivedOperation["d_memref.descriptor_linearized_load", DescriptorLinearizedLoad]
+    derives DerivedOperationCompanion
+
+final case class DescriptorBasePtr(
+    _operands: Seq[Operand[Attribute]],
+    result: Result[Attribute],
+    source_type: Attribute,
+) extends DerivedOperation["d_memref.descriptor_base_ptr", DescriptorBasePtr]
+    derives DerivedOperationCompanion
+
+final case class DescriptorLinearizedLoadFromBase(
+    _operands: Seq[Operand[Attribute]],
+    result: Result[Attribute],
+    source_type: Attribute,
+) extends DerivedOperation["d_memref.descriptor_linearized_load_from_base", DescriptorLinearizedLoadFromBase]
+    derives DerivedOperationCompanion
+
+final case class DescriptorDealloc(
+    descriptor: Operand[Attribute]
+) extends DerivedOperation["d_memref.descriptor_dealloc", DescriptorDealloc]
+    derives DerivedOperationCompanion
+
 final case class Store(
     value: Operand[TypeAttribute],
     memref: Operand[dMemrefMemrefType],
@@ -632,5 +759,25 @@ given OperationCustomParser[ReinterpretCast]:
 
 val dMemrefDialect = summonDialect[
   (dMemrefVectorType, dMemrefMatrixType, dMemrefMemrefType),
-  (Alloc, Dealloc, Dim, DimExact, Load, Store, Cast, Subview, ReinterpretCast),
+  (
+      Alloc,
+      Dealloc,
+      Dim,
+      DimExact,
+      Load,
+      LinearizedLoad,
+      BasePtr,
+      LinearizedLoadFromBase,
+      DescriptorAlloc,
+      DescriptorReinterpret,
+      DescriptorLoad,
+      DescriptorLinearizedLoad,
+      DescriptorBasePtr,
+      DescriptorLinearizedLoadFromBase,
+      DescriptorDealloc,
+      Store,
+      Cast,
+      Subview,
+      ReinterpretCast,
+  ),
 ]
