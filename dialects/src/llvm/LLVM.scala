@@ -172,33 +172,6 @@ case class Return(
 ) extends DerivedOperation["llvm.return", Return]
     with IsTerminator derives DerivedOperationCompanion
 
-case class RefinedAllocDescriptor(
-    _operands: Seq[Operand[Attribute]],
-    result: Result[Attribute],
-    source_type: Attribute,
-) extends DerivedOperation["llvm.refined.alloc_descriptor", RefinedAllocDescriptor]
-    derives DerivedOperationCompanion
-
-case class RefinedReinterpretDescriptor(
-    _operands: Seq[Operand[Attribute]],
-    result: Result[Attribute],
-    source_type: Attribute,
-    target_type: Attribute,
-) extends DerivedOperation["llvm.refined.reinterpret_descriptor", RefinedReinterpretDescriptor]
-    derives DerivedOperationCompanion
-
-case class RefinedLoad(
-    _operands: Seq[Operand[Attribute]],
-    result: Result[Attribute],
-    source_type: Attribute,
-) extends DerivedOperation["llvm.refined.load", RefinedLoad]
-    derives DerivedOperationCompanion
-
-case class RefinedDealloc(
-    descriptor: Operand[Attribute]
-) extends DerivedOperation["llvm.refined.dealloc", RefinedDealloc]
-    derives DerivedOperationCompanion
-
 val LLVMDialect = summonDialect[
   (Ptr, StructType, ArrayType),
   (
@@ -219,9 +192,5 @@ val LLVMDialect = summonDialect[
       Br,
       CondBr,
       Return,
-      RefinedAllocDescriptor,
-      RefinedReinterpretDescriptor,
-      RefinedLoad,
-      RefinedDealloc,
   ),
 ]
