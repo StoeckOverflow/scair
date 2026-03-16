@@ -1,9 +1,20 @@
 package scair.dialects.memref
 
+import fastparse.*
+import scair.Printer
 import scair.clair.codegen.*
 import scair.clair.macros.*
 import scair.dialects.builtin.*
 import scair.ir.*
+import scair.parse.*
+import scair.parse.given
+
+private def parseIndexOperands[$: P](names: Seq[String])(using
+    p: Parser
+): P[Seq[Operand[IndexType]]] =
+  names.foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
+    (acc ~ operandP(n, IndexType())).map(_ :+ _)
+  )
 
 //
 // ███╗░░░███╗ ███████╗ ███╗░░░███╗ ██████╗░ ███████╗ ███████╗
@@ -56,7 +67,39 @@ case class ReinterpretCast(
     strides: Seq[Operand[IndexType]],
     res: Result[MemrefType],
 ) extends DerivedOperation["memref.reinterpret_cast", ReinterpretCast]
-    derives DerivedOperationCompanion
+    derives DerivedOperationCompanion:
+
+  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+    printer.print(name, " ", src, " to\n")
+    printer.print(printer.indent * (indentLevel + 1), "offset: [", offset, "],\n")
+    printer.print(printer.indent * (indentLevel + 1), "sizes: [")
+    printer.printList(sizes)
+    printer.print("],\n")
+    printer.print(printer.indent * (indentLevel + 1), "strides: [")
+    printer.printList(strides)
+    printer.print("]\n")
+    printer.print(printer.indent * indentLevel, ": ", src.typ, " to ", res.typ)
+
+given OperationCustomParser[ReinterpretCast]:
+  def parse[$: P](resNames: Seq[String])(using Parser): P[ReinterpretCast] =
+    P(
+      operandNameP ~ "to" ~ "offset:" ~ "[" ~ operandNameP ~ "]" ~ "," ~
+        "sizes:" ~ "[" ~ operandNameP.rep(sep = ",") ~ "]" ~ "," ~
+        "strides:" ~ "[" ~ operandNameP.rep(sep = ",") ~ "]" ~ ":" ~
+        typeOfP[MemrefType] ~ "to" ~ typeOfP[MemrefType]
+    ).flatMap((srcName, offName, sizeNames, strideNames, srcTyp, resTyp) =>
+      operandP(srcName, srcTyp).flatMap(src =>
+        operandP(offName, IndexType()).flatMap(offset =>
+          parseIndexOperands(sizeNames).flatMap(sizes =>
+            parseIndexOperands(strideNames).flatMap(strides =>
+              resultP(resNames.head, resTyp).map(res =>
+                ReinterpretCast(src, offset, sizes, strides, res)
+              )
+            )
+          )
+        )
+      )
+    )
 
 case class DescriptorAlloc(
     dynamicSizes: Seq[Operand[IndexType]],
