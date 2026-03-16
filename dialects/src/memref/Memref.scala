@@ -101,32 +101,28 @@ given OperationCustomParser[ReinterpretCast]:
       )
     )
 
-case class DescriptorAlloc(
-    dynamicSizes: Seq[Operand[IndexType]],
-    descriptor: Result[Attribute],
-    source_type: Attribute,
-) extends DerivedOperation["memref.descriptor_alloc", DescriptorAlloc]
+case class ExtractStridedMetadata(
+    source: Operand[MemrefType],
+    _results: Seq[Result[Attribute]],
+) extends DerivedOperation["memref.extract_strided_metadata", ExtractStridedMetadata]
     derives DerivedOperationCompanion
 
-case class DescriptorReinterpret(
-    _operands: Seq[Operand[Attribute]],
-    descriptor: Result[Attribute],
-    source_type: Attribute,
-    target_type: Attribute,
-) extends DerivedOperation["memref.descriptor_reinterpret", DescriptorReinterpret]
-    derives DerivedOperationCompanion
+object ExtractStridedMetadata:
+  def baseTypeOf(srcType: MemrefType): RankedMemrefType =
+    srcType match
+      case ranked: RankedMemrefType =>
+        RankedMemrefType(ranked.elementType, ArrayAttribute(Seq.empty))
+      case unranked =>
+        RankedMemrefType(unranked.asInstanceOf[UnrankedMemrefType].elementType, ArrayAttribute(Seq.empty))
 
-case class DescriptorLoad(
-    _operands: Seq[Operand[Attribute]],
-    result: Result[Attribute],
-    source_type: Attribute,
-) extends DerivedOperation["memref.descriptor_load", DescriptorLoad]
-    derives DerivedOperationCompanion
+  def resultTypesOf(srcType: MemrefType): Seq[Attribute] =
+    val rank = srcType match
+      case ranked: RankedMemrefType => ranked.shape.attrValues.size
+      case _                        => 0
+    Seq(baseTypeOf(srcType), IndexType()) ++ Seq.fill(rank * 2)(IndexType())
 
-case class DescriptorDealloc(
-    descriptor: Operand[Attribute]
-) extends DerivedOperation["memref.descriptor_dealloc", DescriptorDealloc]
-    derives DerivedOperationCompanion
+  def build(source: Operand[MemrefType]): ExtractStridedMetadata =
+    ExtractStridedMetadata(source, resultTypesOf(source.typ).map(Result(_)))
 
 val MemrefDialect =
   summonDialect[
@@ -138,9 +134,6 @@ val MemrefDialect =
         Store,
         Dim,
         ReinterpretCast,
-        DescriptorAlloc,
-        DescriptorReinterpret,
-        DescriptorLoad,
-        DescriptorDealloc,
+        ExtractStridedMetadata,
     ),
   ]
