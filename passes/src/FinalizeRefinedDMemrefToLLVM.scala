@@ -150,8 +150,10 @@ private final class Builder(val funcOp: func.Func):
       }
       rev.reverse.toSeq
 
-  private def lowerAlloc(op: d_memref.DescriptorAlloc, block: Block): Value[Attribute] =
-    val ty = op.source_type.asInstanceOf[d_memref.dMemrefMemrefType]
+  private def lowerAllocLike(
+      ty: d_memref.dMemrefMemrefType,
+      block: Block,
+  ): Value[Attribute] =
     val dims = ty.params.map(d => materializeNatOrIndex(d.getVal(), block))
     val offset = ty.offset.map(materializeLayoutParam(_, block)).getOrElse(zeroConstant(block))
     val strides = ty.strides.map(_.map(materializeLayoutParam(_, block))).getOrElse(buildDefaultStrides(dims, block))
@@ -172,20 +174,38 @@ private final class Builder(val funcOp: func.Func):
     emit(block, malloc)
     buildDescriptor(malloc.resultss.head, malloc.resultss.head, offset, dims, strides, block)
 
-  private def lowerReinterpret(op: d_memref.DescriptorReinterpret, block: Block): Value[Attribute] =
-    val src = remap(op.operands.head)
+  private def lowerAlloc(op: d_memref.Alloc, block: Block): Value[Attribute] =
+    lowerAllocLike(op.res.typ, block)
+
+  private def lowerReinterpret(
+      src: Value[Attribute],
+      targetTy: d_memref.dMemrefMemrefType,
+      offset: Value[Attribute],
+      sizes: Seq[Value[Attribute]],
+      strides: Seq[Value[Attribute]],
+      block: Block,
+  ): Value[Attribute] =
     val allocated = lowerExtract(src, Seq(0), llvm.Ptr(), block)
     val aligned = lowerExtract(src, Seq(1), llvm.Ptr(), block)
-    val offset = materializeNatOrIndex(op.operands(1), block)
-    val rank = op.target_type.asInstanceOf[d_memref.dMemrefMemrefType].params.size
-    val sizes = op.operands.slice(2, 2 + rank).map(v => materializeNatOrIndex(v, block))
-    val strides = op.operands.drop(2 + rank).map(v => materializeNatOrIndex(v, block))
     buildDescriptor(allocated, aligned, offset, sizes, strides, block)
 
-  private def lowerLoad(op: d_memref.DescriptorLoad, block: Block): Value[Attribute] =
-    val ty = op.source_type.asInstanceOf[d_memref.dMemrefMemrefType]
-    val desc = remap(op.operands.head)
-    val idxs = op.operands.tail.map(v => materializeNatOrIndex(v, block))
+  private def lowerReinterpret(op: d_memref.ReinterpretCast, block: Block): Value[Attribute] =
+    lowerReinterpret(
+      remap(op.src),
+      op.res.typ,
+      materializeNatOrIndex(op.offset, block),
+      op.sizes.map(v => materializeNatOrIndex(v, block)),
+      op.strides.map(v => materializeNatOrIndex(v, block)),
+      block,
+    )
+
+  private def lowerLoad(
+      desc: Value[Attribute],
+      ty: d_memref.dMemrefMemrefType,
+      idxs: Seq[Value[Attribute]],
+      resultTy: Attribute,
+      block: Block,
+  ): Value[Attribute] =
     val base = lowerExtract(desc, Seq(1), llvm.Ptr(), block)
     val flagged = ty.offset.exists {
       case IntegerAttr(IntData(v), _) => v == 0
@@ -197,21 +217,33 @@ private final class Builder(val funcOp: func.Func):
       emit(block, mul)
       mul.res
     }
-    val linear = terms.reduce { (l, r) =>
-      val add = llvm.Add(asIndex(l), asIndex(r), Result(IndexType()), if flagged then Some(overflowNSWNuw) else None)
-      emit(block, add)
-      add.res
-    }
+    val linear =
+      if terms.size == 1 then terms.head
+      else
+        terms.reduce { (l, r) =>
+          val add = llvm.Add(asIndex(l), asIndex(r), Result(IndexType()), if flagged then Some(overflowNSWNuw) else None)
+          emit(block, add)
+          add.res
+        }
     val gep = llvm.GetElementPtr(asPtr(base), Seq(asIndex(linear)), Result(llvm.Ptr()), dynamicIndexSentinel, ty.elem, if flagged then Some(gepInboundsNuw) else None)
     emit(block, gep)
-    val load = llvm.Load(asPtr(gep.res), Result(op.result.typ))
+    val load = llvm.Load(asPtr(gep.res), Result(resultTy))
     emit(block, load)
     load.res
 
-  private def lowerLinearizedLoad(op: d_memref.DescriptorLinearizedLoad, block: Block): Value[Attribute] =
-    val ty = op.source_type.asInstanceOf[d_memref.dMemrefMemrefType]
-    val desc = remap(op.operands.head)
-    val linear = materializeNatOrIndex(op.operands(1), block)
+  private def lowerLoad(op: d_memref.Load, block: Block): Value[Attribute] =
+    lowerLoad(
+      remap(op.memref),
+      op.memref.typ,
+      op.indices.map(v => materializeNatOrIndex(v, block)),
+      op.res.typ,
+      block,
+    )
+
+  private def lowerLinearizedLoad(op: d_memref.LinearizedLoad, block: Block): Value[Attribute] =
+    val ty = op.memref.typ
+    val desc = remap(op.memref)
+    val linear = materializeNatOrIndex(op.linearIndex, block)
     val base = lowerExtract(desc, Seq(1), llvm.Ptr(), block)
     val flagged = ty.offset.exists {
       case IntegerAttr(IntData(v), _) => v == 0
@@ -219,22 +251,49 @@ private final class Builder(val funcOp: func.Func):
     }
     val gep = llvm.GetElementPtr(asPtr(base), Seq(asIndex(linear)), Result(llvm.Ptr()), dynamicIndexSentinel, ty.elem, if flagged then Some(gepInboundsNuw) else None)
     emit(block, gep)
-    val load = llvm.Load(asPtr(gep.res), Result(op.result.typ))
+    val load = llvm.Load(asPtr(gep.res), Result(op.res.typ))
     emit(block, load)
     load.res
 
-  private def lowerBasePtr(op: d_memref.DescriptorBasePtr, block: Block): Value[Attribute] =
-    val desc = remap(op.operands.head)
-    lowerExtract(desc, Seq(1), llvm.Ptr(), block)
+  private def lowerBasePtr(op: d_memref.BasePtr, block: Block): Value[Attribute] =
+    lowerExtract(remap(op.memref), Seq(1), llvm.Ptr(), block)
 
-  private def lowerLinearizedLoadFromBase(op: d_memref.DescriptorLinearizedLoadFromBase, block: Block): Value[Attribute] =
-    val base = remap(op.operands.head)
-    val linear = materializeNatOrIndex(op.operands(1), block)
-    val gep = llvm.GetElementPtr(asPtr(base), Seq(asIndex(linear)), Result(llvm.Ptr()), dynamicIndexSentinel, op.result.typ, Some(gepInboundsNuw))
+  private def lowerLinearizedLoadFromBase(op: d_memref.LinearizedLoadFromBase, block: Block): Value[Attribute] =
+    val base = remap(op.base)
+    val linear = materializeNatOrIndex(op.linearIndex, block)
+    val gep = llvm.GetElementPtr(asPtr(base), Seq(asIndex(linear)), Result(llvm.Ptr()), dynamicIndexSentinel, op.res.typ, Some(gepInboundsNuw))
     emit(block, gep)
-    val load = llvm.Load(asPtr(gep.res), Result(op.result.typ))
+    val load = llvm.Load(asPtr(gep.res), Result(op.res.typ))
     emit(block, load)
     load.res
+
+  private def lowerExtractStridedMetadata(op: d_memref.ExtractStridedMetadata, block: Block): Seq[Value[Attribute]] =
+    val src = remap(op.source)
+    val srcTy = op.source.typ
+    val rank = srcTy.params.size
+    def used(v: Value[Attribute]): Boolean =
+      v.uses.nonEmpty || v.typeUses.nonEmpty
+
+    val base =
+      if used(op.results.head) then
+        src
+      else src
+    val offset =
+      if used(op.results(1)) then lowerExtract(src, Seq(2), IndexType(), block)
+      else zeroConstant(block)
+    val sizes = (0 until rank).map { i =>
+      if used(op.results(2 + i)) then lowerExtract(src, Seq(3, i), IndexType(), block)
+      else zeroConstant(block)
+    }
+    val strides = (0 until rank).map { i =>
+      if used(op.results(2 + rank + i)) then lowerExtract(src, Seq(4, i), IndexType(), block)
+      else zeroConstant(block)
+    }
+    Seq(base, offset) ++ sizes ++ strides
+
+  private def lowerDealloc(desc: Value[Attribute], block: Block): Unit =
+    val ptr = lowerExtract(desc, Seq(0), llvm.Ptr(), block)
+    emit(block, llvm.Call(SymbolRefAttr(StringData("free")), Seq(ptr.asInstanceOf[Operand[Attribute]]), Seq.empty))
 
   def lower(): func.Func =
     val newBlocks = funcOp.body.blocks.map { oldBlock =>
@@ -263,22 +322,22 @@ private final class Builder(val funcOp: func.Func):
           ()
         case _: dTensor.ShapeToIndex =>
           ()
-        case op: d_memref.DescriptorAlloc =>
-          valueMap(op.descriptor) = lowerAlloc(op, newBlock)
-        case op: d_memref.DescriptorReinterpret =>
-          valueMap(op.descriptor) = lowerReinterpret(op, newBlock)
-        case op: d_memref.DescriptorLoad =>
-          valueMap(op.result) = lowerLoad(op, newBlock)
-        case op: d_memref.DescriptorLinearizedLoad =>
-          valueMap(op.result) = lowerLinearizedLoad(op, newBlock)
-        case op: d_memref.DescriptorBasePtr =>
-          valueMap(op.result) = lowerBasePtr(op, newBlock)
-        case op: d_memref.DescriptorLinearizedLoadFromBase =>
-          valueMap(op.result) = lowerLinearizedLoadFromBase(op, newBlock)
-        case op: d_memref.DescriptorDealloc =>
-          val desc = remap(op.descriptor)
-          val ptr = lowerExtract(desc, Seq(0), llvm.Ptr(), newBlock)
-          emit(newBlock, llvm.Call(SymbolRefAttr(StringData("free")), Seq(ptr.asInstanceOf[Operand[Attribute]]), Seq.empty))
+        case op: d_memref.Alloc =>
+          valueMap(op.res) = lowerAlloc(op, newBlock)
+        case op: d_memref.ReinterpretCast =>
+          valueMap(op.res) = lowerReinterpret(op, newBlock)
+        case op: d_memref.ExtractStridedMetadata =>
+          valueMap.addAll(op.results.zip(lowerExtractStridedMetadata(op, newBlock)))
+        case op: d_memref.Load =>
+          valueMap(op.res) = lowerLoad(op, newBlock)
+        case op: d_memref.LinearizedLoad =>
+          valueMap(op.res) = lowerLinearizedLoad(op, newBlock)
+        case op: d_memref.BasePtr =>
+          valueMap(op.res) = lowerBasePtr(op, newBlock)
+        case op: d_memref.LinearizedLoadFromBase =>
+          valueMap(op.res) = lowerLinearizedLoadFromBase(op, newBlock)
+        case op: d_memref.Dealloc =>
+          lowerDealloc(remap(op.memref), newBlock)
         case ret: func.Return =>
           emit(newBlock, llvm.Return(ret._operands.map(v => remap(v).asInstanceOf[Operand[Attribute]])))
         case other =>
@@ -291,9 +350,9 @@ private final class Builder(val funcOp: func.Func):
 
 private val LowerFunc = pattern {
   case op: func.Func if op.body.blocks.exists(_.operations.exists {
-        case _: d_memref.DescriptorAlloc | _: d_memref.DescriptorReinterpret | _: d_memref.DescriptorLoad |
-            _: d_memref.DescriptorLinearizedLoad | _: d_memref.DescriptorBasePtr |
-            _: d_memref.DescriptorLinearizedLoadFromBase | _: d_memref.DescriptorDealloc | _: func.Return =>
+        case _: d_memref.Alloc | _: d_memref.ReinterpretCast | _: d_memref.ExtractStridedMetadata |
+            _: d_memref.Load | _: d_memref.LinearizedLoad | _: d_memref.BasePtr |
+            _: d_memref.LinearizedLoadFromBase | _: d_memref.Dealloc | _: func.Return =>
           true
         case _ => false
       }) =>

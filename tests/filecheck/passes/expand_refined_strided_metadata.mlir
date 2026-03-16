@@ -33,9 +33,14 @@ builtin.module {
 // CHECK-NEXT:    %8 = "dtensor.nat.const"() <{value = 1024 : i32}> : () -> !dtensor.nat
 // CHECK-NEXT:    %9 = "dtensor.shape.to_index"(%7) : (!dtensor.nat) -> index
 // CHECK-NEXT:    %10 = "dtensor.shape.to_index"(%8) : (!dtensor.nat) -> index
-// CHECK-NEXT:    %11 = "d_memref.descriptor_alloc"() <{source_type = !d_memref.memref<[%6], f32>}> : () -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// CHECK-NEXT:    %12 = "d_memref.descriptor_reinterpret"(%11, %4, %9, %10, %0, %1) <{source_type = !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>, target_type = !d_memref.memref<[%7, %8], f32, offset: 0, strides: [%0, %1]>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>, index, index, index, index, index) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// CHECK-NEXT:    %13 = "d_memref.descriptor_load"(%12, %4, %4) <{source_type = !d_memref.memref<[%7, %8], f32, offset: 0, strides: [%0, %1]>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>, index, index) -> f32
-// CHECK-NEXT:    "d_memref.descriptor_dealloc"(%11) : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> ()
-// CHECK-NEXT:    func.return %13 : f32
+// CHECK-NEXT:    %11 = d_memref.alloc : () -> !d_memref.memref<[%6], f32>
+// CHECK-NEXT:    %12, %13, %14, %15 = "d_memref.extract_strided_metadata"(%11) : (!d_memref.memref<[%6], f32>) -> (!d_memref.memref<[], f32>, index, index, index)
+// CHECK-NEXT:    %16 = d_memref.reinterpret_cast %12 to
+// CHECK-NEXT:      offset: [%4],
+// CHECK-NEXT:      sizes: [%9, %10],
+// CHECK-NEXT:      strides: [%0, %1]
+// CHECK-NEXT:    : !d_memref.memref<[], f32> to !d_memref.memref<[%7, %8], f32, offset: 0, strides: [%0, %1]>
+// CHECK-NEXT:    %17 = d_memref.load %16[%4, %4] : !d_memref.memref<[%7, %8], f32, offset: 0, strides: [%0, %1]> -> f32
+// CHECK-NEXT:    d_memref.dealloc %11 : !d_memref.memref<[%6], f32>
+// CHECK-NEXT:    func.return %17 : f32
 // CHECK-NEXT:  }

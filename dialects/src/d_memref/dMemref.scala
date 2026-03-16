@@ -471,53 +471,21 @@ given OperationCustomParser[LinearizedLoadFromBase]:
       )
     )
 
-final case class DescriptorAlloc(
-    dynamicSizes: Seq[Operand[Attribute]],
-    descriptor: Result[Attribute],
-    source_type: Attribute,
-) extends DerivedOperation["d_memref.descriptor_alloc", DescriptorAlloc]
+final case class ExtractStridedMetadata(
+    source: Operand[dMemrefMemrefType],
+    _results: Seq[Result[Attribute]],
+) extends DerivedOperation["d_memref.extract_strided_metadata", ExtractStridedMetadata]
     derives DerivedOperationCompanion
 
-final case class DescriptorReinterpret(
-    _operands: Seq[Operand[Attribute]],
-    descriptor: Result[Attribute],
-    source_type: Attribute,
-    target_type: Attribute,
-) extends DerivedOperation["d_memref.descriptor_reinterpret", DescriptorReinterpret]
-    derives DerivedOperationCompanion
+object ExtractStridedMetadata:
+  def baseTypeOf(srcType: dMemrefMemrefType): dMemrefMemrefType =
+    dMemrefMemrefType(Seq.empty, srcType.elem)
 
-final case class DescriptorLoad(
-    _operands: Seq[Operand[Attribute]],
-    result: Result[Attribute],
-    source_type: Attribute,
-) extends DerivedOperation["d_memref.descriptor_load", DescriptorLoad]
-    derives DerivedOperationCompanion
+  def resultTypesOf(srcType: dMemrefMemrefType): Seq[Attribute] =
+    Seq(baseTypeOf(srcType), IndexType()) ++ Seq.fill(srcType.params.size * 2)(IndexType())
 
-final case class DescriptorLinearizedLoad(
-    _operands: Seq[Operand[Attribute]],
-    result: Result[Attribute],
-    source_type: Attribute,
-) extends DerivedOperation["d_memref.descriptor_linearized_load", DescriptorLinearizedLoad]
-    derives DerivedOperationCompanion
-
-final case class DescriptorBasePtr(
-    _operands: Seq[Operand[Attribute]],
-    result: Result[Attribute],
-    source_type: Attribute,
-) extends DerivedOperation["d_memref.descriptor_base_ptr", DescriptorBasePtr]
-    derives DerivedOperationCompanion
-
-final case class DescriptorLinearizedLoadFromBase(
-    _operands: Seq[Operand[Attribute]],
-    result: Result[Attribute],
-    source_type: Attribute,
-) extends DerivedOperation["d_memref.descriptor_linearized_load_from_base", DescriptorLinearizedLoadFromBase]
-    derives DerivedOperationCompanion
-
-final case class DescriptorDealloc(
-    descriptor: Operand[Attribute]
-) extends DerivedOperation["d_memref.descriptor_dealloc", DescriptorDealloc]
-    derives DerivedOperationCompanion
+  def build(source: Operand[dMemrefMemrefType]): ExtractStridedMetadata =
+    ExtractStridedMetadata(source, resultTypesOf(source.typ).map(Result(_)))
 
 final case class Store(
     value: Operand[TypeAttribute],
@@ -768,13 +736,7 @@ val dMemrefDialect = summonDialect[
       LinearizedLoad,
       BasePtr,
       LinearizedLoadFromBase,
-      DescriptorAlloc,
-      DescriptorReinterpret,
-      DescriptorLoad,
-      DescriptorLinearizedLoad,
-      DescriptorBasePtr,
-      DescriptorLinearizedLoadFromBase,
-      DescriptorDealloc,
+      ExtractStridedMetadata,
       Store,
       Cast,
       Subview,

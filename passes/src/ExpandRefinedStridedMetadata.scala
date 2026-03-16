@@ -1,99 +1,29 @@
 package scair.passes.expand_refined_strided_metadata
 
 import scair.MLContext
-import scair.dialects.builtin.*
 import scair.dialects.d_memref
-import scair.dialects.llvm
 import scair.ir.*
 import scair.transformations.*
 import scair.transformations.patterns.*
 
-private def descriptorType(rank: Int): llvm.StructType =
-  llvm.StructType(
-    Seq(
-      llvm.Ptr(),
-      llvm.Ptr(),
-      IndexType(),
-      llvm.ArrayType(IntData(rank), IndexType()),
-      llvm.ArrayType(IntData(rank), IndexType()),
-    )
-  )
-
-private val ExpandAlloc = pattern {
-  case op: d_memref.Alloc =>
-    d_memref.DescriptorAlloc(
-      Seq.empty,
-      Result(descriptorType(op.res.typ.params.size)),
-      op.res.typ,
-    )
-}
-
 private val ExpandReinterpret = pattern {
-  case op: d_memref.ReinterpretCast =>
-    d_memref.DescriptorReinterpret(
-      Seq(op.src.asInstanceOf[Operand[Attribute]], op.offset.asInstanceOf[Operand[Attribute]]) ++
-        op.sizes.map(_.asInstanceOf[Operand[Attribute]]) ++
-        op.strides.map(_.asInstanceOf[Operand[Attribute]]),
-      Result(descriptorType(op.res.typ.params.size)),
-      op.src.typ,
-      op.res.typ,
+  case op: d_memref.ReinterpretCast
+      if !op.src.owner.exists(_.isInstanceOf[d_memref.ExtractStridedMetadata]) =>
+    val extract = d_memref.ExtractStridedMetadata.build(op.src)
+    val base = extract.results.head.asInstanceOf[Operand[d_memref.dMemrefMemrefType]]
+    val replacement = d_memref.ReinterpretCast(
+      base,
+      op.offset,
+      op.sizes,
+      op.strides,
+      op.res,
     )
-}
-
-private val ExpandLoad = pattern {
-  case op: d_memref.Load =>
-    d_memref.DescriptorLoad(
-      Seq(op.memref.asInstanceOf[Operand[Attribute]]) ++ op.indices.map(_.asInstanceOf[Operand[Attribute]]),
-      Result(op.res.typ),
-      op.memref.typ,
-    )
-}
-
-private val ExpandLinearizedLoad = pattern {
-  case op: d_memref.LinearizedLoad =>
-    d_memref.DescriptorLinearizedLoad(
-      Seq(op.memref.asInstanceOf[Operand[Attribute]], op.linearIndex.asInstanceOf[Operand[Attribute]]),
-      Result(op.res.typ),
-      op.memref.typ,
-    )
-}
-
-private val ExpandBasePtr = pattern {
-  case op: d_memref.BasePtr =>
-    d_memref.DescriptorBasePtr(
-      Seq(op.memref.asInstanceOf[Operand[Attribute]]),
-      Result(llvm.Ptr()),
-      op.memref.typ,
-    )
-}
-
-private val ExpandLinearizedLoadFromBase = pattern {
-  case op: d_memref.LinearizedLoadFromBase =>
-    d_memref.DescriptorLinearizedLoadFromBase(
-      Seq(op.base.asInstanceOf[Operand[Attribute]], op.linearIndex.asInstanceOf[Operand[Attribute]]),
-      Result(op.res.typ),
-      op.res.typ,
-    )
-}
-
-private val ExpandDealloc = pattern {
-  case op: d_memref.Dealloc =>
-    d_memref.DescriptorDealloc(op.memref.asInstanceOf[Operand[Attribute]])
+    (Seq(extract, replacement), replacement.results)
 }
 
 final class ExpandRefinedStridedMetadata(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "expand-refined-strided-metadata"
   override val walker: PatternRewriteWalker =
     PatternRewriteWalker(
-      GreedyRewritePatternApplier(
-        Seq(
-          ExpandAlloc,
-          ExpandReinterpret,
-          ExpandLoad,
-          ExpandLinearizedLoad,
-          ExpandBasePtr,
-          ExpandLinearizedLoadFromBase,
-          ExpandDealloc,
-        )
-      )
+      GreedyRewritePatternApplier(Seq(ExpandReinterpret))
     )
