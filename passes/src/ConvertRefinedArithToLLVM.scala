@@ -17,15 +17,6 @@ private def asIndex(v: Value[Attribute]): Operand[IndexType] =
 private def asFloat(v: Value[Attribute]): Operand[FloatType] =
   v.asInstanceOf[Operand[FloatType]]
 
-private def constantOrderKey(op: arith.Constant): Int =
-  op.value match
-    case IntegerAttr(IntData(v), _: IndexType) if v == 1024 => 0
-    case IntegerAttr(IntData(v), _: IndexType) if v == 1    => 1
-    case IntegerAttr(IntData(v), _: IndexType) if v == 0    => 2
-    case FloatAttr(FloatData(v), Float32Type()) if v == 0.0 => 3
-    case IntegerAttr(IntData(v), _: IndexType) if v == 256  => 4
-    case _                                                  => 5
-
 private final class Builder(val funcOp: func.Func):
   val blockMap = mutable.Map.empty[Block, Block]
   val valueMap = mutable.Map.empty[Value[Attribute], Value[Attribute]]
@@ -60,11 +51,6 @@ private final class Builder(val funcOp: func.Func):
         Seq(copied)
 
   def lower(): func.Func =
-    val needsHoistedOne =
-      funcOp.body.blocks.exists(_.operations.exists {
-        case llvm.Constant(IntegerAttr(IntData(v), _: IndexType), _) if v == 1 => true
-        case _                                                                  => false
-      })
     val newBlocks = funcOp.body.blocks.map { oldBlock =>
       val nb = Block(oldBlock.arguments.map(_.typ), Seq.empty)
       blockMap(oldBlock) = nb
@@ -73,34 +59,10 @@ private final class Builder(val funcOp: func.Func):
     }
     funcOp.body.blocks.zip(newBlocks).foreach { case (oldBlock, newBlock) =>
       val constants = oldBlock.operations.collect { case c: arith.Constant => c }.toSeq
-      val sorted =
-        if oldBlock eq funcOp.body.blocks.head
-        then constants.zipWithIndex.sortBy((c, i) => (constantOrderKey(c), i)).map(_._1)
-        else constants
-      var insertedSyntheticOne = false
-      sorted.foreach { c =>
+      constants.foreach { c =>
         val lowered = lowerConstant(c, newBlock)
         newBlock.addOp(lowered)
-        if (oldBlock eq funcOp.body.blocks.head) &&
-          needsHoistedOne &&
-          !insertedSyntheticOne &&
-          !sorted.exists {
-            case arith.Constant(IntegerAttr(IntData(v), _: IndexType), _) => v == 1
-            case _                                                         => false
-          } &&
-          constantOrderKey(c) == 0
-        then
-          val one = llvm.Constant(IntegerAttr(IntData(1), IndexType()), Result(IndexType()))
-          newBlock.addOp(one)
-          insertedSyntheticOne = true
       }
-      if (oldBlock eq funcOp.body.blocks.head) && needsHoistedOne && !insertedSyntheticOne && !sorted.exists {
-          case arith.Constant(IntegerAttr(IntData(v), _: IndexType), _) => v == 1
-          case _                                                         => false
-        }
-      then
-        val one = llvm.Constant(IntegerAttr(IntData(1), IndexType()), Result(IndexType()))
-        newBlock.addOp(one)
       oldBlock.operations.foreach {
         case _: arith.Constant => ()
         case other             => newBlock.addOps(lowerOp(other))
