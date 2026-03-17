@@ -17,6 +17,9 @@ private def asIndex(v: Value[Attribute]): Operand[IndexType] =
 private def asFloat(v: Value[Attribute]): Operand[FloatType] =
   v.asInstanceOf[Operand[FloatType]]
 
+// This builder performs a whole-function rebuild so arithmetic conversion can
+// preserve block order and SSA remapping without relying on full conversion
+// infrastructure.
 private final class Builder(val funcOp: func.Func):
   val blockMap = mutable.Map.empty[Block, Block]
   val valueMap = mutable.Map.empty[Value[Attribute], Value[Attribute]]
@@ -58,6 +61,8 @@ private final class Builder(val funcOp: func.Func):
       nb
     }
     funcOp.body.blocks.zip(newBlocks).foreach { case (oldBlock, newBlock) =>
+      // Constants are emitted in source order within each block to keep the
+      // lowering deterministic without introducing a pass-local ordering policy.
       val constants = oldBlock.operations.collect { case c: arith.Constant => c }.toSeq
       constants.foreach { c =>
         val lowered = lowerConstant(c, newBlock)
@@ -78,6 +83,9 @@ private val LowerFunc = pattern {
     Builder(op).lower()
 }
 
+// Converts scalar arithmetic to LLVM arithmetic.
+// Example: `arith.constant` / `arith.addi` / `arith.muli`
+//   -> `llvm.constant` / `llvm.add` / `llvm.mul`.
 final class ConvertRefinedArithToLLVM(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "convert-refined-arith-to-llvm"
   override val walker: PatternRewriteWalker =

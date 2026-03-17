@@ -20,6 +20,9 @@ private def overflowNSWNuw: ArrayAttribute[StringData] =
 private def gepInboundsNuw: ArrayAttribute[StringData] =
   ArrayAttribute(Seq(StringData("inbounds"), StringData("nuw")))
 
+// Finalization is implemented as a whole-function rebuild because refined
+// memref lowering simultaneously replaces refined ops, materializes layout
+// parameters, and preserves the surrounding LLVM CFG.
 private final class Builder(val funcOp: func.Func):
   private val state = FunctionLoweringState(funcOp)
   private var cachedOne: Option[Value[Attribute]] = None
@@ -46,6 +49,9 @@ private final class Builder(val funcOp: func.Func):
       if v == 1 then cachedOne = Some(c.res)
       c.res
 
+  // Refined types may encode layout through nat-valued SSA parameters. This
+  // helper collapses those representations to the index SSA form expected by
+  // the final LLVM address arithmetic.
   private def materializeNatOrIndex(v: Value[Attribute], block: Block): Value[Attribute] =
     remap(v) match
       case existing if existing.owner.exists {
@@ -80,6 +86,8 @@ private final class Builder(val funcOp: func.Func):
   ): RankedMemrefDescriptorHelper =
     RankedMemrefDescriptorHelper(desc, rank, block)
 
+  // When the refined type omits explicit strides, finalize reconstructs the
+  // canonical row-major defaults from the refined dimension values.
   private def buildDefaultStrides(
       dims: Seq[Value[Attribute]],
       block: Block,
@@ -170,6 +178,8 @@ private final class Builder(val funcOp: func.Func):
       block,
     )
 
+  // Direct refined loads use the current descriptor value, but their indices
+  // have already been normalized to explicit SSA values by earlier passes.
   private def lowerLoad(
       desc: Value[Attribute],
       ty: d_memref.dMemrefMemrefType,
@@ -229,6 +239,7 @@ private final class Builder(val funcOp: func.Func):
       block,
     )
 
+  // Linearized loads consume the already-normalized linear index directly.
   private def lowerLinearizedLoad(
       op: d_memref.LinearizedLoad,
       block: Block,
@@ -257,6 +268,8 @@ private final class Builder(val funcOp: func.Func):
   private def lowerBasePtr(op: d_memref.BasePtr, block: Block): Value[Attribute] =
     descriptor(remap(op.memref), op.memref.typ.params.size, block).alignedPtr()
 
+  // This is the end point of the refined access normalization path: a hoisted
+  // base pointer plus a linearized offset become a single GEP+load pair.
   private def lowerLinearizedLoadFromBase(
       op: d_memref.LinearizedLoadFromBase,
       block: Block,
@@ -287,6 +300,8 @@ private final class Builder(val funcOp: func.Func):
     def used(v: Value[Attribute]): Boolean =
       v.uses.nonEmpty || v.typeUses.nonEmpty
 
+    // As on the baseline side, the extracted base currently aliases the source
+    // descriptor value. This preserves the existing LLVM IR shape.
     val base = src
     val offset =
       if used(op.results(1)) then srcDesc.offset()
@@ -321,6 +336,8 @@ private final class Builder(val funcOp: func.Func):
     funcOp.body.blocks.zip(newBlocks).foreach { case (oldBlock, newBlock) =>
       oldBlock.operations.foreach {
         case c: llvm.Constant =>
+          // Reuse the entry-block index-1 constant when possible so the refined
+          // routes preserve the current stable constant shape in snapshot tests.
           c.value match
             case IntegerAttr(IntData(v), _: IndexType) if v == 1 && !(oldBlock eq funcOp.body.blocks.head) =>
               state.valueMap(c.res) = cachedOne.getOrElse(constIndex(1, newBlocks.head))
@@ -380,6 +397,10 @@ private val LowerFunc = pattern {
     Builder(op).lower()
 }
 
+// Finalizes refined d_memref operations to standard LLVM dialect operations.
+// Example: `d_memref.alloc` / `d_memref.base_ptr` /
+// `d_memref.linearized_load_from_base`
+//   -> LLVM descriptor construction, pointer extraction, GEP, and load.
 final class FinalizeRefinedDMemrefToLLVM(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "finalize-refined-dmemref-to-llvm"
   override val walker: PatternRewriteWalker =

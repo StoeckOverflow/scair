@@ -28,6 +28,8 @@ private def remapValue(
 ): Value[Attribute] =
   valueMapper.getOrElse(value, value)
 
+// Region refinement preserves structured loop nesting while replacing baseline
+// memref/affine operations with their refined d_memref/d_affine counterparts.
 private def lowerRegion(
     region: Region,
     outerMapper: mutable.Map[Value[Attribute], Value[Attribute]],
@@ -92,6 +94,8 @@ private def staticNat(v: BigInt): (Seq[Operation], ValueAttribute) =
   val c = dTensor.NatConst(i32Attr(v), Result(dTensor.dTensorNatType()))
   (Seq(c), ValueAttribute(c.res))
 
+// Dynamic dimensions are reified as nat values so that refined memref types can
+// carry dimension information directly in the type.
 private def dynamicNat(v: Operand[IndexType]): (Seq[Operation], ValueAttribute) =
   val cast = dTensor.IndexToNat(v, Result(dTensor.dTensorNatType()))
   (Seq(cast), ValueAttribute(cast.res))
@@ -115,6 +119,9 @@ private def refineBaseMemrefType(
   }
   (emitted.toSeq, d_memref.dMemrefMemrefType(dims, ty.elementType.asInstanceOf[TypeAttribute]))
 
+// Reinterpret refinement preserves the explicit view parameters as refined
+// layout parameters so later passes can reason about offset and stride values
+// before descriptor materialization.
 private def refineReinterpretType(
     ty: RankedMemrefType,
     sizes: Seq[Operand[IndexType]],
@@ -226,6 +233,10 @@ private val RefineAffineLoad = pattern {
     )
 }
 
+// Refines baseline memref/affine IR into d_memref/d_affine IR.
+// Example: `memref.alloc` / `memref.reinterpret_cast` / `affine.for`
+//   -> `d_memref.alloc` / `d_memref.reinterpret_cast` / `d_affine.for`,
+//      with dynamic dimensions reified as refined type parameters.
 final class RefineDynamicLayoutToDMemref(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "refine-dynamic-layout-to-dmemref"
   override val walker: PatternRewriteWalker =

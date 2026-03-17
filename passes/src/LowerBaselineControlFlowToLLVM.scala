@@ -12,6 +12,8 @@ import scair.transformations.patterns.*
 
 import scala.collection.mutable
 
+// This builder reconstructs the function as explicit LLVM CFG because lowering
+// affine loops requires coordinated block creation and SSA remapping.
 private final class Builder(val funcOp: func.Func):
   private val state = FunctionLoweringState(funcOp)
   private val blocks = mutable.ArrayBuffer.empty[Block]
@@ -79,6 +81,8 @@ private final class Builder(val funcOp: func.Func):
       val exit = Block(Seq(init.typ), Seq.empty)
       cfg.appendBlock(exit)
 
+      // The nested-loop lowering uses an explicit outer-header / inner-header /
+      // latch structure so loop-carried values remain visible as block arguments.
       cfg.emitBr(current, Seq(outerLb, init), outerHeader)
 
       val outerIv = outerHeader.arguments.head
@@ -205,6 +209,9 @@ private val LowerFunc = pattern {
     Builder(op).lower()
 }
 
+// Lowers baseline affine control flow to explicit LLVM CFG.
+// Example: `affine.for` / `affine.yield`
+//   -> `llvm.br`, `llvm.cond_br`, and block arguments carrying loop state.
 final class LowerBaselineControlFlowToLLVM(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "lower-baseline-control-flow-to-llvm"
   override val walker: PatternRewriteWalker =

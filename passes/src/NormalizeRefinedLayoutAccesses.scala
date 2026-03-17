@@ -16,6 +16,9 @@ private def idxAttr(v: BigInt): IntegerAttr =
 private def asIndex(v: Value[Attribute]): Operand[IndexType] =
   v.asInstanceOf[Operand[IndexType]]
 
+// Layout parameters may be stored either as index-like integers or as dtensor
+// nat values. This helper normalizes both cases to index SSA values so the
+// subsequent address arithmetic is purely arithmetic IR.
 private def materializeLayoutParam(param: d_memref.LayoutParam): (Vector[Operation], Value[Attribute]) =
   param match
     case i: IntegerAttr =>
@@ -50,6 +53,8 @@ private val NormalizeLoad = pattern {
           val zero = arith.Constant(idxAttr(0), Result(IndexType()))
           (Vector(zero), Some(zero.result))
     val strideOpsAndValues = ty.strides.get.map(materializeLayoutParam)
+    // Each multidimensional access is rewritten into the explicit linearized
+    // address terms that downstream hoisting and LLVM lowering operate on.
     val indexTerms = op.indices.zip(strideOpsAndValues).map { case (idx, (prefix, stride)) =>
       val mul = mulIndex(idx, stride)
       (prefix :+ mul, mul.result)
@@ -72,6 +77,10 @@ private val NormalizeLoad = pattern {
     (prefix.result() ++ Seq(base, normalized), Seq(normalized.res))
 }
 
+// Rewrites refined multidimensional loads into explicit linearized access IR.
+// Example: `d_memref.load %A[%i, %j]`
+//   -> `arith.muli/addi` address terms + `d_memref.base_ptr` +
+//      `d_memref.linearized_load_from_base`.
 final class NormalizeRefinedLayoutAccesses(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "normalize-refined-layout-accesses"
   override val walker: PatternRewriteWalker =

@@ -29,6 +29,8 @@ private val HoistRowBase = pattern {
         valueMap.addAll(innerBody.arguments.zip(rebuiltInnerBody.arguments))
 
         innerBody.operations.foreach {
+          // Only computations that depend on the outer induction variable can
+          // become loop-invariant with respect to the inner loop.
           case mul: arith.MulI if mul.lhs == outerIv.asInstanceOf[Operand[IndexType]] || mul.rhs == outerIv.asInstanceOf[Operand[IndexType]] =>
             val hoisted = arith.MulI(
               (if mul.lhs == outerIv.asInstanceOf[Operand[IndexType]] then newOuterIv else outerValueMap.getOrElse(mul.lhs, mul.lhs)).asInstanceOf[Operand[IndexType]],
@@ -37,6 +39,8 @@ private val HoistRowBase = pattern {
             )
             hoistedOps += hoisted
             valueMap(mul.result) = hoisted.result
+          // Base pointer extraction is invariant across the inner loop once the
+          // refined memref value itself is available in the outer loop.
           case base: d_memref.BasePtr =>
             val hoisted = d_memref.BasePtr(
               outerValueMap.getOrElse(base.memref, base.memref).asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
@@ -85,6 +89,9 @@ private val HoistRowBase = pattern {
         PatternAction.Abort
 }
 
+// Hoists loop-invariant refined layout computations in nested refined loops.
+// Example: inner-loop `arith.muli %i, %stride0` and `d_memref.base_ptr %A`
+//   -> the same computations placed in the surrounding outer-loop body.
 final class HoistRefinedLayoutInvariants(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "hoist-refined-layout-invariants"
   override val walker: PatternRewriteWalker =

@@ -19,6 +19,8 @@ private def overflowNSWNuw: ArrayAttribute[StringData] =
 private def gepInboundsNuw: ArrayAttribute[StringData] =
   ArrayAttribute(Seq(StringData("inbounds"), StringData("nuw")))
 
+// Finalization is implemented as a whole-function rebuild because memref
+// lowering must replace descriptor-valued operations and preserve SSA uses.
 private final class Builder(val funcOp: func.Func):
   private val state = FunctionLoweringState(funcOp)
   private var cachedOne: Option[Value[Attribute]] = None
@@ -47,6 +49,8 @@ private final class Builder(val funcOp: func.Func):
   ): RankedMemrefDescriptorHelper =
     RankedMemrefDescriptorHelper(desc, rank, block)
 
+  // Baseline memref allocation materializes the standard ranked memref
+  // descriptor shape directly in LLVM dialect.
   private def materializeRankedDims(
       ty: RankedMemrefType,
       dynamicSizes: Seq[Value[Attribute]],
@@ -152,6 +156,9 @@ private final class Builder(val funcOp: func.Func):
       block,
     )
 
+  // Baseline loads still reconstruct the linear address from descriptor strides
+  // at finalize time because the baseline route does not expose this arithmetic
+  // earlier in the pipeline.
   private def lowerLoad(
       desc: Value[Attribute],
       ty: RankedMemrefType,
@@ -217,6 +224,9 @@ private final class Builder(val funcOp: func.Func):
     def used(v: Value[Attribute]): Boolean =
       v.uses.nonEmpty || v.typeUses.nonEmpty
 
+    // The base result follows the current pragmatic convention used in this
+    // codebase: it aliases the source descriptor instead of constructing a new
+    // standalone base descriptor value.
     val base = src
     val offset =
       if used(op.results(1)) then srcDesc.offset()
@@ -292,6 +302,10 @@ private val LowerFunc = pattern {
     Builder(op).lower()
 }
 
+// Finalizes baseline memref operations to standard LLVM dialect operations.
+// Example: `memref.alloc` / `memref.load` / `memref.dealloc`
+//   -> LLVM memref descriptor construction, `llvm.getelementptr`, `llvm.load`,
+//      and `llvm.call @free`.
 final class FinalizeDynamicMemrefToLLVM(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "finalize-dynamic-memref-to-llvm"
   override val walker: PatternRewriteWalker =

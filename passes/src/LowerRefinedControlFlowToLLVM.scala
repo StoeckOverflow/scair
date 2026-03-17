@@ -13,6 +13,8 @@ import scair.transformations.patterns.*
 
 import scala.collection.mutable
 
+// This builder reconstructs refined structured control flow as LLVM CFG while
+// explicitly threading the refined values that later lowering stages still use.
 private final class Builder(val funcOp: func.Func):
   private val state = FunctionLoweringState(funcOp)
   private val blocks = mutable.ArrayBuffer.empty[Block]
@@ -39,6 +41,8 @@ private final class Builder(val funcOp: func.Func):
   private def deepCopyOp(op: Operation): Operation =
     state.deepCopyOp(op)
 
+  // Values defined at function entry remain available after loop lowering only
+  // if they are threaded through block arguments explicitly.
   private def entryArgCaptures(ops: Seq[Operation]): Seq[Value[Attribute]] =
     val entryArgs = funcOp.body.blocks.head.arguments.toSet
     ops.flatMap(_.operands.map(_.asInstanceOf[Value[Attribute]])).filter(entryArgs.contains).distinct
@@ -90,6 +94,8 @@ private final class Builder(val funcOp: func.Func):
       val exit = Block(Seq(init.typ), Seq.empty)
       cfg.appendBlock(exit)
 
+      // Refined lowering extends the baseline CFG skeleton by threading captured
+      // layout-related values through block arguments.
       cfg.emitBr(current, Seq(outerLb, init) ++ captures.map(remap), outerHeader)
 
       val outerIv = outerHeader.arguments.head
@@ -229,6 +235,10 @@ private val LowerFunc = pattern {
     lowerFunc(op).get
 }
 
+// Lowers refined affine control flow to explicit LLVM CFG.
+// Example: `d_affine.for` / `d_affine.yield`
+//   -> `llvm.br`, `llvm.cond_br`, and block arguments carrying loop state plus
+//      captured refined values.
 final class LowerRefinedControlFlowToLLVM(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "lower-refined-control-flow-to-llvm"
   override val walker: PatternRewriteWalker =
