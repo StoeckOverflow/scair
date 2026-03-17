@@ -7,19 +7,12 @@ import scair.dialects.d_memref
 import scair.dialects.func
 import scair.dialects.llvm
 import scair.ir.*
+import scair.passes.lowering_helpers.FunctionLoweringState
+import scair.passes.llvm_helpers.*
 import scair.transformations.*
 import scair.transformations.patterns.*
 
 import scala.collection.mutable
-
-private def i32Attr(v: Int): IntegerAttr =
-  IntegerAttr(IntData(v), I32)
-
-private def densePath(indices: Int*): DenseArrayAttr =
-  DenseArrayAttr(I32, indices.map(i => i32Attr(i)))
-
-private def dynamicIndexSentinel: DenseArrayAttr =
-  DenseArrayAttr(I32, Seq(i32Attr(-2147483648)))
 
 private def overflowNSWNuw: ArrayAttribute[StringData] =
   ArrayAttribute(Seq(StringData("nsw"), StringData("nuw")))
@@ -27,28 +20,31 @@ private def overflowNSWNuw: ArrayAttribute[StringData] =
 private def gepInboundsNuw: ArrayAttribute[StringData] =
   ArrayAttribute(Seq(StringData("inbounds"), StringData("nuw")))
 
-private def idxAttr(v: BigInt): IntegerAttr =
-  IntegerAttr(IntData(v), IndexType())
-
-private def asIndex(v: Value[Attribute]): Operand[IndexType] =
-  v.asInstanceOf[Operand[IndexType]]
-
-private def asPtr(v: Value[Attribute]): Operand[llvm.Ptr] =
-  v.asInstanceOf[Operand[llvm.Ptr]]
-
-private def constNat(v: Value[Attribute]): Option[BigInt] =
-  v.owner match
-    case Some(dTensor.NatConst(IntegerAttr(IntData(k), _), _)) => Some(k)
-    case _                                                     => None
-
 private final class Builder(val funcOp: func.Func):
-  val blockMap = mutable.Map.empty[Block, Block]
-  val valueMap = mutable.Map.empty[Value[Attribute], Value[Attribute]]
+  private val state = FunctionLoweringState(funcOp)
   private var cachedOne: Option[Value[Attribute]] = None
   private var cachedZero: Option[Value[Attribute]] = None
 
-  private def remap(v: Value[Attribute]): Value[Attribute] = valueMap.getOrElse(v, v)
-  private def emit(block: Block, op: Operation): Unit = block.addOp(op)
+  private def remap(v: Value[Attribute]): Value[Attribute] =
+    state.remap(v)
+
+  private def emit(block: Block, op: Operation): Unit =
+    block.addOp(op)
+
+  private def constNat(v: Value[Attribute]): Option[BigInt] =
+    v.owner match
+      case Some(dTensor.NatConst(IntegerAttr(IntData(k), _), _)) => Some(k)
+      case _                                                     => None
+
+  private def constIndex(v: BigInt, block: Block): Value[Attribute] =
+    if v == 0 && cachedZero.nonEmpty then cachedZero.get
+    else if v == 1 && cachedOne.nonEmpty then cachedOne.get
+    else
+      val c = llvm.Constant(idxAttr(v), Result(IndexType()))
+      emit(block, c)
+      if v == 0 then cachedZero = Some(c.res)
+      if v == 1 then cachedOne = Some(c.res)
+      c.res
 
   private def materializeNatOrIndex(v: Value[Attribute], block: Block): Value[Attribute] =
     remap(v) match
@@ -58,90 +54,39 @@ private final class Builder(val funcOp: func.Func):
           } =>
         existing
       case other =>
-        constNat(other).map { k =>
-          val c = llvm.Constant(idxAttr(k), Result(IndexType()))
-          emit(block, c)
-          c.res
-        }.orElse {
+        constNat(other).map(k => constIndex(k, block)).orElse {
           other.owner.collect {
-            case dTensor.IndexToNat(idx, _) => materializeNatOrIndex(idx, block)
+            case dTensor.IndexToNat(idx, _) =>
+              materializeNatOrIndex(idx, block)
             case dTensor.ShapeToIndex(nat, _) =>
-              constNat(nat).map { k =>
-                val c = llvm.Constant(idxAttr(k), Result(IndexType()))
-                emit(block, c)
-                c.res
-              }.getOrElse(other)
+              constNat(nat).map(k => constIndex(k, block)).getOrElse(other)
           }
         }.getOrElse(other)
 
-  private def materializeLayoutParam(param: d_memref.LayoutParam, block: Block): Value[Attribute] =
+  private def materializeLayoutParam(
+      param: d_memref.LayoutParam,
+      block: Block,
+  ): Value[Attribute] =
     param match
       case i: IntegerAttr =>
-        if i.value.value == 0 && cachedZero.nonEmpty then cachedZero.get
-        else if i.value.value == 1 && cachedOne.nonEmpty then cachedOne.get
-        else
-          val c = llvm.Constant(IntegerAttr(i.value, IndexType()), Result(IndexType()))
-          emit(block, c)
-          c.res
+        constIndex(i.value.value, block)
       case v: ValueAttribute =>
         materializeNatOrIndex(v.getVal(), block)
 
-  private def zeroConstant(block: Block): Value[Attribute] =
-    cachedZero.getOrElse {
-      val c = llvm.Constant(idxAttr(0), Result(IndexType()))
-      emit(block, c)
-      cachedZero = Some(c.res)
-      c.res
-    }
-
-  private def oneConstant(block: Block): Value[Attribute] =
-    cachedOne.getOrElse {
-      val c = llvm.Constant(idxAttr(1), Result(IndexType()))
-      emit(block, c)
-      cachedOne = Some(c.res)
-      c.res
-    }
-
-  private def lowerExtract(agg: Value[Attribute], path: Seq[Int], resTy: Attribute, block: Block): Value[Attribute] =
-    val ex = llvm.ExtractValue(agg.asInstanceOf[Operand[Attribute]], densePath(path*), Result(resTy))
-    emit(block, ex)
-    ex.res
-
-  private def buildDescriptor(
-      allocatedPtr: Value[Attribute],
-      alignedPtr: Value[Attribute],
-      offset: Value[Attribute],
-      sizes: Seq[Value[Attribute]],
-      strides: Seq[Value[Attribute]],
+  private def descriptor(
+      desc: Value[Attribute],
+      rank: Int,
       block: Block,
-  ): Value[Attribute] =
-    val descTy = llvm.StructType(
-      Seq(
-        llvm.Ptr(),
-        llvm.Ptr(),
-        IndexType(),
-        llvm.ArrayType(IntData(sizes.size), IndexType()),
-        llvm.ArrayType(IntData(sizes.size), IndexType()),
-      )
-    )
-    val poison = llvm.Poison(Result(descTy))
-    emit(block, poison)
-    def ins(v: Value[Attribute], agg: Value[Attribute], path: Int*): Value[Attribute] =
-      val op = llvm.InsertValue(v.asInstanceOf[Operand[Attribute]], agg.asInstanceOf[Operand[Attribute]], densePath(path*), Result(descTy))
-      emit(block, op)
-      op.res
-    var desc: Value[Attribute] = poison.res
-    desc = ins(allocatedPtr, desc, 0)
-    desc = ins(alignedPtr, desc, 1)
-    desc = ins(offset, desc, 2)
-    sizes.zipWithIndex.foreach { case (s, i) => desc = ins(s, desc, 3, i) }
-    strides.zipWithIndex.foreach { case (s, i) => desc = ins(s, desc, 4, i) }
-    desc
+  ): RankedMemrefDescriptorHelper =
+    RankedMemrefDescriptorHelper(desc, rank, block)
 
-  private def buildDefaultStrides(dims: Seq[Value[Attribute]], block: Block): Seq[Value[Attribute]] =
+  private def buildDefaultStrides(
+      dims: Seq[Value[Attribute]],
+      block: Block,
+  ): Seq[Value[Attribute]] =
     if dims.isEmpty then Seq.empty
     else
-      val one = oneConstant(block)
+      val one = constIndex(1, block)
       val rev = mutable.ArrayBuffer[Value[Attribute]](one)
       dims.reverse.drop(1).foreach { dim =>
         val mul = llvm.Mul(asIndex(dim), asIndex(rev.last), Result(IndexType()))
@@ -155,10 +100,10 @@ private final class Builder(val funcOp: func.Func):
       block: Block,
   ): Value[Attribute] =
     val dims = ty.params.map(d => materializeNatOrIndex(d.getVal(), block))
-    val offset = ty.offset.map(materializeLayoutParam(_, block)).getOrElse(zeroConstant(block))
+    val offset = ty.offset.map(materializeLayoutParam(_, block)).getOrElse(constIndex(0, block))
     val strides = ty.strides.map(_.map(materializeLayoutParam(_, block))).getOrElse(buildDefaultStrides(dims, block))
     val numElems =
-      if dims.isEmpty then oneConstant(block)
+      if dims.isEmpty then constIndex(1, block)
       else dims.tail.foldLeft(dims.head) { (acc, dim) =>
         val mul = llvm.Mul(asIndex(acc), asIndex(dim), Result(IndexType()))
         emit(block, mul)
@@ -166,13 +111,30 @@ private final class Builder(val funcOp: func.Func):
       }
     val nullPtr = llvm.Zero(Result(llvm.Ptr()))
     emit(block, nullPtr)
-    val sizePtr = llvm.GetElementPtr(asPtr(nullPtr.res), Seq(asIndex(numElems)), Result(llvm.Ptr()), dynamicIndexSentinel, ty.elem)
+    val sizePtr = llvm.GetElementPtr(
+      asPtr(nullPtr.res),
+      Seq(asIndex(numElems)),
+      Result(llvm.Ptr()),
+      dynamicIndexSentinel,
+      ty.elem,
+    )
     emit(block, sizePtr)
     val sizeBytes = llvm.PtrToInt(asPtr(sizePtr.res), Result(IndexType()))
     emit(block, sizeBytes)
-    val malloc = llvm.Call(SymbolRefAttr(StringData("malloc")), Seq(sizeBytes.out.asInstanceOf[Operand[Attribute]]), Seq(Result(llvm.Ptr())))
+    val malloc = llvm.Call(
+      SymbolRefAttr(StringData("malloc")),
+      Seq(sizeBytes.out.asInstanceOf[Operand[Attribute]]),
+      Seq(Result(llvm.Ptr())),
+    )
     emit(block, malloc)
-    buildDescriptor(malloc.resultss.head, malloc.resultss.head, offset, dims, strides, block)
+    RankedMemrefDescriptorHelper.build(
+      malloc.resultss.head,
+      malloc.resultss.head,
+      offset,
+      dims,
+      strides,
+      block,
+    )
 
   private def lowerAlloc(op: d_memref.Alloc, block: Block): Value[Attribute] =
     lowerAllocLike(op.res.typ, block)
@@ -185,17 +147,26 @@ private final class Builder(val funcOp: func.Func):
       strides: Seq[Value[Attribute]],
       block: Block,
   ): Value[Attribute] =
-    val allocated = lowerExtract(src, Seq(0), llvm.Ptr(), block)
-    val aligned = lowerExtract(src, Seq(1), llvm.Ptr(), block)
-    buildDescriptor(allocated, aligned, offset, sizes, strides, block)
+    val srcDesc = descriptor(src, targetTy.params.size, block)
+    RankedMemrefDescriptorHelper.build(
+      srcDesc.allocatedPtr(),
+      srcDesc.alignedPtr(),
+      offset,
+      sizes,
+      strides,
+      block,
+    )
 
-  private def lowerReinterpret(op: d_memref.ReinterpretCast, block: Block): Value[Attribute] =
+  private def lowerReinterpret(
+      op: d_memref.ReinterpretCast,
+      block: Block,
+  ): Value[Attribute] =
     lowerReinterpret(
       remap(op.src),
       op.res.typ,
       materializeNatOrIndex(op.offset, block),
-      op.sizes.map(v => materializeNatOrIndex(v, block)),
-      op.strides.map(v => materializeNatOrIndex(v, block)),
+      op.sizes.map(materializeNatOrIndex(_, block)),
+      op.strides.map(materializeNatOrIndex(_, block)),
       block,
     )
 
@@ -206,14 +177,20 @@ private final class Builder(val funcOp: func.Func):
       resultTy: Attribute,
       block: Block,
   ): Value[Attribute] =
-    val base = lowerExtract(desc, Seq(1), llvm.Ptr(), block)
+    val memrefDesc = descriptor(desc, idxs.size, block)
+    val base = memrefDesc.alignedPtr()
     val flagged = ty.offset.exists {
       case IntegerAttr(IntData(v), _) => v == 0
       case _                          => false
     } && idxs.size == 2
     val terms = idxs.zipWithIndex.map { case (idx, axis) =>
-      val stride = lowerExtract(desc, Seq(4, axis), IndexType(), block)
-      val mul = llvm.Mul(asIndex(idx), asIndex(stride), Result(IndexType()), if flagged then Some(overflowNSWNuw) else None)
+      val stride = memrefDesc.stride(axis)
+      val mul = llvm.Mul(
+        asIndex(idx),
+        asIndex(stride),
+        Result(IndexType()),
+        if flagged then Some(overflowNSWNuw) else None,
+      )
       emit(block, mul)
       mul.res
     }
@@ -221,11 +198,23 @@ private final class Builder(val funcOp: func.Func):
       if terms.size == 1 then terms.head
       else
         terms.reduce { (l, r) =>
-          val add = llvm.Add(asIndex(l), asIndex(r), Result(IndexType()), if flagged then Some(overflowNSWNuw) else None)
+          val add = llvm.Add(
+            asIndex(l),
+            asIndex(r),
+            Result(IndexType()),
+            if flagged then Some(overflowNSWNuw) else None,
+          )
           emit(block, add)
           add.res
         }
-    val gep = llvm.GetElementPtr(asPtr(base), Seq(asIndex(linear)), Result(llvm.Ptr()), dynamicIndexSentinel, ty.elem, if flagged then Some(gepInboundsNuw) else None)
+    val gep = llvm.GetElementPtr(
+      asPtr(base),
+      Seq(asIndex(linear)),
+      Result(llvm.Ptr()),
+      dynamicIndexSentinel,
+      ty.elem,
+      if flagged then Some(gepInboundsNuw) else None,
+    )
     emit(block, gep)
     val load = llvm.Load(asPtr(gep.res), Result(resultTy))
     emit(block, load)
@@ -235,87 +224,116 @@ private final class Builder(val funcOp: func.Func):
     lowerLoad(
       remap(op.memref),
       op.memref.typ,
-      op.indices.map(v => materializeNatOrIndex(v, block)),
+      op.indices.map(materializeNatOrIndex(_, block)),
       op.res.typ,
       block,
     )
 
-  private def lowerLinearizedLoad(op: d_memref.LinearizedLoad, block: Block): Value[Attribute] =
+  private def lowerLinearizedLoad(
+      op: d_memref.LinearizedLoad,
+      block: Block,
+  ): Value[Attribute] =
     val ty = op.memref.typ
     val desc = remap(op.memref)
     val linear = materializeNatOrIndex(op.linearIndex, block)
-    val base = lowerExtract(desc, Seq(1), llvm.Ptr(), block)
+    val base = descriptor(desc, ty.params.size, block).alignedPtr()
     val flagged = ty.offset.exists {
       case IntegerAttr(IntData(v), _) => v == 0
       case _                          => false
     }
-    val gep = llvm.GetElementPtr(asPtr(base), Seq(asIndex(linear)), Result(llvm.Ptr()), dynamicIndexSentinel, ty.elem, if flagged then Some(gepInboundsNuw) else None)
+    val gep = llvm.GetElementPtr(
+      asPtr(base),
+      Seq(asIndex(linear)),
+      Result(llvm.Ptr()),
+      dynamicIndexSentinel,
+      ty.elem,
+      if flagged then Some(gepInboundsNuw) else None,
+    )
     emit(block, gep)
     val load = llvm.Load(asPtr(gep.res), Result(op.res.typ))
     emit(block, load)
     load.res
 
   private def lowerBasePtr(op: d_memref.BasePtr, block: Block): Value[Attribute] =
-    lowerExtract(remap(op.memref), Seq(1), llvm.Ptr(), block)
+    descriptor(remap(op.memref), op.memref.typ.params.size, block).alignedPtr()
 
-  private def lowerLinearizedLoadFromBase(op: d_memref.LinearizedLoadFromBase, block: Block): Value[Attribute] =
+  private def lowerLinearizedLoadFromBase(
+      op: d_memref.LinearizedLoadFromBase,
+      block: Block,
+  ): Value[Attribute] =
     val base = remap(op.base)
     val linear = materializeNatOrIndex(op.linearIndex, block)
-    val gep = llvm.GetElementPtr(asPtr(base), Seq(asIndex(linear)), Result(llvm.Ptr()), dynamicIndexSentinel, op.res.typ, Some(gepInboundsNuw))
+    val gep = llvm.GetElementPtr(
+      asPtr(base),
+      Seq(asIndex(linear)),
+      Result(llvm.Ptr()),
+      dynamicIndexSentinel,
+      op.res.typ,
+      Some(gepInboundsNuw),
+    )
     emit(block, gep)
     val load = llvm.Load(asPtr(gep.res), Result(op.res.typ))
     emit(block, load)
     load.res
 
-  private def lowerExtractStridedMetadata(op: d_memref.ExtractStridedMetadata, block: Block): Seq[Value[Attribute]] =
+  private def lowerExtractStridedMetadata(
+      op: d_memref.ExtractStridedMetadata,
+      block: Block,
+  ): Seq[Value[Attribute]] =
     val src = remap(op.source)
     val srcTy = op.source.typ
     val rank = srcTy.params.size
+    val srcDesc = descriptor(src, rank, block)
     def used(v: Value[Attribute]): Boolean =
       v.uses.nonEmpty || v.typeUses.nonEmpty
 
-    val base =
-      if used(op.results.head) then
-        src
-      else src
+    val base = src
     val offset =
-      if used(op.results(1)) then lowerExtract(src, Seq(2), IndexType(), block)
-      else zeroConstant(block)
+      if used(op.results(1)) then srcDesc.offset()
+      else constIndex(0, block)
     val sizes = (0 until rank).map { i =>
-      if used(op.results(2 + i)) then lowerExtract(src, Seq(3, i), IndexType(), block)
-      else zeroConstant(block)
+      if used(op.results(2 + i)) then srcDesc.size(i)
+      else constIndex(0, block)
     }
     val strides = (0 until rank).map { i =>
-      if used(op.results(2 + rank + i)) then lowerExtract(src, Seq(4, i), IndexType(), block)
-      else zeroConstant(block)
+      if used(op.results(2 + rank + i)) then srcDesc.stride(i)
+      else constIndex(0, block)
     }
     Seq(base, offset) ++ sizes ++ strides
 
   private def lowerDealloc(desc: Value[Attribute], block: Block): Unit =
-    val ptr = lowerExtract(desc, Seq(0), llvm.Ptr(), block)
-    emit(block, llvm.Call(SymbolRefAttr(StringData("free")), Seq(ptr.asInstanceOf[Operand[Attribute]]), Seq.empty))
+    val rank = desc.typ match
+      case llvm.StructType(fields) =>
+        fields(3).asInstanceOf[llvm.ArrayType].size.value.toInt
+      case _ => 0
+    val ptr = descriptor(desc, rank, block).allocatedPtr()
+    emit(
+      block,
+      llvm.Call(
+        SymbolRefAttr(StringData("free")),
+        Seq(ptr.asInstanceOf[Operand[Attribute]]),
+        Seq.empty,
+      ),
+    )
 
   def lower(): func.Func =
-    val newBlocks = funcOp.body.blocks.map { oldBlock =>
-      val nb = Block(oldBlock.arguments.map(_.typ), Seq.empty)
-      blockMap(oldBlock) = nb
-      valueMap.addAll(oldBlock.arguments.zip(nb.arguments))
-      nb
-    }
+    val newBlocks = state.makeClonedBlocks()
     funcOp.body.blocks.zip(newBlocks).foreach { case (oldBlock, newBlock) =>
       oldBlock.operations.foreach {
         case c: llvm.Constant =>
           c.value match
             case IntegerAttr(IntData(v), _: IndexType) if v == 1 && !(oldBlock eq funcOp.body.blocks.head) =>
-              valueMap(c.res) = oneConstant(newBlocks.head)
+              state.valueMap(c.res) = cachedOne.getOrElse(constIndex(1, newBlocks.head))
             case _ =>
-              val copied = c.deepCopy(using blockMap, valueMap).asInstanceOf[llvm.Constant]
+              val copied = state.deepCopyOp(c).asInstanceOf[llvm.Constant]
               emit(newBlock, copied)
-              valueMap(c.res) = copied.res
+              state.valueMap(c.res) = copied.res
               c.value match
-                case IntegerAttr(IntData(v), _: IndexType) if v == 1 => cachedOne = Some(copied.res)
-                case IntegerAttr(IntData(v), _: IndexType) if v == 0 => cachedZero = Some(copied.res)
-                case _                                               => ()
+                case IntegerAttr(IntData(v), _: IndexType) if v == 1 =>
+                  cachedOne = Some(copied.res)
+                case IntegerAttr(IntData(v), _: IndexType) if v == 0 =>
+                  cachedZero = Some(copied.res)
+                case _ => ()
         case _: dTensor.NatConst =>
           ()
         case _: dTensor.IndexToNat =>
@@ -323,27 +341,30 @@ private final class Builder(val funcOp: func.Func):
         case _: dTensor.ShapeToIndex =>
           ()
         case op: d_memref.Alloc =>
-          valueMap(op.res) = lowerAlloc(op, newBlock)
+          state.valueMap(op.res) = lowerAlloc(op, newBlock)
         case op: d_memref.ReinterpretCast =>
-          valueMap(op.res) = lowerReinterpret(op, newBlock)
+          state.valueMap(op.res) = lowerReinterpret(op, newBlock)
         case op: d_memref.ExtractStridedMetadata =>
-          valueMap.addAll(op.results.zip(lowerExtractStridedMetadata(op, newBlock)))
+          state.valueMap.addAll(op.results.zip(lowerExtractStridedMetadata(op, newBlock)))
         case op: d_memref.Load =>
-          valueMap(op.res) = lowerLoad(op, newBlock)
+          state.valueMap(op.res) = lowerLoad(op, newBlock)
         case op: d_memref.LinearizedLoad =>
-          valueMap(op.res) = lowerLinearizedLoad(op, newBlock)
+          state.valueMap(op.res) = lowerLinearizedLoad(op, newBlock)
         case op: d_memref.BasePtr =>
-          valueMap(op.res) = lowerBasePtr(op, newBlock)
+          state.valueMap(op.res) = lowerBasePtr(op, newBlock)
         case op: d_memref.LinearizedLoadFromBase =>
-          valueMap(op.res) = lowerLinearizedLoadFromBase(op, newBlock)
+          state.valueMap(op.res) = lowerLinearizedLoadFromBase(op, newBlock)
         case op: d_memref.Dealloc =>
           lowerDealloc(remap(op.memref), newBlock)
         case ret: func.Return =>
-          emit(newBlock, llvm.Return(ret._operands.map(v => remap(v).asInstanceOf[Operand[Attribute]])))
+          emit(
+            newBlock,
+            llvm.Return(ret._operands.map(v => remap(v).asInstanceOf[Operand[Attribute]])),
+          )
         case other =>
-          val copied = other.deepCopy(using blockMap, valueMap)
+          val copied = state.deepCopyOp(other)
           emit(newBlock, copied)
-          valueMap.addAll(other.results.zip(copied.results))
+          state.valueMap.addAll(other.results.zip(copied.results))
       }
     }
     func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(newBlocks))

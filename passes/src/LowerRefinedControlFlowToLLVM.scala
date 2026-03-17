@@ -5,61 +5,25 @@ import scair.dialects.affine.*
 import scair.dialects.builtin.*
 import scair.dialects.d_affine
 import scair.dialects.func
-import scair.dialects.llvm
 import scair.ir.*
+import scair.passes.control_flow_helpers.*
+import scair.passes.lowering_helpers.FunctionLoweringState
 import scair.transformations.*
 import scair.transformations.patterns.*
 
 import scala.collection.mutable
 
-private def asIndex(v: Value[Attribute]): Operand[IndexType] =
-  v.asInstanceOf[Operand[IndexType]]
-
-private def asI1(v: Value[Attribute]): Operand[IntegerType] =
-  v.asInstanceOf[Operand[IntegerType]]
-
-private def idxAttr(v: BigInt): IntegerAttr =
-  IntegerAttr(IntData(v), IndexType())
-
-private def overflowNSWNuw: ArrayAttribute[StringData] =
-  ArrayAttribute(Seq(StringData("nsw"), StringData("nuw")))
-
-private def identityOrConstBound(
-    operands: Seq[Value[Attribute]],
-    map: AffineMapAttr,
-): Option[Either[BigInt, Value[Attribute]]] =
-  if map.affineMap.affineExprs.size != 1 then None
-  else
-    val dims = map.affineMap.dimensions
-    map.affineMap.affineExprs.head match
-      case AffineConstantExpr(v) => Some(Left(v))
-      case AffineDimExpr(name) =>
-        val idx = dims.indexOf(name)
-        if idx < 0 || idx >= operands.size then None else Some(Right(operands(idx)))
-      case _ => None
-
 private final class Builder(val funcOp: func.Func):
-  val blocks = mutable.ArrayBuffer.empty[Block]
-  val blockMap = mutable.Map.empty[Block, Block]
-  val valueMap = mutable.Map.empty[Value[Attribute], Value[Attribute]]
-  var current: Block = Block(funcOp.body.blocks.head.arguments.map(_.typ), Seq.empty)
+  private val state = FunctionLoweringState(funcOp)
+  private val blocks = mutable.ArrayBuffer.empty[Block]
+  private val cfg = LoopCFGBuilder(blocks)
+  private var current: Block = Block(funcOp.body.blocks.head.arguments.map(_.typ), Seq.empty)
   blocks += current
-  blockMap(funcOp.body.blocks.head) = current
-  valueMap.addAll(funcOp.body.blocks.head.arguments.zip(current.arguments))
-
-  private def emit(op: Operation): Unit =
-    current.addOp(op)
-
-  private def appendBlock(block: Block): Unit =
-    blocks += block
-
-  private def emitIndexConstant(v: BigInt): Value[Attribute] =
-    val c = llvm.Constant(idxAttr(v), Result(IndexType()))
-    emit(c)
-    c.res
+  state.blockMap(funcOp.body.blocks.head) = current
+  state.valueMap.addAll(funcOp.body.blocks.head.arguments.zip(current.arguments))
 
   private def remap(v: Value[Attribute]): Value[Attribute] =
-    valueMap.getOrElse(v, v)
+    state.remap(v)
 
   private def lowerBound(
       operands: Seq[Value[Attribute]],
@@ -67,13 +31,13 @@ private final class Builder(val funcOp: func.Func):
   ): Option[Value[Attribute]] =
     identityOrConstBound(operands.map(remap), map).map {
       case Left(k) =>
-        emitIndexConstant(k)
+        cfg.emitIndexConstant(current, k)
       case Right(v) =>
         remap(v)
     }
 
   private def deepCopyOp(op: Operation): Operation =
-    op.deepCopy(using blockMap, valueMap)
+    state.deepCopyOp(op)
 
   private def entryArgCaptures(ops: Seq[Operation]): Seq[Value[Attribute]] =
     val entryArgs = funcOp.body.blocks.head.arguments.toSet
@@ -82,11 +46,11 @@ private final class Builder(val funcOp: func.Func):
   private def lowerSimpleOp(op: Operation): Unit =
     op match
       case nested: d_affine.For =>
-        lowerFor(nested).foreach(v => valueMap(nested.res.head) = v)
+        lowerFor(nested).foreach(v => state.valueMap(nested.res.head) = v)
       case other =>
         val copied = deepCopyOp(other)
-        emit(copied)
-        valueMap.addAll(op.results.zip(copied.results))
+        current.addOp(copied)
+        state.valueMap.addAll(op.results.zip(copied.results))
 
   private def hasNestedLoopShape(op: d_affine.For): Boolean =
     if op.inits.size != 1 || op.res.size != 1 || op.body.blocks.size != 1 then false
@@ -111,67 +75,52 @@ private final class Builder(val funcOp: func.Func):
     yield
       val captures = entryArgCaptures(prefixOps ++ innerBody.operations.toSeq)
       val outerHeader = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
-      appendBlock(outerHeader)
+      cfg.appendBlock(outerHeader)
       val outerBodyEntry = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
-      appendBlock(outerBodyEntry)
+      cfg.appendBlock(outerBodyEntry)
       val prefixResultTypes = prefixOps.flatMap(_.results.map(_.typ))
       val innerHeader =
         Block(Seq(IndexType(), IndexType(), init.typ) ++ prefixResultTypes ++ captures.map(_.typ), Seq.empty)
-      appendBlock(innerHeader)
+      cfg.appendBlock(innerHeader)
       val innerBodyEntry =
         Block(Seq(IndexType(), IndexType(), init.typ) ++ prefixResultTypes ++ captures.map(_.typ), Seq.empty)
-      appendBlock(innerBodyEntry)
+      cfg.appendBlock(innerBodyEntry)
       val outerLatch = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
-      appendBlock(outerLatch)
+      cfg.appendBlock(outerLatch)
       val exit = Block(Seq(init.typ), Seq.empty)
-      appendBlock(exit)
+      cfg.appendBlock(exit)
 
-      emit(
-        llvm.Br(
-          Seq(asIndex(outerLb), init.asInstanceOf[Operand[Attribute]]) ++
-            captures.map(remap(_).asInstanceOf[Operand[Attribute]]),
-          outerHeader,
-        )
-      )
+      cfg.emitBr(current, Seq(outerLb, init) ++ captures.map(remap), outerHeader)
 
       val outerIv = outerHeader.arguments.head
       val outerAcc = outerHeader.arguments(1)
       val outerHeaderCaptures = outerHeader.arguments.drop(2)
-      val outerCmp = llvm.ICmp(asIndex(outerIv), asIndex(outerUb), StringData("slt"), Result(I1))
-      outerHeader.addOp(outerCmp)
-      outerHeader.addOp(
-        llvm.CondBr(
-          asI1(outerCmp.res),
-          Seq(outerIv.asInstanceOf[Operand[Attribute]], outerAcc.asInstanceOf[Operand[Attribute]]) ++
-            outerHeaderCaptures.map(_.asInstanceOf[Operand[Attribute]]),
-          Seq(outerAcc.asInstanceOf[Operand[Attribute]]),
-          outerBodyEntry,
-          exit,
-        )
+      val outerCmp = cfg.emitICmpSlt(outerHeader, outerIv, outerUb)
+      cfg.emitCondBr(
+        outerHeader,
+        outerCmp,
+        Seq(outerIv, outerAcc) ++ outerHeaderCaptures,
+        Seq(outerAcc),
+        outerBodyEntry,
+        exit,
       )
 
       val outerBodyIv = outerBodyEntry.arguments.head
       val outerBodyAcc = outerBodyEntry.arguments(1)
       val outerBodyCaptures = outerBodyEntry.arguments.drop(2)
       current = outerBodyEntry
-      val savedOuter = mutable.Map.from(valueMap)
-      valueMap.addAll(
+      val savedOuter = mutable.Map.from(state.valueMap)
+      state.valueMap.addAll(
         Seq(outerBody.arguments.head -> outerBodyIv, outerBody.arguments(1) -> outerBodyAcc) ++
           captures.zip(outerBodyCaptures)
       )
       prefixOps.foreach(lowerSimpleOp)
       val prefixValues = prefixOps.flatMap(_.results.map(r => remap(r)))
-      valueMap.clear(); valueMap.addAll(savedOuter)
-      outerBodyEntry.addOp(
-        llvm.Br(
-          Seq(
-            outerBodyIv.asInstanceOf[Operand[Attribute]],
-            asIndex(innerLb),
-            outerBodyAcc.asInstanceOf[Operand[Attribute]],
-          ) ++ prefixValues.map(_.asInstanceOf[Operand[Attribute]]) ++
-            outerBodyCaptures.map(_.asInstanceOf[Operand[Attribute]]),
-          innerHeader,
-        )
+      state.valueMap.clear(); state.valueMap.addAll(savedOuter)
+      cfg.emitBr(
+        outerBodyEntry,
+        Seq(outerBodyIv, innerLb, outerBodyAcc) ++ prefixValues ++ outerBodyCaptures,
+        innerHeader,
       )
 
       val innerOuterIv = innerHeader.arguments.head
@@ -179,29 +128,19 @@ private final class Builder(val funcOp: func.Func):
       val innerAcc = innerHeader.arguments(2)
       val innerPrefixExtras = innerHeader.arguments.drop(3).take(prefixResultTypes.size)
       val innerCaptures = innerHeader.arguments.drop(3 + prefixResultTypes.size)
-      val innerCmp = llvm.ICmp(asIndex(innerIv), asIndex(innerUb), StringData("slt"), Result(I1))
-      innerHeader.addOp(innerCmp)
-      innerHeader.addOp(
-        llvm.CondBr(
-          asI1(innerCmp.res),
-          Seq(
-            innerOuterIv.asInstanceOf[Operand[Attribute]],
-            innerIv.asInstanceOf[Operand[Attribute]],
-            innerAcc.asInstanceOf[Operand[Attribute]],
-          ) ++ innerPrefixExtras.map(_.asInstanceOf[Operand[Attribute]]) ++
-            innerCaptures.map(_.asInstanceOf[Operand[Attribute]]),
-          Seq(
-            innerOuterIv.asInstanceOf[Operand[Attribute]],
-            innerAcc.asInstanceOf[Operand[Attribute]],
-          ) ++ innerCaptures.map(_.asInstanceOf[Operand[Attribute]]),
-          innerBodyEntry,
-          outerLatch,
-        )
+      val innerCmp = cfg.emitICmpSlt(innerHeader, innerIv, innerUb)
+      cfg.emitCondBr(
+        innerHeader,
+        innerCmp,
+        Seq(innerOuterIv, innerIv, innerAcc) ++ innerPrefixExtras ++ innerCaptures,
+        Seq(innerOuterIv, innerAcc) ++ innerCaptures,
+        innerBodyEntry,
+        outerLatch,
       )
 
       current = innerBodyEntry
-      val saved = mutable.Map.from(valueMap)
-      valueMap.addAll(
+      val saved = mutable.Map.from(state.valueMap)
+      state.valueMap.addAll(
         Seq(
           op.body.blocks.head.arguments.head -> innerBodyEntry.arguments.head,
           op.body.blocks.head.arguments(1) -> outerBodyAcc,
@@ -215,45 +154,22 @@ private final class Builder(val funcOp: func.Func):
         case y: d_affine.Yield => yielded = Some(remap(y.args.head))
         case other             => lowerSimpleOp(other)
       }
-      valueMap.clear(); valueMap.addAll(saved)
+      state.valueMap.clear(); state.valueMap.addAll(saved)
       yielded.foreach { y =>
-        val step = emitIndexConstant(inner.step.value.value)
-        val nextIv = llvm.Add(
-          asIndex(innerBodyEntry.arguments(1)),
-          asIndex(step),
-          Result(IndexType()),
-          Some(overflowNSWNuw),
-        )
-        emit(nextIv)
-        emit(
-          llvm.Br(
-            Seq(
-              innerBodyEntry.arguments.head.asInstanceOf[Operand[Attribute]],
-              nextIv.res.asInstanceOf[Operand[Attribute]],
-              y.asInstanceOf[Operand[Attribute]],
-            ) ++ innerBodyEntry.arguments.drop(3).map(_.asInstanceOf[Operand[Attribute]]),
-            innerHeader,
-          )
+        val step = cfg.emitIndexConstant(current, inner.step.value.value)
+        val nextIv = cfg.emitAdd(current, innerBodyEntry.arguments(1), step)
+        cfg.emitBr(
+          current,
+          Seq(innerBodyEntry.arguments.head, nextIv, y) ++ innerBodyEntry.arguments.drop(3),
+          innerHeader,
         )
       }
 
       current = outerLatch
       val outerLatchCaptures = outerLatch.arguments.drop(2)
-      val outerStep = emitIndexConstant(op.step.value.value)
-      val nextOuter = llvm.Add(
-        asIndex(outerLatch.arguments.head),
-        asIndex(outerStep),
-        Result(IndexType()),
-        Some(overflowNSWNuw),
-      )
-      emit(nextOuter)
-      emit(
-        llvm.Br(
-          Seq(nextOuter.res.asInstanceOf[Operand[Attribute]], outerLatch.arguments(1).asInstanceOf[Operand[Attribute]]) ++
-            outerLatchCaptures.map(_.asInstanceOf[Operand[Attribute]]),
-          outerHeader,
-        )
-      )
+      val outerStep = cfg.emitIndexConstant(current, op.step.value.value)
+      val nextOuter = cfg.emitAdd(current, outerLatch.arguments.head, outerStep)
+      cfg.emitBr(current, Seq(nextOuter, outerLatch.arguments(1)) ++ outerLatchCaptures, outerHeader)
 
       current = exit
       exit.arguments.head
@@ -269,44 +185,29 @@ private final class Builder(val funcOp: func.Func):
         val init = remap(op.inits.head)
         val bodyBlock = op.body.blocks.head
         val header = Block(Seq(IndexType(), init.typ), Seq.empty)
-        appendBlock(header)
+        cfg.appendBlock(header)
         val body = Block(Seq(IndexType(), init.typ), Seq.empty)
-        appendBlock(body)
+        cfg.appendBlock(body)
         val exit = Block(Seq(init.typ), Seq.empty)
-        appendBlock(exit)
-        emit(llvm.Br(Seq(asIndex(lb), init.asInstanceOf[Operand[Attribute]]), header))
+        cfg.appendBlock(exit)
+        cfg.emitBr(current, Seq(lb, init), header)
         val iv = header.arguments.head
         val acc = header.arguments(1)
-        val cmp = llvm.ICmp(asIndex(iv), asIndex(ub), StringData("slt"), Result(I1))
-        header.addOp(cmp)
-        header.addOp(
-          llvm.CondBr(
-            asI1(cmp.res),
-            Seq(iv.asInstanceOf[Operand[Attribute]], acc.asInstanceOf[Operand[Attribute]]),
-            Seq(acc.asInstanceOf[Operand[Attribute]]),
-            body,
-            exit,
-          )
-        )
+        val cmp = cfg.emitICmpSlt(header, iv, ub)
+        cfg.emitCondBr(header, cmp, Seq(iv, acc), Seq(acc), body, exit)
         current = body
-        val saved = mutable.Map.from(valueMap)
-        valueMap.addAll(Seq(bodyBlock.arguments.head -> body.arguments.head, bodyBlock.arguments(1) -> body.arguments(1)))
+        val saved = mutable.Map.from(state.valueMap)
+        state.valueMap.addAll(Seq(bodyBlock.arguments.head -> body.arguments.head, bodyBlock.arguments(1) -> body.arguments(1)))
         var yielded: Option[Value[Attribute]] = None
         bodyBlock.operations.foreach {
           case y: d_affine.Yield => yielded = Some(remap(y.args.head))
           case other             => lowerSimpleOp(other)
         }
-        valueMap.clear(); valueMap.addAll(saved)
+        state.valueMap.clear(); state.valueMap.addAll(saved)
         yielded.foreach { y =>
-          val step = emitIndexConstant(op.step.value.value)
-          val nextIv = llvm.Add(
-            asIndex(body.arguments.head),
-            asIndex(step),
-            Result(IndexType()),
-            Some(overflowNSWNuw),
-          )
-          emit(nextIv)
-          emit(llvm.Br(Seq(nextIv.res.asInstanceOf[Operand[Attribute]], y.asInstanceOf[Operand[Attribute]]), header))
+          val step = cfg.emitIndexConstant(current, op.step.value.value)
+          val nextIv = cfg.emitAdd(current, body.arguments.head, step)
+          cfg.emitBr(current, Seq(nextIv, y), header)
         }
         current = exit
         exit.arguments.head
@@ -314,7 +215,7 @@ private final class Builder(val funcOp: func.Func):
   def lower(): func.Func =
     funcOp.body.blocks.head.operations.foreach {
       case loop: d_affine.For =>
-        lowerFor(loop).foreach(v => valueMap(loop.res.head) = v)
+        lowerFor(loop).foreach(v => state.valueMap(loop.res.head) = v)
       case other =>
         lowerSimpleOp(other)
     }
