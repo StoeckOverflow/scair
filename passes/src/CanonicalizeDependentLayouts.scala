@@ -41,8 +41,6 @@ private def simplifyLayoutParam(
               simplifyLayoutParam(ValueAttribute(rhs))
             case Some(arith.MulI(lhs, rhs, _)) if isConst(rhs, 1) =>
               simplifyLayoutParam(ValueAttribute(lhs))
-            case Some(ShapeToIndex(nat, _)) =>
-              simplifyLayoutParam(ValueAttribute(nat))
             case _ =>
               v
     case other => other
