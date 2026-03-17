@@ -6,9 +6,9 @@ builtin.module {
     func.return %m : index
   }
 }
-// CHECK: func.func @min_project_dim
-// CHECK-NOT: d_affine.min
-// CHECK: func.return %{{.*}} : index
+// CHECK-LABEL: func.func @min_project_dim(%0: index, %1: index) -> index {
+// CHECK-NEXT:    func.return %0 : index
+// CHECK-NEXT:  }
 
 // -----
 
@@ -20,8 +20,12 @@ builtin.module {
     func.return %m : index
   }
 }
-// CHECK: "arith.constant"() <{value = 12 : index}> : () -> index
-// CHECK-NOT: d_affine.min
+// CHECK-LABEL: func.func @min_fold_const_expr() -> index {
+// CHECK-NEXT:    %0 = "arith.constant"() <{value = 8 : index}> : () -> index
+// CHECK-NEXT:    %1 = "arith.constant"() <{value = 4 : index}> : () -> index
+// CHECK-NEXT:    %2 = "arith.constant"() <{value = 12 : index}> : () -> index
+// CHECK-NEXT:    func.return %2 : index
+// CHECK-NEXT:  }
 
 // -----
 
@@ -31,9 +35,9 @@ builtin.module {
     func.return %a : index
   }
 }
-// CHECK: func.func @apply_project_symbol
-// CHECK-NOT: d_affine.apply
-// CHECK: func.return %{{.*}} : index
+// CHECK-LABEL: func.func @apply_project_symbol(%0: index, %1: index) -> index {
+// CHECK-NEXT:    func.return %1 : index
+// CHECK-NEXT:  }
 
 // -----
 
@@ -45,5 +49,9 @@ builtin.module {
     func.return %r : index
   }
 }
-// CHECK: "arith.constant"() <{value = 12 : index}> : () -> index
-// CHECK-NOT: d_affine.apply
+// CHECK-LABEL: func.func @apply_fold_const_expr() -> index {
+// CHECK-NEXT:    %0 = "arith.constant"() <{value = 5 : index}> : () -> index
+// CHECK-NEXT:    %1 = "arith.constant"() <{value = 7 : index}> : () -> index
+// CHECK-NEXT:    %2 = "arith.constant"() <{value = 12 : index}> : () -> index
+// CHECK-NEXT:    func.return %2 : index
+// CHECK-NEXT:  }

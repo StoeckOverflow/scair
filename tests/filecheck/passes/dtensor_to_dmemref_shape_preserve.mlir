@@ -8,6 +8,10 @@ builtin.module {
   "test.keep"(%d) : (!value<%m>) -> ()
 }
 
-// CHECK: %[[M:.*]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// CHECK: %[[CAST:.*]] = "builtin.unrealized_conversion_cast"(%{{.*}}) : (!dtensor.tensor<[%[[M]]], i32>) -> !d_memref.memref<[%[[M]]], i32>
-// CHECK: %[[D:.*]] = d_memref.dim_exact %[[CAST]] {axis = 0 : i32} : !d_memref.memref<[%[[M]]], i32> -> !value<%[[M]]>
+// CHECK-LABEL: builtin.module {
+// CHECK-NEXT:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CHECK-NEXT:   %1 = "test.tensor"() : () -> !dtensor.tensor<[%0], i32>
+// CHECK-NEXT:   %2 = "builtin.unrealized_conversion_cast"(%1) : (!dtensor.tensor<[%0], i32>) -> !d_memref.memref<[%0], i32>
+// CHECK-NEXT:   %3 = d_memref.dim_exact %2 {axis = 0 : i32} : !d_memref.memref<[%0], i32> -> !value<%0>
+// CHECK-NEXT:   "test.keep"(%3) : (!value<%0>) -> ()
+// CHECK-NEXT: }

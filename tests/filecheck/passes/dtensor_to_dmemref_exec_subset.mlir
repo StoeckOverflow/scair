@@ -22,22 +22,51 @@ builtin.module {
   "test.keep"(%e, %c, %d) : (!dtensor.tensor<[%m, %n], i32>, !dtensor.tensor<[%m, %n], i32>, !value<%n>) -> ()
 }
 
-// LOWER-LABEL: builtin.module
-// LOWER: %[[M:.*]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// LOWER: %[[N:.*]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// LOWER: %[[EMPTY_ALLOC:.*]] = d_memref.alloc : () -> !d_memref.memref<[%[[M]], %[[N]]], i32>
-// LOWER: %[[I0:.*]] = "dtensor.shape.to_index"(%[[M]]) : (!dtensor.nat) -> index
-// LOWER: %[[I1:.*]] = "dtensor.shape.to_index"(%[[N]]) : (!dtensor.nat) -> index
-// LOWER: d_affine.for
-// LOWER: d_memref.store
-// LOWER: d_memref.cast
-// LOWER: d_memref.dim_exact
-// LOWER-NOT: "dtensor.empty"
-// LOWER-NOT: "dtensor.fill"
-// LOWER-NOT: "dtensor.cast"
-// LOWER-NOT: "dtensor.dim"
+// LOWER-LABEL: builtin.module {
+// LOWER-NEXT:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// LOWER-NEXT:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// LOWER-NEXT:   %2 = "arith.constant"() <{value = 7 : i32}> : () -> i32
+// LOWER-NEXT:   %3 = d_memref.alloc : () -> !d_memref.memref<[%0, %1], i32>
+// LOWER-NEXT:   %4 = "builtin.unrealized_conversion_cast"(%3) : (!d_memref.memref<[%0, %1], i32>) -> !dtensor.tensor<[%0, %1], i32>
+// LOWER-NEXT:   %5 = "arith.constant"() <{value = 0 : index}> : () -> index
+// LOWER-NEXT:   %6 = "dtensor.shape.to_index"(%0) : (!dtensor.nat) -> index
+// LOWER-NEXT:   %7 = "dtensor.shape.to_index"(%1) : (!dtensor.nat) -> index
+// LOWER-NEXT:   %8 = d_memref.alloc : () -> !d_memref.memref<[%0, %1], i32>
+// LOWER-NEXT:   d_affine.for %9 = #map(%5) to #map(%6) step 1 : i32 {
+// LOWER-NEXT:     d_affine.for %10 = #map(%5) to #map(%7) step 1 : i32 {
+// LOWER-NEXT:       d_memref.store %2, %8[%9, %10] : i32, !d_memref.memref<[%0, %1], i32>
+// LOWER-NEXT:       d_affine.yield
+// LOWER-NEXT:     }
+// LOWER-NEXT:     d_affine.yield
+// LOWER-NEXT:   }
+// LOWER-NEXT:   %11 = "builtin.unrealized_conversion_cast"(%8) : (!d_memref.memref<[%0, %1], i32>) -> !dtensor.tensor<[%0, %1], i32>
+// LOWER-NEXT:   %12 = "builtin.unrealized_conversion_cast"(%11) : (!dtensor.tensor<[%0, %1], i32>) -> !d_memref.memref<[%0, %1], i32>
+// LOWER-NEXT:   %13 = d_memref.cast %12 : !d_memref.memref<[%0, %1], i32> -> !d_memref.memref<[%0, %1], i32>
+// LOWER-NEXT:   %14 = "builtin.unrealized_conversion_cast"(%13) : (!d_memref.memref<[%0, %1], i32>) -> !dtensor.tensor<[%0, %1], i32>
+// LOWER-NEXT:   %15 = "builtin.unrealized_conversion_cast"(%14) : (!dtensor.tensor<[%0, %1], i32>) -> !d_memref.memref<[%0, %1], i32>
+// LOWER-NEXT:   %16 = d_memref.dim_exact %15 {axis = 1 : i32} : !d_memref.memref<[%0, %1], i32> -> !value<%1>
+// LOWER-NEXT:   "test.keep"(%4, %14, %16) : (!dtensor.tensor<[%0, %1], i32>, !dtensor.tensor<[%0, %1], i32>, !value<%1>) -> ()
+// LOWER-NEXT: }
 
-// RECON-LABEL: builtin.module
-// RECON: d_memref.alloc : () -> !d_memref.memref<[%{{.*}}, %{{.*}}], i32>
-// RECON: d_memref.cast
-// RECON-NOT: "builtin.unrealized_conversion_cast"(%{{.*}}) : (!d_memref.memref<[%{{.*}}, %{{.*}}], i32>) -> !d_memref.memref<[%{{.*}}, %{{.*}}], i32>
+// RECON-LABEL: builtin.module {
+// RECON-NEXT:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// RECON-NEXT:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// RECON-NEXT:   %2 = "arith.constant"() <{value = 7 : i32}> : () -> i32
+// RECON-NEXT:   %3 = d_memref.alloc : () -> !d_memref.memref<[%0, %1], i32>
+// RECON-NEXT:   %4 = "builtin.unrealized_conversion_cast"(%3) : (!d_memref.memref<[%0, %1], i32>) -> !dtensor.tensor<[%0, %1], i32>
+// RECON-NEXT:   %5 = "arith.constant"() <{value = 0 : index}> : () -> index
+// RECON-NEXT:   %6 = "dtensor.shape.to_index"(%0) : (!dtensor.nat) -> index
+// RECON-NEXT:   %7 = "dtensor.shape.to_index"(%1) : (!dtensor.nat) -> index
+// RECON-NEXT:   %8 = d_memref.alloc : () -> !d_memref.memref<[%0, %1], i32>
+// RECON-NEXT:   d_affine.for %9 = #map(%5) to #map(%6) step 1 : i32 {
+// RECON-NEXT:     d_affine.for %10 = #map(%5) to #map(%7) step 1 : i32 {
+// RECON-NEXT:       d_memref.store %2, %8[%9, %10] : i32, !d_memref.memref<[%0, %1], i32>
+// RECON-NEXT:       d_affine.yield
+// RECON-NEXT:     }
+// RECON-NEXT:     d_affine.yield
+// RECON-NEXT:   }
+// RECON-NEXT:   %11 = d_memref.cast %8 : !d_memref.memref<[%0, %1], i32> -> !d_memref.memref<[%0, %1], i32>
+// RECON-NEXT:   %12 = "builtin.unrealized_conversion_cast"(%11) : (!d_memref.memref<[%0, %1], i32>) -> !dtensor.tensor<[%0, %1], i32>
+// RECON-NEXT:   %13 = d_memref.dim_exact %11 {axis = 1 : i32} : !d_memref.memref<[%0, %1], i32> -> !value<%1>
+// RECON-NEXT:   "test.keep"(%4, %12, %13) : (!dtensor.tensor<[%0, %1], i32>, !dtensor.tensor<[%0, %1], i32>, !value<%1>) -> ()
+// RECON-NEXT: }

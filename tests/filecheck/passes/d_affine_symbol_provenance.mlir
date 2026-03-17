@@ -15,10 +15,13 @@ builtin.module {
   }
 }
 
-// CHECK-LABEL: func.func @project_symbol_nat_provenance
-// CHECK: "dtensor.shape.to_index"
-// CHECK-NOT: d_affine.apply
-// CHECK: func.return %{{.*}} : index
+// CHECK-LABEL: func.func @project_symbol_nat_provenance(%0: !dtensor.nat) -> index {
+// CHECK-NEXT:    %1 = "dtensor.nat.const"() <{value = 64 : i32}> : () -> !dtensor.nat
+// CHECK-NEXT:    %2 = "dtensor.nat.mul"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CHECK-NEXT:    %3 = "dtensor.shape.to_index"(%2) : (!dtensor.nat) -> index
+// CHECK-NEXT:    %4 = "arith.constant"() <{value = 0 : index}> : () -> index
+// CHECK-NEXT:    func.return %3 : index
+// CHECK-NEXT:  }
 
 // -----
 
@@ -38,6 +41,16 @@ builtin.module {
   }
 }
 
-// CHECK-LABEL: func.func @affine_subset_symbol_const_fold
-// CHECK: "arith.constant"() <{value = 392 : index}> : () -> index
-// CHECK-NOT: d_affine.apply
+// CHECK-LABEL: func.func @affine_subset_symbol_const_fold() -> index {
+// CHECK-NEXT:    %0 = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
+// CHECK-NEXT:    %1 = "dtensor.nat.const"() <{value = 64 : i32}> : () -> !dtensor.nat
+// CHECK-NEXT:    %2 = "dtensor.nat.const"() <{value = 128 : i32}> : () -> !dtensor.nat
+// CHECK-NEXT:    %3 = "dtensor.nat.mul"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CHECK-NEXT:    %4 = "dtensor.nat.mul"(%0, %2) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CHECK-NEXT:    %5 = "dtensor.shape.to_index"(%3) : (!dtensor.nat) -> index
+// CHECK-NEXT:    %6 = "dtensor.shape.to_index"(%4) : (!dtensor.nat) -> index
+// CHECK-NEXT:    %7 = "arith.constant"() <{value = 3 : index}> : () -> index
+// CHECK-NEXT:    %8 = "arith.constant"() <{value = 5 : index}> : () -> index
+// CHECK-NEXT:    %9 = "arith.constant"() <{value = 392 : index}> : () -> index
+// CHECK-NEXT:    func.return %9 : index
+// CHECK-NEXT:  }
