@@ -1,4 +1,4 @@
-package scair.passes.finalize_refined_dmemref_to_llvm
+package scair.passes.finalize_refined_dmemref_to_llvm_descriptor
 
 import scair.MLContext
 import scair.dialects.builtin.*
@@ -30,36 +30,6 @@ private final class Builder(val funcOp: func.Func):
 
   private def emit(block: Block, op: Operation): Unit =
     block.addOp(op)
-
-  private def convertCarrierType(attr: Attribute): Attribute =
-    attr match
-      case _: d_memref.dMemrefMemrefType => llvm.Ptr()
-      case other                         => other
-
-  private def loweredFunctionType: FunctionType =
-    FunctionType(
-      funcOp.function_type.inputs.map(i => convertCarrierType(i).asInstanceOf[TypeAttribute]),
-      funcOp.function_type.outputs.map(o => convertCarrierType(o).asInstanceOf[TypeAttribute]),
-    )
-
-  private def makeLoweredBlocks(): Seq[Block] =
-    funcOp.body.blocks.map { oldBlock =>
-      val nb = Block(oldBlock.arguments.map(arg => convertCarrierType(arg.typ)), Seq.empty)
-      state.blockMap(oldBlock) = nb
-      state.valueMap.addAll(oldBlock.arguments.zip(nb.arguments))
-      nb
-    }
-
-  private def seedEntryIndexAliases(entry: Block): Unit =
-    funcOp.body.blocks.head.arguments.zip(entry.arguments).foreach { case (oldArg, newArg) =>
-      oldArg.typ match
-        case _: IndexType =>
-          val zero = constIndex(0, entry)
-          val alias = llvm.Add(newArg.asInstanceOf[Operand[IndexType]], asIndex(zero), Result(IndexType()))
-          emit(entry, alias)
-          state.valueMap(oldArg) = alias.res
-        case _ => ()
-    }
 
   private def constNat(v: Value[Attribute]): Option[BigInt] =
     v.owner match
@@ -93,12 +63,27 @@ private final class Builder(val funcOp: func.Func):
           }
         }.getOrElse(other)
 
-  private def materializeLayoutParam(param: d_memref.LayoutParam, block: Block): Value[Attribute] =
+  private def materializeLayoutParam(
+      param: d_memref.LayoutParam,
+      block: Block,
+  ): Value[Attribute] =
     param match
-      case i: IntegerAttr    => constIndex(i.value.value, block)
-      case v: ValueAttribute => materializeNatOrIndex(v.getVal(), block)
+      case i: IntegerAttr =>
+        constIndex(i.value.value, block)
+      case v: ValueAttribute =>
+        materializeNatOrIndex(v.getVal(), block)
 
-  private def buildDefaultStrides(dims: Seq[Value[Attribute]], block: Block): Seq[Value[Attribute]] =
+  private def descriptor(
+      desc: Value[Attribute],
+      rank: Int,
+      block: Block,
+  ): RankedMemrefDescriptorHelper =
+    RankedMemrefDescriptorHelper(desc, rank, block)
+
+  private def buildDefaultStrides(
+      dims: Seq[Value[Attribute]],
+      block: Block,
+  ): Seq[Value[Attribute]] =
     if dims.isEmpty then Seq.empty
     else
       val one = constIndex(1, block)
@@ -110,67 +95,13 @@ private final class Builder(val funcOp: func.Func):
       }
       rev.reverse.toSeq
 
-  private def layoutOffset(ty: d_memref.dMemrefMemrefType, block: Block): Value[Attribute] =
-    ty.offset.map(materializeLayoutParam(_, block)).getOrElse(constIndex(0, block))
-
-  private def layoutDims(ty: d_memref.dMemrefMemrefType, block: Block): Seq[Value[Attribute]] =
-    ty.params.map(d => materializeNatOrIndex(d.getVal(), block))
-
-  private def layoutStrides(
+  private def lowerAllocLike(
       ty: d_memref.dMemrefMemrefType,
-      dims: Seq[Value[Attribute]],
       block: Block,
-  ): Seq[Value[Attribute]] =
-    ty.strides.map(_.map(materializeLayoutParam(_, block))).getOrElse(buildDefaultStrides(dims, block))
-
-  private def constIndexValue(v: Value[Attribute]): Option[BigInt] =
-    v.owner match
-      case Some(llvm.Constant(IntegerAttr(IntData(k), _: IndexType), _)) => Some(k)
-      case _                                                              => None
-
-  private def hasZeroOffset(ty: d_memref.dMemrefMemrefType): Boolean =
-    ty.offset match
-      case Some(IntegerAttr(IntData(v), _)) => v == 0
-      case _                                => false
-
-  private def computeLinearIndex(
-      ty: d_memref.dMemrefMemrefType,
-      idxs: Seq[Value[Attribute]],
-      block: Block,
-      useFlags: Boolean,
   ): Value[Attribute] =
-    val dims = layoutDims(ty, block)
-    val offset = layoutOffset(ty, block)
-    val strides = layoutStrides(ty, dims, block)
-    val terms = idxs.zip(strides).map { case (idx, stride) =>
-      constIndexValue(stride) match
-        case Some(1) => idx
-        case _ =>
-          val mul = llvm.Mul(
-            asIndex(idx),
-            asIndex(stride),
-            Result(IndexType()),
-            if useFlags then Some(overflowNSWNuw) else None,
-          )
-          emit(block, mul)
-          mul.res
-    }
-    val summands =
-      (if constIndexValue(offset).contains(0) then Seq.empty else Seq(offset)) ++ terms
-    if summands.isEmpty then constIndex(0, block)
-    else summands.reduceLeft { (lhs, rhs) =>
-      val add = llvm.Add(
-        asIndex(lhs),
-        asIndex(rhs),
-        Result(IndexType()),
-        if useFlags then Some(overflowNSWNuw) else None,
-      )
-      emit(block, add)
-      add.res
-    }
-
-  private def lowerAllocLike(ty: d_memref.dMemrefMemrefType, block: Block): Value[Attribute] =
-    val dims = layoutDims(ty, block)
+    val dims = ty.params.map(d => materializeNatOrIndex(d.getVal(), block))
+    val offset = ty.offset.map(materializeLayoutParam(_, block)).getOrElse(constIndex(0, block))
+    val strides = ty.strides.map(_.map(materializeLayoutParam(_, block))).getOrElse(buildDefaultStrides(dims, block))
     val numElems =
       if dims.isEmpty then constIndex(1, block)
       else dims.tail.foldLeft(dims.head) { (acc, dim) =>
@@ -196,93 +127,183 @@ private final class Builder(val funcOp: func.Func):
       Seq(Result(llvm.Ptr())),
     )
     emit(block, malloc)
-    malloc.resultss.head
+    RankedMemrefDescriptorHelper.build(
+      malloc.resultss.head,
+      malloc.resultss.head,
+      offset,
+      dims,
+      strides,
+      block,
+    )
 
   private def lowerAlloc(op: d_memref.Alloc, block: Block): Value[Attribute] =
     lowerAllocLike(op.res.typ, block)
 
-  private def lowerReinterpret(op: d_memref.ReinterpretCast, block: Block): Value[Attribute] =
-    remap(op.src)
+  private def lowerReinterpret(
+      src: Value[Attribute],
+      targetTy: d_memref.dMemrefMemrefType,
+      offset: Value[Attribute],
+      sizes: Seq[Value[Attribute]],
+      strides: Seq[Value[Attribute]],
+      block: Block,
+  ): Value[Attribute] =
+    val srcDesc = descriptor(src, targetTy.params.size, block)
+    RankedMemrefDescriptorHelper.build(
+      srcDesc.allocatedPtr(),
+      srcDesc.alignedPtr(),
+      offset,
+      sizes,
+      strides,
+      block,
+    )
 
-  private def lowerLoadFromLinearized(
-      base: Value[Attribute],
-      elemTy: Attribute,
-      linear: Value[Attribute],
+  private def lowerReinterpret(op: d_memref.ReinterpretCast, block: Block): Value[Attribute] =
+    lowerReinterpret(
+      remap(op.src),
+      op.res.typ,
+      materializeLayoutParam(op.res.typ.offset.get, block),
+      op.res.typ.params.map(d => materializeNatOrIndex(d.getVal(), block)),
+      op.res.typ.strides.get.map(materializeLayoutParam(_, block)),
+      block,
+    )
+
+  private def lowerLoad(
+      desc: Value[Attribute],
+      ty: d_memref.dMemrefMemrefType,
+      idxs: Seq[Value[Attribute]],
       resultTy: Attribute,
       block: Block,
-      useFlags: Boolean,
   ): Value[Attribute] =
+    val memrefDesc = descriptor(desc, idxs.size, block)
+    val base = memrefDesc.alignedPtr()
+    val flagged = ty.offset.exists {
+      case IntegerAttr(IntData(v), _) => v == 0
+      case _                          => false
+    } && idxs.size == 2
+    val terms = idxs.zipWithIndex.map { case (idx, axis) =>
+      val stride = memrefDesc.stride(axis)
+      val mul = llvm.Mul(
+        asIndex(idx),
+        asIndex(stride),
+        Result(IndexType()),
+        if flagged then Some(overflowNSWNuw) else None,
+      )
+      emit(block, mul)
+      mul.res
+    }
+    val linear =
+      if terms.size == 1 then terms.head
+      else
+        terms.reduce { (l, r) =>
+          val add = llvm.Add(
+            asIndex(l),
+            asIndex(r),
+            Result(IndexType()),
+            if flagged then Some(overflowNSWNuw) else None,
+          )
+          emit(block, add)
+          add.res
+        }
     val gep = llvm.GetElementPtr(
       asPtr(base),
       Seq(asIndex(linear)),
       Result(llvm.Ptr()),
       dynamicIndexSentinel,
-      elemTy,
-      if useFlags then Some(gepInboundsNuw) else None,
+      ty.elem,
+      if flagged then Some(gepInboundsNuw) else None,
     )
     emit(block, gep)
     val load = llvm.Load(asPtr(gep.res), Result(resultTy))
     emit(block, load)
     load.res
 
-  private def lowerStoreToLinearized(
+  private def lowerLoad(op: d_memref.Load, block: Block): Value[Attribute] =
+    lowerLoad(remap(op.memref), op.memref.typ, op.indices.map(materializeNatOrIndex(_, block)), op.res.typ, block)
+
+  private def lowerStore(
+      desc: Value[Attribute],
+      ty: d_memref.dMemrefMemrefType,
+      idxs: Seq[Value[Attribute]],
       value: Value[Attribute],
-      base: Value[Attribute],
-      elemTy: Attribute,
-      linear: Value[Attribute],
       block: Block,
-      useFlags: Boolean,
   ): Unit =
+    val memrefDesc = descriptor(desc, idxs.size, block)
+    val base = memrefDesc.alignedPtr()
+    val flagged = ty.offset.exists {
+      case IntegerAttr(IntData(v), _) => v == 0
+      case _                          => false
+    } && idxs.size == 2
+    val terms = idxs.zipWithIndex.map { case (idx, axis) =>
+      val stride = memrefDesc.stride(axis)
+      val mul = llvm.Mul(
+        asIndex(idx),
+        asIndex(stride),
+        Result(IndexType()),
+        if flagged then Some(overflowNSWNuw) else None,
+      )
+      emit(block, mul)
+      mul.res
+    }
+    val linear =
+      if terms.size == 1 then terms.head
+      else
+        terms.reduce { (l, r) =>
+          val add = llvm.Add(
+            asIndex(l),
+            asIndex(r),
+            Result(IndexType()),
+            if flagged then Some(overflowNSWNuw) else None,
+          )
+          emit(block, add)
+          add.res
+        }
     val gep = llvm.GetElementPtr(
       asPtr(base),
       Seq(asIndex(linear)),
       Result(llvm.Ptr()),
       dynamicIndexSentinel,
-      elemTy,
-      if useFlags then Some(gepInboundsNuw) else None,
+      ty.elem,
+      if flagged then Some(gepInboundsNuw) else None,
     )
     emit(block, gep)
     emit(block, llvm.Store(value.asInstanceOf[Operand[Attribute]], asPtr(gep.res)))
 
-  private def lowerLoad(op: d_memref.Load, block: Block): Value[Attribute] =
-    val idxs = op.indices.map(materializeNatOrIndex(_, block))
-    val flagged = hasZeroOffset(op.memref.typ) && idxs.size == 2
-    val linear = computeLinearIndex(op.memref.typ, idxs, block, flagged)
-    lowerLoadFromLinearized(remap(op.memref), op.memref.typ.elem, linear, op.res.typ, block, flagged)
-
   private def lowerStore(op: d_memref.Store, block: Block): Unit =
-    val idxs = op.indices.map(materializeNatOrIndex(_, block))
-    val flagged = hasZeroOffset(op.memref.typ) && idxs.size == 2
-    val linear = computeLinearIndex(op.memref.typ, idxs, block, flagged)
-    lowerStoreToLinearized(remap(op.value), remap(op.memref), op.memref.typ.elem, linear, block, flagged)
-
-  private def lowerExtractStridedMetadata(op: d_memref.ExtractStridedMetadata, block: Block): Seq[Value[Attribute]] =
-    val srcTy = op.source.typ
-    val dims = layoutDims(srcTy, block)
-    val offset = layoutOffset(srcTy, block)
-    val strides = layoutStrides(srcTy, dims, block)
-    Seq(remap(op.source), offset) ++ dims ++ strides
-
-  private def lowerDealloc(ptr: Value[Attribute], block: Block): Unit =
-    emit(
+    lowerStore(
+      remap(op.memref),
+      op.memref.typ,
+      op.indices.map(materializeNatOrIndex(_, block)),
+      remap(op.value),
       block,
-      llvm.Call(SymbolRefAttr(StringData("free")), Seq(asPtr(ptr).asInstanceOf[Operand[Attribute]]), Seq.empty),
     )
 
+  private def lowerExtractStridedMetadata(op: d_memref.ExtractStridedMetadata, block: Block): Seq[Value[Attribute]] =
+    val src = remap(op.source)
+    val srcTy = op.source.typ
+    val rank = srcTy.params.size
+    val srcDesc = descriptor(src, rank, block)
+    def used(v: Value[Attribute]): Boolean = v.uses.nonEmpty || v.typeUses.nonEmpty
+    val base = src
+    val offset = if used(op.results(1)) then srcDesc.offset() else constIndex(0, block)
+    val sizes = (0 until rank).map(i => if used(op.results(2 + i)) then srcDesc.size(i) else constIndex(0, block))
+    val strides = (0 until rank).map(i => if used(op.results(2 + rank + i)) then srcDesc.stride(i) else constIndex(0, block))
+    Seq(base, offset) ++ sizes ++ strides
+
+  private def lowerDealloc(desc: Value[Attribute], block: Block): Unit =
+    val rank = desc.typ match
+      case llvm.StructType(fields) => fields(3).asInstanceOf[llvm.ArrayType].size.value.toInt
+      case _                       => 0
+    val ptr = descriptor(desc, rank, block).allocatedPtr()
+    emit(block, llvm.Call(SymbolRefAttr(StringData("free")), Seq(ptr.asInstanceOf[Operand[Attribute]]), Seq.empty))
+
   def lower(): func.Func =
-    val newBlocks = makeLoweredBlocks()
-    seedEntryIndexAliases(newBlocks.head)
-    if funcOp.body.blocks.tail.exists(_.operations.exists {
-        case llvm.Constant(IntegerAttr(IntData(v), _: IndexType), _) => v == 1
-        case _                                                       => false
-      })
-    then cachedOne = Some(constIndex(1, newBlocks.head))
+    val newBlocks = state.makeClonedBlocks()
     funcOp.body.blocks.zip(newBlocks).foreach { case (oldBlock, newBlock) =>
       oldBlock.operations.foreach {
         case c: llvm.Constant =>
           c.value match
-            case IntegerAttr(IntData(v), _: IndexType) if v == 1 && cachedOne.nonEmpty =>
-              state.valueMap(c.res) = cachedOne.get
+            case IntegerAttr(IntData(v), _: IndexType) if v == 1 && !(oldBlock eq funcOp.body.blocks.head) =>
+              state.valueMap(c.res) = cachedOne.getOrElse(constIndex(1, newBlocks.head))
             case _ =>
               val copied = state.deepCopyOp(c).asInstanceOf[llvm.Constant]
               emit(newBlock, copied)
@@ -291,10 +312,10 @@ private final class Builder(val funcOp: func.Func):
                 case IntegerAttr(IntData(v), _: IndexType) if v == 1 => cachedOne = Some(copied.res)
                 case IntegerAttr(IntData(v), _: IndexType) if v == 0 => cachedZero = Some(copied.res)
                 case _                                               => ()
-        case _: dTensor.NatConst     => ()
-        case _: dTensor.IndexToNat   => ()
-        case _: dTensor.ShapeToIndex => ()
-        case op: d_memref.Alloc      => state.valueMap(op.res) = lowerAlloc(op, newBlock)
+        case _: dTensor.NatConst      => ()
+        case _: dTensor.IndexToNat    => ()
+        case _: dTensor.ShapeToIndex  => ()
+        case op: d_memref.Alloc       => state.valueMap(op.res) = lowerAlloc(op, newBlock)
         case op: d_memref.ReinterpretCast =>
           state.valueMap(op.res) = lowerReinterpret(op, newBlock)
         case op: d_memref.ExtractStridedMetadata =>
@@ -315,7 +336,7 @@ private final class Builder(val funcOp: func.Func):
           state.valueMap.addAll(other.results.zip(copied.results))
       }
     }
-    func.Func(funcOp.sym_name, loweredFunctionType, funcOp.sym_visibility, Region(newBlocks))
+    func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(newBlocks))
 
 private val LowerFunc = pattern {
   case op: func.Func if op.body.blocks.exists(_.operations.exists {
@@ -328,7 +349,7 @@ private val LowerFunc = pattern {
     Builder(op).lower()
 }
 
-final class FinalizeRefinedDMemrefToLLVM(ctx: MLContext) extends WalkerPass(ctx):
-  override val name: String = "finalize-refined-dmemref-to-llvm"
+final class FinalizeRefinedDMemrefDescriptorToLLVM(ctx: MLContext) extends WalkerPass(ctx):
+  override val name: String = "finalize-refined-dmemref-descriptor-to-llvm"
   override val walker: PatternRewriteWalker =
     PatternRewriteWalker(GreedyRewritePatternApplier(Seq(LowerFunc)))

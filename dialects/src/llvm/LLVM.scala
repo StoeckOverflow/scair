@@ -109,6 +109,13 @@ case class Load(
     with AssemblyFormat["$addr attr-dict `:` type($addr) `->` type($res)"]
     derives DerivedOperationCompanion
 
+case class Store(
+    value: Operand[Attribute],
+    addr: Operand[Ptr],
+) extends DerivedOperation["llvm.store", Store]
+    with AssemblyFormat["$value `,` $addr attr-dict `:` type($value) `,` type($addr)"]
+    derives DerivedOperationCompanion
+
 case class GetElementPtr(
     base: Operand[Ptr],
     dynamicIndices: Seq[Operand[IntegerType | IndexType]],
@@ -183,6 +190,7 @@ val LLVMDialect = summonDialect[
       FAdd,
       ICmp,
       Load,
+      Store,
       GetElementPtr,
       ExtractValue,
       InsertValue,

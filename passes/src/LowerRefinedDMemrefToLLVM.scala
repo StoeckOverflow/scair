@@ -3,6 +3,7 @@ package scair.passes.lower_refined_dmemref_to_llvm
 import scair.MLContext
 import scair.passes.convert_refined_arith_to_llvm.ConvertRefinedArithToLLVM
 import scair.passes.finalize_dynamic_memref_to_llvm.FinalizeDynamicMemrefToLLVM
+import scair.passes.finalize_refined_dmemref_to_llvm_descriptor.FinalizeRefinedDMemrefDescriptorToLLVM
 import scair.passes.finalize_refined_dmemref_to_llvm.FinalizeRefinedDMemrefToLLVM
 import scair.passes.hoist_refined_layout_invariants.HoistRefinedLayoutInvariants
 import scair.passes.lower_baseline_control_flow_to_llvm.LowerBaselineControlFlowToLLVM
@@ -14,8 +15,8 @@ import scair.transformations.ModulePass
 import scair.ir.Operation
 
 // Core refined lowering pipeline.
-// Example: `d_affine.for` + `arith.addi` + `d_memref.load`
-//   -> `llvm.br`/`llvm.cond_br` + `llvm.add` + LLVM descriptor/GEP/load.
+// Example: refined `d_memref.load` / `d_memref.store`
+//   -> explicit SSA layout arithmetic + pointer-based LLVM GEP/load/store.
 final class LowerRefinedDMemrefToLLVMPipeline(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "lower-refined-dmemref-to-llvm-pipeline"
   private val passes = Seq[ModulePass](
@@ -47,16 +48,17 @@ final class LowerRefinedDMemrefToLLVMBaseline(ctx: MLContext) extends ModulePass
   override val name: String = "lower-refined-dmemref-to-llvm-baseline"
   private val passes = Seq[ModulePass](
     RefineDynamicLayoutToDMemref(ctx),
-    LowerRefinedDMemrefToLLVMPipeline(ctx),
+    LowerRefinedControlFlowToLLVM(ctx),
+    ConvertRefinedArithToLLVM(ctx),
+    FinalizeRefinedDMemrefDescriptorToLLVM(ctx),
   )
   override def transform(op: Operation): Operation =
     passes.foldLeft(op)((cur, pass) => pass.transform(cur))
 
 // Refined optimized route.
-// Example: `d_memref.load %A[%i, %j]`
-//   -> explicit linearized index + `d_memref.base_ptr` +
-//      `d_memref.linearized_load_from_base`
-//   -> LLVM with hoisted row-base and base-pointer computations.
+// Example: `d_memref.load %view[%i, %j]`
+//   -> explicit linearized index + flat 1D `d_memref.load`
+//   -> pointer-based LLVM with hoisted row-base arithmetic.
 final class LowerRefinedDMemrefToLLVMOptimized(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "lower-refined-dmemref-to-llvm-optimized"
   private val passes = Seq[ModulePass](

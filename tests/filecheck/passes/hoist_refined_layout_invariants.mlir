@@ -41,16 +41,15 @@ builtin.module {
 // CHECK-NEXT:    %11 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 // CHECK-NEXT:    %12 = d_affine.for %13 = #map(%7) to #map(%2) step 1 : i32 iter_args(%14 = %11 : f32) {
 // CHECK-NEXT:      %15 = "arith.muli"(%13, %0) : (index, index) -> index
-// CHECK-NEXT:      %16 = d_memref.base_ptr %10 : !d_memref.memref<[%8, %9], f32, offset: %7, strides: [%0, %1]> -> !llvm.ptr
-// CHECK-NEXT:      %17 = d_affine.for %18 = #map(%7) to #map(%6) step 1 : i32 iter_args(%19 = %14 : f32) {
-// CHECK-NEXT:        %20 = "arith.muli"(%18, %1) : (index, index) -> index
-// CHECK-NEXT:        %21 = "arith.addi"(%7, %15) : (index, index) -> index
-// CHECK-NEXT:        %22 = "arith.addi"(%21, %20) : (index, index) -> index
-// CHECK-NEXT:        %23 = d_memref.linearized_load_from_base %16[%22] : !llvm.ptr -> f32
-// CHECK-NEXT:        %24 = "arith.addf"(%19, %23) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
-// CHECK-NEXT:        d_affine.yield %24 : (f32)
+// CHECK-NEXT:      %16 = d_affine.for %17 = #map(%7) to #map(%6) step 1 : i32 iter_args(%18 = %14 : f32) {
+// CHECK-NEXT:        %19 = "arith.muli"(%17, %1) : (index, index) -> index
+// CHECK-NEXT:        %20 = "arith.addi"(%7, %15) : (index, index) -> index
+// CHECK-NEXT:        %21 = "arith.addi"(%20, %19) : (index, index) -> index
+// CHECK-NEXT:        %22 = d_memref.load %5[%21] : !d_memref.memref<[%4], f32> -> f32
+// CHECK-NEXT:        %23 = "arith.addf"(%18, %22) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
+// CHECK-NEXT:        d_affine.yield %23 : (f32)
 // CHECK-NEXT:      }
-// CHECK-NEXT:      d_affine.yield %17 : (f32)
+// CHECK-NEXT:      d_affine.yield %16 : (f32)
 // CHECK-NEXT:    }
 // CHECK-NEXT:    func.return %12 : f32
 // CHECK-NEXT:  }

@@ -145,59 +145,42 @@ builtin.module {
 // P2-NEXT:  }
 
 // P3-LABEL: func.func @semi_affine_layout_map(%0: index, %1: index) -> f32 {
-// P3-NEXT:    %2 = llvm.mlir.constant 256 : index : index
-// P3-NEXT:    %3 = llvm.mlir.constant 1024 : index : index
-// P3-NEXT:    %4 = llvm.mlir.constant 0 : index : index
-// P3-NEXT:    %5 = llvm.mlir.constant 0.0 : f32 : f32
-// P3-NEXT:    %6 = "llvm.mul"(%2, %0) : (index, index) -> index
-// P3-NEXT:    %7 = llvm.mlir.constant 1 : index : index
-// P3-NEXT:    %8 = llvm.mlir.zero : !llvm.ptr
-// P3-NEXT:    %9 = "llvm.getelementptr"(%8, %6) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// P3-NEXT:    %10 = "llvm.ptrtoint"(%9) : (!llvm.ptr) -> index
-// P3-NEXT:    %11 = "llvm.call"(%10) <{callee = @malloc}> : (index) -> !llvm.ptr
-// P3-NEXT:    %12 = llvm.mlir.poison : !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// P3-NEXT:    %13 = "llvm.insertvalue"(%11, %12) <{position = array<i32: 0>}> : (!llvm.ptr, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// P3-NEXT:    %14 = "llvm.insertvalue"(%11, %13) <{position = array<i32: 1>}> : (!llvm.ptr, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// P3-NEXT:    %15 = "llvm.insertvalue"(%4, %14) <{position = array<i32: 2>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// P3-NEXT:    %16 = "llvm.insertvalue"(%6, %15) <{position = array<i32: 3, 0>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// P3-NEXT:    %17 = "llvm.insertvalue"(%7, %16) <{position = array<i32: 4, 0>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// P3-NEXT:    %18 = llvm.mlir.constant 256 : index : index
-// P3-NEXT:    %19 = llvm.mlir.constant 1024 : index : index
-// P3-NEXT:    %20 = "llvm.extractvalue"(%17) <{position = array<i32: 0>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.ptr
-// P3-NEXT:    %21 = "llvm.extractvalue"(%17) <{position = array<i32: 1>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.ptr
-// P3-NEXT:    %22 = llvm.mlir.poison : !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// P3-NEXT:    %23 = "llvm.insertvalue"(%20, %22) <{position = array<i32: 0>}> : (!llvm.ptr, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// P3-NEXT:    %24 = "llvm.insertvalue"(%21, %23) <{position = array<i32: 1>}> : (!llvm.ptr, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// P3-NEXT:    %25 = "llvm.insertvalue"(%4, %24) <{position = array<i32: 2>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// P3-NEXT:    %26 = "llvm.insertvalue"(%18, %25) <{position = array<i32: 3, 0>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// P3-NEXT:    %27 = "llvm.insertvalue"(%19, %26) <{position = array<i32: 3, 1>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// P3-NEXT:    %28 = "llvm.insertvalue"(%0, %27) <{position = array<i32: 4, 0>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// P3-NEXT:    %29 = "llvm.insertvalue"(%1, %28) <{position = array<i32: 4, 1>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// P3-NEXT:    "llvm.br"(%4, %5, %0, %1)[^bb0] : (index, f32, index, index) -> ()
-// P3-NEXT:  ^bb0(%30: index, %31: f32, %32: index, %33: index):
-// P3-NEXT:    %34 = "llvm.icmp"(%30, %2) <{predicate = "slt"}> : (index, index) -> i1
-// P3-NEXT:    "llvm.cond_br"(%34, %30, %31, %32, %33, %31)[^bb1, ^bb2] <{operandSegmentSizes = array<i32: 1, 4, 1>}> : (i1, index, f32, index, index, f32) -> ()
-// P3-NEXT:  ^bb1(%35: index, %36: f32, %37: index, %38: index):
-// P3-NEXT:    %39 = "llvm.mul"(%35, %37) : (index, index) -> index
-// P3-NEXT:    %40 = "llvm.extractvalue"(%29) <{position = array<i32: 1>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.ptr
-// P3-NEXT:    "llvm.br"(%35, %4, %36, %39, %40, %37, %38)[^bb3] : (index, index, f32, index, !llvm.ptr, index, index) -> ()
-// P3-NEXT:  ^bb3(%41: index, %42: index, %43: f32, %44: index, %45: !llvm.ptr, %46: index, %47: index):
-// P3-NEXT:    %48 = "llvm.icmp"(%42, %3) <{predicate = "slt"}> : (index, index) -> i1
-// P3-NEXT:    "llvm.cond_br"(%48, %41, %42, %43, %44, %45, %46, %47, %41, %43, %46, %47)[^bb4, ^bb5] <{operandSegmentSizes = array<i32: 1, 7, 4>}> : (i1, index, index, f32, index, !llvm.ptr, index, index, index, f32, index, index) -> ()
-// P3-NEXT:  ^bb4(%49: index, %50: index, %51: f32, %52: index, %53: !llvm.ptr, %54: index, %55: index):
-// P3-NEXT:    %56 = "llvm.mul"(%50, %55) : (index, index) -> index
-// P3-NEXT:    %57 = "llvm.add"(%4, %52) : (index, index) -> index
-// P3-NEXT:    %58 = "llvm.add"(%57, %56) : (index, index) -> index
-// P3-NEXT:    %59 = "llvm.getelementptr"(%53, %58) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32, gepFlags = ["inbounds", "nuw"]}> : (!llvm.ptr, index) -> !llvm.ptr
-// P3-NEXT:    %60 = llvm.load %59 : !llvm.ptr -> f32
-// P3-NEXT:    %61 = "llvm.fadd"(%51, %60) : (f32, f32) -> f32
-// P3-NEXT:    %62 = "llvm.add"(%50, %7) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// P3-NEXT:    "llvm.br"(%49, %62, %61, %52, %53, %54, %55)[^bb3] : (index, index, f32, index, !llvm.ptr, index, index) -> ()
-// P3-NEXT:  ^bb5(%63: index, %64: f32, %65: index, %66: index):
-// P3-NEXT:    %67 = "llvm.add"(%63, %7) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// P3-NEXT:    "llvm.br"(%67, %64, %65, %66)[^bb0] : (index, f32, index, index) -> ()
-// P3-NEXT:  ^bb2(%68: f32):
-// P3-NEXT:    %69 = "llvm.extractvalue"(%17) <{position = array<i32: 0>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.ptr
-// P3-NEXT:    "llvm.call"(%69) <{callee = @free}> : (!llvm.ptr) -> ()
-// P3-NEXT:    "llvm.return"(%68) : (f32) -> ()
+// P3-NEXT:    %2 = llvm.mlir.constant 0 : index : index
+// P3-NEXT:    %3 = "llvm.add"(%0, %2) : (index, index) -> index
+// P3-NEXT:    %4 = "llvm.add"(%1, %2) : (index, index) -> index
+// P3-NEXT:    %5 = llvm.mlir.constant 1 : index : index
+// P3-NEXT:    %6 = llvm.mlir.constant 256 : index : index
+// P3-NEXT:    %7 = llvm.mlir.constant 1024 : index : index
+// P3-NEXT:    %8 = llvm.mlir.constant 0 : index : index
+// P3-NEXT:    %9 = llvm.mlir.constant 0.0 : f32 : f32
+// P3-NEXT:    %10 = "llvm.mul"(%6, %3) : (index, index) -> index
+// P3-NEXT:    %11 = llvm.mlir.zero : !llvm.ptr
+// P3-NEXT:    %12 = "llvm.getelementptr"(%11, %10) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// P3-NEXT:    %13 = "llvm.ptrtoint"(%12) : (!llvm.ptr) -> index
+// P3-NEXT:    %14 = "llvm.call"(%13) <{callee = @malloc}> : (index) -> !llvm.ptr
+// P3-NEXT:    "llvm.br"(%8, %9, %3, %4)[^bb0] : (index, f32, index, index) -> ()
+// P3-NEXT:  ^bb0(%15: index, %16: f32, %17: index, %18: index):
+// P3-NEXT:    %19 = "llvm.icmp"(%15, %6) <{predicate = "slt"}> : (index, index) -> i1
+// P3-NEXT:    "llvm.cond_br"(%19, %15, %16, %17, %18, %16)[^bb1, ^bb2] <{operandSegmentSizes = array<i32: 1, 4, 1>}> : (i1, index, f32, index, index, f32) -> ()
+// P3-NEXT:  ^bb1(%20: index, %21: f32, %22: index, %23: index):
+// P3-NEXT:    %24 = "llvm.mul"(%20, %22) : (index, index) -> index
+// P3-NEXT:    "llvm.br"(%20, %8, %21, %24, %22, %23)[^bb3] : (index, index, f32, index, index, index) -> ()
+// P3-NEXT:  ^bb3(%25: index, %26: index, %27: f32, %28: index, %29: index, %30: index):
+// P3-NEXT:    %31 = "llvm.icmp"(%26, %7) <{predicate = "slt"}> : (index, index) -> i1
+// P3-NEXT:    "llvm.cond_br"(%31, %25, %26, %27, %28, %29, %30, %25, %27, %29, %30)[^bb4, ^bb5] <{operandSegmentSizes = array<i32: 1, 6, 4>}> : (i1, index, index, f32, index, index, index, index, f32, index, index) -> ()
+// P3-NEXT:  ^bb4(%32: index, %33: index, %34: f32, %35: index, %36: index, %37: index):
+// P3-NEXT:    %38 = "llvm.mul"(%33, %37) : (index, index) -> index
+// P3-NEXT:    %39 = "llvm.add"(%8, %35) : (index, index) -> index
+// P3-NEXT:    %40 = "llvm.add"(%39, %38) : (index, index) -> index
+// P3-NEXT:    %41 = "llvm.getelementptr"(%14, %40) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// P3-NEXT:    %42 = llvm.load %41 : !llvm.ptr -> f32
+// P3-NEXT:    %43 = "llvm.fadd"(%34, %42) : (f32, f32) -> f32
+// P3-NEXT:    %44 = "llvm.add"(%33, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// P3-NEXT:    "llvm.br"(%32, %44, %43, %35, %36, %37)[^bb3] : (index, index, f32, index, index, index) -> ()
+// P3-NEXT:  ^bb5(%45: index, %46: f32, %47: index, %48: index):
+// P3-NEXT:    %49 = "llvm.add"(%45, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// P3-NEXT:    "llvm.br"(%49, %46, %47, %48)[^bb0] : (index, f32, index, index) -> ()
+// P3-NEXT:  ^bb2(%50: f32):
+// P3-NEXT:    "llvm.call"(%14) <{callee = @free}> : (!llvm.ptr) -> ()
+// P3-NEXT:    "llvm.return"(%50) : (f32) -> ()
 // P3-NEXT:  }

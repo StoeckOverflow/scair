@@ -5,7 +5,6 @@ import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.dTensor
 import scair.dialects.d_memref
-import scair.dialects.llvm
 import scair.ir.*
 import scair.transformations.*
 import scair.transformations.patterns.*
@@ -39,49 +38,75 @@ private def addIndex(lhs: Value[Attribute], rhs: Value[Attribute]): arith.AddI =
 private def mulIndex(lhs: Value[Attribute], rhs: Value[Attribute]): arith.MulI =
   arith.MulI(asIndex(lhs), asIndex(rhs), Result(IndexType()))
 
+private def isCanonicalFlatCarrier(ty: d_memref.dMemrefMemrefType): Boolean =
+  ty.params.size == 1 &&
+  ty.offset.isEmpty &&
+  ty.strides.isEmpty
+
+private def underlyingFlatBuffer(
+    memref: Operand[d_memref.dMemrefMemrefType]
+): Option[Operand[d_memref.dMemrefMemrefType]] =
+  memref.owner match
+    case Some(cast: d_memref.Cast) =>
+      underlyingFlatBuffer(cast.src)
+    case Some(rc: d_memref.ReinterpretCast) if isCanonicalFlatCarrier(rc.src.typ) =>
+      Some(rc.src)
+    case _ =>
+      None
+
+private def linearizedIndexOps(
+    ty: d_memref.dMemrefMemrefType,
+    indices: Seq[Operand[IndexType]],
+): (Vector[Operation], Value[Attribute]) =
+  val rank = indices.size
+  val offsetOpsAndValue =
+    ty.offset match
+      case Some(IntegerAttr(IntData(v), _)) if v == 0 => (Vector.empty[Operation], None)
+      case Some(off) =>
+        val (ops, v) = materializeLayoutParam(off)
+        (ops, Some(v))
+      case None =>
+        val zero = arith.Constant(idxAttr(0), Result(IndexType()))
+        (Vector(zero), Some(zero.result))
+  val strideOpsAndValues = ty.strides.get.map(materializeLayoutParam)
+  val indexTerms = indices.zip(strideOpsAndValues).map { case (idx, (prefix, stride)) =>
+    val mul = mulIndex(idx, stride)
+    (prefix :+ mul, mul.result)
+  }
+  val prefix = Vector.newBuilder[Operation]
+  prefix ++= offsetOpsAndValue._1
+  indexTerms.foreach(prefix ++= _._1)
+  val linear =
+    if rank == 0 then offsetOpsAndValue._2.get
+    else
+      val withOffset = offsetOpsAndValue._2.toSeq ++ indexTerms.map(_._2)
+      withOffset.reduceLeft { (lhs, rhs) =>
+        val add = addIndex(lhs, rhs)
+        prefix += add
+        add.result
+      }
+  (prefix.result(), linear)
+
 private val NormalizeLoad = pattern {
   case op: d_memref.Load if op.memref.typ.strides.nonEmpty =>
-    val ty = op.memref.typ
-    val rank = op.indices.size
-    val offsetOpsAndValue =
-      ty.offset match
-        case Some(IntegerAttr(IntData(v), _)) if v == 0 => (Vector.empty[Operation], None)
-        case Some(off) =>
-          val (ops, v) = materializeLayoutParam(off)
-          (ops, Some(v))
-        case None =>
-          val zero = arith.Constant(idxAttr(0), Result(IndexType()))
-          (Vector(zero), Some(zero.result))
-    val strideOpsAndValues = ty.strides.get.map(materializeLayoutParam)
-    // Each multidimensional access is rewritten into the explicit linearized
-    // address terms that downstream hoisting and LLVM lowering operate on.
-    val indexTerms = op.indices.zip(strideOpsAndValues).map { case (idx, (prefix, stride)) =>
-      val mul = mulIndex(idx, stride)
-      (prefix :+ mul, mul.result)
-    }
-    val prefix = Vector.newBuilder[Operation]
-    prefix ++= offsetOpsAndValue._1
-    indexTerms.foreach(prefix ++= _._1)
-    val linear: Value[Attribute] =
-      if rank == 0 then offsetOpsAndValue._2.get
-      else
-        val terms = indexTerms.map(_._2)
-        val withOffset = offsetOpsAndValue._2.toSeq ++ terms
-        withOffset.reduceLeft { (lhs, rhs) =>
-          val add = addIndex(lhs, rhs)
-          prefix += add
-          add.result
-        }
-    val base = d_memref.BasePtr(op.memref, Result(llvm.Ptr()))
-    val normalized = d_memref.LinearizedLoadFromBase(base.res, asIndex(linear), Result(op.res.typ))
-    (prefix.result() ++ Seq(base, normalized), Seq(normalized.res))
+    underlyingFlatBuffer(op.memref).map { flat =>
+      val (prefix, linear) = linearizedIndexOps(op.memref.typ, op.indices)
+      val normalized = d_memref.Load(flat, Seq(asIndex(linear)), Result(op.res.typ))
+      (prefix :+ normalized, Seq(normalized.res))
+    }.getOrElse(PatternAction.Abort)
 }
 
-// Rewrites refined multidimensional loads into explicit linearized access IR.
-// Example: `d_memref.load %A[%i, %j]`
-//   -> `arith.muli/addi` address terms + `d_memref.base_ptr` +
-//      `d_memref.linearized_load_from_base`.
+private val NormalizeStore = pattern {
+  case op: d_memref.Store if op.memref.typ.strides.nonEmpty =>
+    underlyingFlatBuffer(op.memref).map { flat =>
+      val (prefix, linear) = linearizedIndexOps(op.memref.typ, op.indices)
+      prefix :+ d_memref.Store(op.value, flat, Seq(asIndex(linear)))
+    }.getOrElse(PatternAction.Abort)
+}
+
+// Rewrites refined view accesses into explicit linearized arithmetic plus
+// ordinary flat-buffer d_memref.load/store operations.
 final class NormalizeRefinedLayoutAccesses(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "normalize-refined-layout-accesses"
   override val walker: PatternRewriteWalker =
-    PatternRewriteWalker(GreedyRewritePatternApplier(Seq(NormalizeLoad)))
+    PatternRewriteWalker(GreedyRewritePatternApplier(Seq(NormalizeLoad, NormalizeStore)))

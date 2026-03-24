@@ -23,42 +23,25 @@ builtin.module {
 }
 
 // CHECK-LABEL: func.func @finalize(%0: index, %1: index) -> f32 {
-// CHECK-NEXT:    %2 = llvm.mlir.constant 1024 : index : index
-// CHECK-NEXT:    %3 = llvm.mlir.constant 1 : index : index
-// CHECK-NEXT:    %4 = llvm.mlir.constant 0 : index : index
-// CHECK-NEXT:    %5 = llvm.mlir.constant 256 : index : index
-// CHECK-NEXT:    %6 = "llvm.mul"(%5, %0) : (index, index) -> index
-// CHECK-NEXT:    %7 = llvm.mlir.zero : !llvm.ptr
-// CHECK-NEXT:    %8 = "llvm.getelementptr"(%7, %6) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// CHECK-NEXT:    %9 = "llvm.ptrtoint"(%8) : (!llvm.ptr) -> index
-// CHECK-NEXT:    %10 = "llvm.call"(%9) <{callee = @malloc}> : (index) -> !llvm.ptr
-// CHECK-NEXT:    %11 = llvm.mlir.poison : !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// CHECK-NEXT:    %12 = "llvm.insertvalue"(%10, %11) <{position = array<i32: 0>}> : (!llvm.ptr, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// CHECK-NEXT:    %13 = "llvm.insertvalue"(%10, %12) <{position = array<i32: 1>}> : (!llvm.ptr, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// CHECK-NEXT:    %14 = "llvm.insertvalue"(%4, %13) <{position = array<i32: 2>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// CHECK-NEXT:    %15 = "llvm.insertvalue"(%6, %14) <{position = array<i32: 3, 0>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// CHECK-NEXT:    %16 = "llvm.insertvalue"(%3, %15) <{position = array<i32: 4, 0>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>
-// CHECK-NEXT:    %17 = llvm.mlir.constant 256 : index : index
-// CHECK-NEXT:    %18 = llvm.mlir.constant 1024 : index : index
-// CHECK-NEXT:    %19 = "llvm.extractvalue"(%16) <{position = array<i32: 0>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.ptr
-// CHECK-NEXT:    %20 = "llvm.extractvalue"(%16) <{position = array<i32: 1>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.ptr
-// CHECK-NEXT:    %21 = llvm.mlir.poison : !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// CHECK-NEXT:    %22 = "llvm.insertvalue"(%19, %21) <{position = array<i32: 0>}> : (!llvm.ptr, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// CHECK-NEXT:    %23 = "llvm.insertvalue"(%20, %22) <{position = array<i32: 1>}> : (!llvm.ptr, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// CHECK-NEXT:    %24 = "llvm.insertvalue"(%4, %23) <{position = array<i32: 2>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// CHECK-NEXT:    %25 = "llvm.insertvalue"(%17, %24) <{position = array<i32: 3, 0>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// CHECK-NEXT:    %26 = "llvm.insertvalue"(%18, %25) <{position = array<i32: 3, 1>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// CHECK-NEXT:    %27 = "llvm.insertvalue"(%0, %26) <{position = array<i32: 4, 0>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// CHECK-NEXT:    %28 = "llvm.insertvalue"(%1, %27) <{position = array<i32: 4, 1>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
-// CHECK-NEXT:    %29 = "llvm.extractvalue"(%28) <{position = array<i32: 1>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.ptr
-// CHECK-NEXT:    %30 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 0>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> index
-// CHECK-NEXT:    %31 = "llvm.mul"(%4, %30) : (index, index) -> index
-// CHECK-NEXT:    %32 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 1>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> index
-// CHECK-NEXT:    %33 = "llvm.mul"(%4, %32) : (index, index) -> index
-// CHECK-NEXT:    %34 = "llvm.add"(%31, %33) : (index, index) -> index
-// CHECK-NEXT:    %35 = "llvm.getelementptr"(%29, %34) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// CHECK-NEXT:    %36 = llvm.load %35 : !llvm.ptr -> f32
-// CHECK-NEXT:    %37 = "llvm.extractvalue"(%16) <{position = array<i32: 0>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.ptr
-// CHECK-NEXT:    "llvm.call"(%37) <{callee = @free}> : (!llvm.ptr) -> ()
-// CHECK-NEXT:    "llvm.return"(%36) : (f32) -> ()
+// CHECK-NEXT:    %2 = llvm.mlir.constant 0 : index : index
+// CHECK-NEXT:    %3 = "llvm.add"(%0, %2) : (index, index) -> index
+// CHECK-NEXT:    %4 = "llvm.add"(%1, %2) : (index, index) -> index
+// CHECK-NEXT:    %5 = llvm.mlir.constant 1024 : index : index
+// CHECK-NEXT:    %6 = llvm.mlir.constant 1 : index : index
+// CHECK-NEXT:    %7 = llvm.mlir.constant 0 : index : index
+// CHECK-NEXT:    %8 = llvm.mlir.constant 256 : index : index
+// CHECK-NEXT:    %9 = "llvm.mul"(%8, %3) : (index, index) -> index
+// CHECK-NEXT:    %10 = llvm.mlir.zero : !llvm.ptr
+// CHECK-NEXT:    %11 = "llvm.getelementptr"(%10, %9) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// CHECK-NEXT:    %12 = "llvm.ptrtoint"(%11) : (!llvm.ptr) -> index
+// CHECK-NEXT:    %13 = "llvm.call"(%12) <{callee = @malloc}> : (index) -> !llvm.ptr
+// CHECK-NEXT:    %14 = llvm.mlir.constant 256 : index : index
+// CHECK-NEXT:    %15 = llvm.mlir.constant 1024 : index : index
+// CHECK-NEXT:    %16 = "llvm.mul"(%7, %3) : (index, index) -> index
+// CHECK-NEXT:    %17 = "llvm.mul"(%7, %4) : (index, index) -> index
+// CHECK-NEXT:    %18 = "llvm.add"(%16, %17) : (index, index) -> index
+// CHECK-NEXT:    %19 = "llvm.getelementptr"(%13, %18) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// CHECK-NEXT:    %20 = llvm.load %19 : !llvm.ptr -> f32
+// CHECK-NEXT:    "llvm.call"(%13) <{callee = @free}> : (!llvm.ptr) -> ()
+// CHECK-NEXT:    "llvm.return"(%20) : (f32) -> ()
 // CHECK-NEXT:  }

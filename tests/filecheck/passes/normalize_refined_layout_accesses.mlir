@@ -30,7 +30,6 @@ builtin.module {
 // CHECK-NEXT:    %13 = "arith.muli"(%3, %1) : (index, index) -> index
 // CHECK-NEXT:    %14 = "arith.addi"(%10, %12) : (index, index) -> index
 // CHECK-NEXT:    %15 = "arith.addi"(%14, %13) : (index, index) -> index
-// CHECK-NEXT:    %16 = d_memref.base_ptr %11 : !d_memref.memref<[%4, %5], f32, offset: %10, strides: [%0, %1]> -> !llvm.ptr
-// CHECK-NEXT:    %17 = d_memref.linearized_load_from_base %16[%15] : !llvm.ptr -> f32
-// CHECK-NEXT:    func.return %17 : f32
+// CHECK-NEXT:    %16 = d_memref.load %7[%15] : !d_memref.memref<[%6], f32> -> f32
+// CHECK-NEXT:    func.return %16 : f32
 // CHECK-NEXT:  }

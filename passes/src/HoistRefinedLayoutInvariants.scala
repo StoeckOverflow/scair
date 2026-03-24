@@ -4,7 +4,6 @@ import scair.MLContext
 import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.d_affine
-import scair.dialects.d_memref
 import scair.ir.*
 import scair.transformations.*
 import scair.transformations.patterns.*
@@ -39,15 +38,6 @@ private val HoistRowBase = pattern {
             )
             hoistedOps += hoisted
             valueMap(mul.result) = hoisted.result
-          // Base pointer extraction is invariant across the inner loop once the
-          // refined memref value itself is available in the outer loop.
-          case base: d_memref.BasePtr =>
-            val hoisted = d_memref.BasePtr(
-              outerValueMap.getOrElse(base.memref, base.memref).asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
-              Result(base.res.typ),
-            )
-            hoistedOps += hoisted
-            valueMap(base.res) = hoisted.res
           case other =>
             val copied = other.deepCopy(using blockMap, valueMap)
             rebuiltInnerBody.addOp(copied)
@@ -89,9 +79,9 @@ private val HoistRowBase = pattern {
         PatternAction.Abort
 }
 
-// Hoists loop-invariant refined layout computations in nested refined loops.
-// Example: inner-loop `arith.muli %i, %stride0` and `d_memref.base_ptr %A`
-//   -> the same computations placed in the surrounding outer-loop body.
+// Hoists loop-invariant refined layout arithmetic in nested refined loops.
+// Example: inner-loop `arith.muli %i, %stride0`
+//   -> the same computation placed in the surrounding outer-loop body.
 final class HoistRefinedLayoutInvariants(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "hoist-refined-layout-invariants"
   override val walker: PatternRewriteWalker =
