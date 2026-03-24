@@ -14,12 +14,9 @@ builtin.module {
     %d1_i = "dtensor.shape.to_index"(%d1) : (!dtensor.nat) -> index
     %flat = d_memref.alloc : () -> !d_memref.memref<[%flat_nat], f32>
     %base, %off, %size0, %stride = "d_memref.extract_strided_metadata"(%flat) : (!d_memref.memref<[%flat_nat], f32>) -> (!d_memref.memref<[], f32>, index, index, index)
-    %buf = d_memref.reinterpret_cast %base to
-      offset: [%c0],
-      sizes: [%d0_i, %d1_i],
-      strides: [%stride0, %stride1]
-    : !d_memref.memref<[], f32> to !d_memref.memref<[%d0, %d1], f32, offset: 0, strides: [%stride0, %stride1]>
-    %v = d_memref.load %buf[%c0, %c0] : !d_memref.memref<[%d0, %d1], f32, offset: 0, strides: [%stride0, %stride1]> -> f32
+    %buf = d_memref.reinterpret_cast %base
+    : !d_memref.memref<[], f32> to !d_memref.memref<[%d0, %d1], f32, offset: %c0, strides: [%stride0, %stride1]>
+    %v = d_memref.load %buf[%c0, %c0] : !d_memref.memref<[%d0, %d1], f32, offset: %c0, strides: [%stride0, %stride1]> -> f32
     d_memref.dealloc %flat : !d_memref.memref<[%flat_nat], f32>
     func.return %v : f32
   }
@@ -55,11 +52,11 @@ builtin.module {
 // CHECK-NEXT:    %28 = "llvm.insertvalue"(%1, %27) <{position = array<i32: 4, 1>}> : (index, !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>
 // CHECK-NEXT:    %29 = "llvm.extractvalue"(%28) <{position = array<i32: 1>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> !llvm.ptr
 // CHECK-NEXT:    %30 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 0>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> index
-// CHECK-NEXT:    %31 = "llvm.mul"(%4, %30) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// CHECK-NEXT:    %31 = "llvm.mul"(%4, %30) : (index, index) -> index
 // CHECK-NEXT:    %32 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 1>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<2 x index>, !llvm.array<2 x index>)>) -> index
-// CHECK-NEXT:    %33 = "llvm.mul"(%4, %32) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// CHECK-NEXT:    %34 = "llvm.add"(%31, %33) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// CHECK-NEXT:    %35 = "llvm.getelementptr"(%29, %34) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32, gepFlags = ["inbounds", "nuw"]}> : (!llvm.ptr, index) -> !llvm.ptr
+// CHECK-NEXT:    %33 = "llvm.mul"(%4, %32) : (index, index) -> index
+// CHECK-NEXT:    %34 = "llvm.add"(%31, %33) : (index, index) -> index
+// CHECK-NEXT:    %35 = "llvm.getelementptr"(%29, %34) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
 // CHECK-NEXT:    %36 = llvm.load %35 : !llvm.ptr -> f32
 // CHECK-NEXT:    %37 = "llvm.extractvalue"(%16) <{position = array<i32: 0>}> : (!llvm.struct<(!llvm.ptr, !llvm.ptr, index, !llvm.array<1 x index>, !llvm.array<1 x index>)>) -> !llvm.ptr
 // CHECK-NEXT:    "llvm.call"(%37) <{callee = @free}> : (!llvm.ptr) -> ()

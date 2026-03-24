@@ -15,21 +15,17 @@ builtin.module {
   %dx = d_memref.dim_exact %buf {axis = 0 : i32} : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> -> !value<%m>
   %sv = d_memref.subview %buf[%z_i, %z_i][%m_i, %n_i][%o_i, %o_i] : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> -> !d_memref.memref<[%m, %n], f32>
   %c = d_memref.cast %sv : !d_memref.memref<[%m, %n], f32> -> !d_memref.memref<[%m, %n], f32>
-  %rc = d_memref.reinterpret_cast %buf to
-    offset: [%z_i],
-    sizes: [%m_i, %n_i],
-    strides: [%n_i, %o_i]
-  : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> to !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n_i, %o_i]>
+  %rc = d_memref.reinterpret_cast %buf : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> to !d_memref.memref<[%m, %n], f32, offset: %z_i, strides: [%n_i, %o_i]>
   %vx = "test.vx"() : () -> !d_memref.vector<%m, f32>
   %mx = "test.mx"() : () -> !d_memref.matrix<%m, %n, f32>
-  "test.keep"(%r, %d0, %dx, %c, %rc, %vx, %mx) : (f32, index, !value<%m>, !d_memref.memref<[%m, %n], f32>, !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n_i, %o_i]>, !d_memref.vector<%m, f32>, !d_memref.matrix<%m, %n, f32>) -> ()
+  "test.keep"(%r, %d0, %dx, %c, %rc, %vx, %mx) : (f32, index, !value<%m>, !d_memref.memref<[%m, %n], f32>, !d_memref.memref<[%m, %n], f32, offset: %z_i, strides: [%n_i, %o_i]>, !d_memref.vector<%m, f32>, !d_memref.matrix<%m, %n, f32>) -> ()
   d_memref.dealloc %buf : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]>
 }
 
 // VERIFY: d_memref.dim %{{.*}}, %{{.*}} : !d_memref.memref<[%{{.*}}, %{{.*}}], f32, offset: 0, strides: [%{{.*}}, 1]> -> index
 // VERIFY: d_memref.dim_exact %{{.*}} {axis = 0 : i32} : !d_memref.memref<[%{{.*}}, %{{.*}}], f32, offset: 0, strides: [%{{.*}}, 1]> -> !value<%{{.*}}>
 // VERIFY: d_memref.subview %{{.*}}[%{{.*}}, %{{.*}}][%{{.*}}, %{{.*}}][%{{.*}}, %{{.*}}]
-// VERIFY: d_memref.reinterpret_cast %{{.*}} to
+// VERIFY: d_memref.reinterpret_cast %{{.*}}
 
 // -----
 
@@ -95,19 +91,11 @@ builtin.module {
 builtin.module {
   %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
   %n = "dtensor.nat.const"() <{value = 5 : i32}> : () -> !dtensor.nat
-  %m_i = "dtensor.shape.to_index"(%m) : (!dtensor.nat) -> index
-  %n_i = "dtensor.shape.to_index"(%n) : (!dtensor.nat) -> index
-  %z_i = "arith.constant"() <{value = 0 : index}> : () -> index
-  %o_i = "arith.constant"() <{value = 1 : index}> : () -> index
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], f32>
-  %bad = d_memref.reinterpret_cast %buf to
-    offset: [%z_i],
-    sizes: [%m_i, %n_i],
-    strides: [%n_i, %o_i]
-  : !d_memref.memref<[%m, %n], f32> to !d_memref.memref<[%n, %m], f32>
+  %bad = d_memref.reinterpret_cast %buf : !d_memref.memref<[%m, %n], f32> to !d_memref.memref<[%n, %m], f32>
 }
 
-// VERIFY: d_memref.reinterpret_cast: size provenance mismatch at axis 0; expected result dim to match size operand via dtensor.shape.to_index
+// VERIFY: d_memref.reinterpret_cast: expected destination type to encode offset and strides
 
 // -----
 

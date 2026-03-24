@@ -647,83 +647,35 @@ given OperationCustomParser[Subview]:
 
 final case class ReinterpretCast(
     src: Operand[dMemrefMemrefType],
-    offset: Operand[IndexType],
-    sizes: Seq[Operand[IndexType]],
-    strides: Seq[Operand[IndexType]],
     res: Result[dMemrefMemrefType],
 ) extends DerivedOperation["d_memref.reinterpret_cast", ReinterpretCast]
     derives DerivedOperationCompanion:
 
-  private def sameDimAsSizeOperand(
-      dim: ValueAttribute,
-      size: Operand[IndexType],
-  ): Boolean =
-    val dimNat = dTensorTypeUtil.resolveNatValue(dim.getVal())
-    val sizeNat = dTensorTypeUtil.resolveNatFromIndexValue(size)
-    (dimNat, sizeNat) match
-      case (OK(d), OK(s)) => d eq s
-      case _              =>
-        (dim.getVal().owner, size.owner) match
-          case (
-                Some(NatConst(IntegerAttr(IntData(d), _), _)),
-                Some(arith.Constant(IntegerAttr(IntData(s), _: IndexType), _)),
-              ) => d == s
-          case _ => false
-
-  private def firstSizeProvenanceMismatch: Option[Int] =
-    res.typ.params.zip(sizes).zipWithIndex.collectFirst {
-      case ((d, s), axis) if !sameDimAsSizeOperand(d, s) => axis
-    }
-
   override def customVerify(): OK[Operation] =
-    val resRank = res.typ.params.size
-    if sizes.size != resRank then
-      Err(s"d_memref.reinterpret_cast: expected $resRank sizes, got ${sizes.size}")
-    else if strides.size != resRank then
-      Err(s"d_memref.reinterpret_cast: expected $resRank strides, got ${strides.size}")
-    else if src.typ.elem != res.typ.elem then
+    if src.typ.elem != res.typ.elem then
       Err(
         s"d_memref.reinterpret_cast: expected equal element types, got ${src.typ.elem} and ${res.typ.elem}"
       )
+    else if res.typ.offset.isEmpty || res.typ.strides.isEmpty then
+      Err(
+        "d_memref.reinterpret_cast: expected destination type to encode offset and strides"
+      )
     else
-      firstSizeProvenanceMismatch match
-        case Some(axis) =>
-          Err(
-            s"d_memref.reinterpret_cast: size provenance mismatch at axis $axis; expected result dim to match size operand via dtensor.shape.to_index"
-          )
-        case None => OK(this)
+      OK(this)
 
   override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
-    printer.print(name, " ", src, " to\n")
-    printer.print(printer.indent * (indentLevel + 1), "offset: [", offset, "],\n")
-    printer.print(printer.indent * (indentLevel + 1), "sizes: [")
-    printer.printList(sizes)
-    printer.print("],\n")
-    printer.print(printer.indent * (indentLevel + 1), "strides: [")
-    printer.printList(strides)
-    printer.print("]\n")
+    printer.print(name, " ", src, "\n")
     printer.print(printer.indent * indentLevel, ": ", src.typ, " to ", res.typ)
 
 given OperationCustomParser[ReinterpretCast]:
   def parse[$: P](resNames: Seq[String])(using Parser): P[ReinterpretCast] =
-    P(
-      operandNameP ~ "to" ~ "offset:" ~ "[" ~ operandNameP ~ "]" ~ "," ~
-        "sizes:" ~ "[" ~ operandNameP.rep(sep = ",") ~ "]" ~ "," ~
-        "strides:" ~ "[" ~ operandNameP.rep(sep = ",") ~ "]" ~ ":" ~
-        typeOfP[dMemrefMemrefType] ~ "to" ~ typeOfP[dMemrefMemrefType]
-    ).flatMap((srcName, offName, sizeNames, strideNames, srcTyp, resTyp) =>
-      operandP(srcName, srcTyp).flatMap(src =>
-        operandP(offName, IndexType()).flatMap(offset =>
-          parseIndexOperands(sizeNames).flatMap(sizes =>
-            parseIndexOperands(strideNames).flatMap(strides =>
-              resultP(resNames.head, resTyp).map(res =>
-                ReinterpretCast(src, offset, sizes, strides, res)
-              )
-            )
-          )
+    P(operandNameP ~ ":" ~ typeOfP[dMemrefMemrefType] ~ "to" ~ typeOfP[dMemrefMemrefType])
+      .flatMap((srcName, srcTyp, resTyp) =>
+        operandP(srcName, srcTyp).flatMap(src =>
+          resultP(resNames.head, resTyp).map(res => ReinterpretCast(src, res))
         )
       )
-    )
+
 
 val dMemrefDialect = summonDialect[
   (dMemrefVectorType, dMemrefMatrixType, dMemrefMemrefType),

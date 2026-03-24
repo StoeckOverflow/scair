@@ -23,12 +23,9 @@ builtin.module {
 // CHECK-NEXT:    %7 = "arith.constant"() <{value = 0 : index}> : () -> index
 // CHECK-NEXT:    %8 = "dtensor.nat.const"() <{value = 256 : i32}> : () -> !dtensor.nat
 // CHECK-NEXT:    %9 = "dtensor.nat.const"() <{value = 1024 : i32}> : () -> !dtensor.nat
-// CHECK-NEXT:    %10 = d_memref.reinterpret_cast %5 to
-// CHECK-NEXT:      offset: [%7],
-// CHECK-NEXT:      sizes: [%2, %6],
-// CHECK-NEXT:      strides: [%0, %1]
-// CHECK-NEXT:    : !d_memref.memref<[%4], f32> to !d_memref.memref<[%8, %9], f32, offset: 0 : index, strides: [%0, %1]>
-// CHECK-NEXT:    %11 = d_memref.load %10[%7, %7] : !d_memref.memref<[%8, %9], f32, offset: 0 : index, strides: [%0, %1]> -> f32
+// CHECK-NEXT:    %10 = d_memref.reinterpret_cast %5
+// CHECK-NEXT:    : !d_memref.memref<[%4], f32> to !d_memref.memref<[%8, %9], f32, offset: %7, strides: [%0, %1]>
+// CHECK-NEXT:    %11 = d_memref.load %10[%7, %7] : !d_memref.memref<[%8, %9], f32, offset: %7, strides: [%0, %1]> -> f32
 // CHECK-NEXT:    d_memref.dealloc %5 : !d_memref.memref<[%4], f32>
 // CHECK-NEXT:    func.return %11 : f32
 // CHECK-NEXT:  }

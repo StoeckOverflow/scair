@@ -172,9 +172,9 @@ private final class Builder(val funcOp: func.Func):
     lowerReinterpret(
       remap(op.src),
       op.res.typ,
-      materializeNatOrIndex(op.offset, block),
-      op.sizes.map(materializeNatOrIndex(_, block)),
-      op.strides.map(materializeNatOrIndex(_, block)),
+      materializeLayoutParam(op.res.typ.offset.get, block),
+      op.res.typ.params.map(d => materializeNatOrIndex(d.getVal(), block)),
+      op.res.typ.strides.get.map(materializeLayoutParam(_, block)),
       block,
     )
 

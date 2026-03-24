@@ -151,8 +151,7 @@ private def refineReinterpretType(
       ValueAttribute(v)
   }
   val refinedOffset: d_memref.LayoutParam =
-    if layout.offset.data >= 0 then IntegerAttr(IntData(layout.offset.data), IndexType())
-    else ValueAttribute(offset)
+    ValueAttribute(offset)
   (
     emitted.toSeq,
     d_memref.dMemrefMemrefType(
@@ -195,9 +194,6 @@ private val RefineReinterpret = pattern {
         val (prefix, refinedTy) = refineReinterpretType(ty, op.sizes, op.offset, op.strides)
         val refined = d_memref.ReinterpretCast(
           op.src.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
-          op.offset,
-          op.sizes,
-          op.strides,
           Result(refinedTy),
         )
         (prefix :+ refined, Seq(refined.res))

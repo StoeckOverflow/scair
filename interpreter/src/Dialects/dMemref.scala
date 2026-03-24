@@ -1,6 +1,8 @@
 package scair.interpreter
 
+import scair.dialects.builtin.*
 import scair.dialects.d_memref
+import scair.ir.ValueAttribute
 
 private def asInt(x: Any, name: String): Int =
   x match
@@ -125,6 +127,16 @@ object run_d_subview extends OpImpl[d_memref.Subview]:
 
 object run_d_reinterpret_cast extends OpImpl[d_memref.ReinterpretCast]:
 
+  private def asLayoutInt(
+      param: d_memref.LayoutParam,
+      interpreter: Interpreter,
+      ctx: RuntimeCtx,
+      name: String,
+  ): Int =
+    param match
+      case i: IntegerAttr    => i.value.value.toInt
+      case v: ValueAttribute => asInt(interpreter.lookup_op(v.getVal(), ctx), name)
+
   def compute(
       op: d_memref.ReinterpretCast,
       interpreter: Interpreter,
@@ -132,16 +144,24 @@ object run_d_reinterpret_cast extends OpImpl[d_memref.ReinterpretCast]:
       args: Seq[Any],
   ): Option[Any] =
     args match
-      case Seq(src: ShapedArray, offsetAny, rest*) =>
+      case Seq(src: ShapedArray) =>
         val rank = op.res.typ.params.size
-        val offset = asInt(offsetAny, "d_memref.reinterpret_cast offset")
-        val all = rest.map(asInt(_, "d_memref.reinterpret_cast operand"))
-        val sizes = all.take(rank)
-        val strides = all.drop(rank).take(rank)
+        val offset = asLayoutInt(
+          op.res.typ.offset.get,
+          interpreter,
+          ctx,
+          "d_memref.reinterpret_cast offset",
+        )
+        val sizes = op.res.typ.params.map(d =>
+          asInt(interpreter.lookup_op(d.getVal(), ctx), "d_memref.reinterpret_cast size")
+        )
+        val strides = op.res.typ.strides.get.map(s =>
+          asLayoutInt(s, interpreter, ctx, "d_memref.reinterpret_cast stride")
+        )
         Some(src.reinterpret(offset, sizes, strides))
       case _ =>
         throw new Exception(
-          "d_memref.reinterpret_cast expects (ShapedArray, offset, sizes..., strides...)"
+          "d_memref.reinterpret_cast expects (ShapedArray)"
         )
 
 val InterpreterdMemrefDialect: InterpreterDialect =

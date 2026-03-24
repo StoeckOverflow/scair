@@ -9,12 +9,9 @@ builtin.module {
     %c256 = "arith.constant"() <{value = 256 : index}> : () -> index
     %c1024 = "arith.constant"() <{value = 1024 : index}> : () -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
-    %view = d_memref.reinterpret_cast %buf to
-      offset: [%c0],
-      sizes: [%c256, %c1024],
-      strides: [%stride0, %stride1]
-    : !d_memref.memref<[%flat], f32> to !d_memref.memref<[%d0, %d1], f32, offset: 0, strides: [%stride0, %stride1]>
-    %v = d_memref.load %view[%i, %j] : !d_memref.memref<[%d0, %d1], f32, offset: 0, strides: [%stride0, %stride1]> -> f32
+    %view = d_memref.reinterpret_cast %buf
+    : !d_memref.memref<[%flat], f32> to !d_memref.memref<[%d0, %d1], f32, offset: %c0, strides: [%stride0, %stride1]>
+    %v = d_memref.load %view[%i, %j] : !d_memref.memref<[%d0, %d1], f32, offset: %c0, strides: [%stride0, %stride1]> -> f32
     func.return %v : f32
   }
 }
@@ -27,15 +24,13 @@ builtin.module {
 // CHECK-NEXT:    %8 = "arith.constant"() <{value = 256 : index}> : () -> index
 // CHECK-NEXT:    %9 = "arith.constant"() <{value = 1024 : index}> : () -> index
 // CHECK-NEXT:    %10 = "arith.constant"() <{value = 0 : index}> : () -> index
-// CHECK-NEXT:    %11 = d_memref.reinterpret_cast %7 to
-// CHECK-NEXT:      offset: [%10],
-// CHECK-NEXT:      sizes: [%8, %9],
-// CHECK-NEXT:      strides: [%0, %1]
-// CHECK-NEXT:    : !d_memref.memref<[%6], f32> to !d_memref.memref<[%4, %5], f32, offset: 0, strides: [%0, %1]>
+// CHECK-NEXT:    %11 = d_memref.reinterpret_cast %7
+// CHECK-NEXT:    : !d_memref.memref<[%6], f32> to !d_memref.memref<[%4, %5], f32, offset: %10, strides: [%0, %1]>
 // CHECK-NEXT:    %12 = "arith.muli"(%2, %0) : (index, index) -> index
 // CHECK-NEXT:    %13 = "arith.muli"(%3, %1) : (index, index) -> index
-// CHECK-NEXT:    %14 = "arith.addi"(%12, %13) : (index, index) -> index
-// CHECK-NEXT:    %15 = d_memref.base_ptr %11 : !d_memref.memref<[%4, %5], f32, offset: 0, strides: [%0, %1]> -> !llvm.ptr
-// CHECK-NEXT:    %16 = d_memref.linearized_load_from_base %15[%14] : !llvm.ptr -> f32
-// CHECK-NEXT:    func.return %16 : f32
+// CHECK-NEXT:    %14 = "arith.addi"(%10, %12) : (index, index) -> index
+// CHECK-NEXT:    %15 = "arith.addi"(%14, %13) : (index, index) -> index
+// CHECK-NEXT:    %16 = d_memref.base_ptr %11 : !d_memref.memref<[%4, %5], f32, offset: %10, strides: [%0, %1]> -> !llvm.ptr
+// CHECK-NEXT:    %17 = d_memref.linearized_load_from_base %16[%15] : !llvm.ptr -> f32
+// CHECK-NEXT:    func.return %17 : f32
 // CHECK-NEXT:  }
