@@ -12,8 +12,6 @@ import scair.passes.llvm_helpers.*
 import scair.transformations.*
 import scair.transformations.patterns.*
 
-import scala.collection.mutable
-
 private def overflowNSWNuw: ArrayAttribute[StringData] =
   ArrayAttribute(Seq(StringData("nsw"), StringData("nuw")))
 
@@ -22,14 +20,20 @@ private def gepInboundsNuw: ArrayAttribute[StringData] =
 
 private final class Builder(val funcOp: func.Func):
   private val state = FunctionLoweringState(funcOp)
-  private var cachedOne: Option[Value[Attribute]] = None
-  private var cachedZero: Option[Value[Attribute]] = None
+  private var cachedIndexConstants: Option[CachedIndexConstants] = None
+  private var refinedIndexMaterializer: Option[RefinedIndexMaterializer] = None
 
   private def remap(v: Value[Attribute]): Value[Attribute] =
     state.remap(v)
 
   private def emit(block: Block, op: Operation): Unit =
     block.addOp(op)
+
+  private def constCache: CachedIndexConstants =
+    cachedIndexConstants.get
+
+  private def indexMaterializer: RefinedIndexMaterializer =
+    refinedIndexMaterializer.get
 
   private def convertCarrierType(attr: Attribute): Attribute =
     attr match
@@ -61,54 +65,14 @@ private final class Builder(val funcOp: func.Func):
         case _ => ()
     }
 
-  private def constNat(v: Value[Attribute]): Option[BigInt] =
-    v.owner match
-      case Some(dTensor.NatConst(IntegerAttr(IntData(k), _), _)) => Some(k)
-      case _                                                     => None
-
   private def constIndex(v: BigInt, block: Block): Value[Attribute] =
-    if v == 0 && cachedZero.nonEmpty then cachedZero.get
-    else if v == 1 && cachedOne.nonEmpty then cachedOne.get
-    else
-      val c = llvm.Constant(idxAttr(v), Result(IndexType()))
-      emit(block, c)
-      if v == 0 then cachedZero = Some(c.res)
-      if v == 1 then cachedOne = Some(c.res)
-      c.res
+    constCache.constIndex(v, block)
 
   private def materializeNatOrIndex(v: Value[Attribute], block: Block): Value[Attribute] =
-    remap(v) match
-      case existing if existing.owner.exists {
-            case op: Operation => op.name.startsWith("llvm.")
-            case _             => false
-          } =>
-        existing
-      case other =>
-        constNat(other).map(k => constIndex(k, block)).orElse {
-          other.owner.collect {
-            case dTensor.IndexToNat(idx, _) =>
-              materializeNatOrIndex(idx, block)
-            case dTensor.ShapeToIndex(nat, _) =>
-              constNat(nat).map(k => constIndex(k, block)).getOrElse(other)
-          }
-        }.getOrElse(other)
+    indexMaterializer.materializeNatOrIndex(v, block)
 
   private def materializeLayoutParam(param: d_memref.LayoutParam, block: Block): Value[Attribute] =
-    param match
-      case i: IntegerAttr    => constIndex(i.value.value, block)
-      case v: ValueAttribute => materializeNatOrIndex(v.getVal(), block)
-
-  private def buildDefaultStrides(dims: Seq[Value[Attribute]], block: Block): Seq[Value[Attribute]] =
-    if dims.isEmpty then Seq.empty
-    else
-      val one = constIndex(1, block)
-      val rev = mutable.ArrayBuffer[Value[Attribute]](one)
-      dims.reverse.drop(1).foreach { dim =>
-        val mul = llvm.Mul(asIndex(dim), asIndex(rev.last), Result(IndexType()))
-        emit(block, mul)
-        rev += mul.res
-      }
-      rev.reverse.toSeq
+    indexMaterializer.materializeLayoutParam(param, block)
 
   private def layoutOffset(ty: d_memref.dMemrefMemrefType, block: Block): Value[Attribute] =
     ty.offset.map(materializeLayoutParam(_, block)).getOrElse(constIndex(0, block))
@@ -121,7 +85,7 @@ private final class Builder(val funcOp: func.Func):
       dims: Seq[Value[Attribute]],
       block: Block,
   ): Seq[Value[Attribute]] =
-    ty.strides.map(_.map(materializeLayoutParam(_, block))).getOrElse(buildDefaultStrides(dims, block))
+    ty.strides.map(_.map(materializeLayoutParam(_, block))).getOrElse(buildDefaultStrides(dims, block, constCache))
 
   private def constIndexValue(v: Value[Attribute]): Option[BigInt] =
     v.owner match
@@ -178,21 +142,10 @@ private final class Builder(val funcOp: func.Func):
         emit(block, mul)
         mul.res
       }
-    val nullPtr = llvm.Zero(Result(llvm.Ptr()))
-    emit(block, nullPtr)
-    val sizePtr = llvm.GetElementPtr(
-      asPtr(nullPtr.res),
-      Seq(asIndex(numElems)),
-      Result(llvm.Ptr()),
-      dynamicIndexSentinel,
-      ty.elem,
-    )
-    emit(block, sizePtr)
-    val sizeBytes = llvm.PtrToInt(asPtr(sizePtr.res), Result(IndexType()))
-    emit(block, sizeBytes)
+    val sizeBytes = computeAllocationSizeBytes(numElems, ty.elem, block)
     val malloc = llvm.Call(
       SymbolRefAttr(StringData("malloc")),
-      Seq(sizeBytes.out.asInstanceOf[Operand[Attribute]]),
+      Seq(sizeBytes.asInstanceOf[Operand[Attribute]]),
       Seq(Result(llvm.Ptr())),
     )
     emit(block, malloc)
@@ -271,25 +224,27 @@ private final class Builder(val funcOp: func.Func):
 
   def lower(): func.Func =
     val newBlocks = makeLoweredBlocks()
+    cachedIndexConstants = Some(CachedIndexConstants(newBlocks.head))
+    refinedIndexMaterializer = Some(RefinedIndexMaterializer(remap, constCache))
     seedEntryIndexAliases(newBlocks.head)
     if funcOp.body.blocks.tail.exists(_.operations.exists {
         case llvm.Constant(IntegerAttr(IntData(v), _: IndexType), _) => v == 1
         case _                                                       => false
       })
-    then cachedOne = Some(constIndex(1, newBlocks.head))
+    then constCache.constIndex(1, newBlocks.head)
     funcOp.body.blocks.zip(newBlocks).foreach { case (oldBlock, newBlock) =>
       oldBlock.operations.foreach {
         case c: llvm.Constant =>
           c.value match
-            case IntegerAttr(IntData(v), _: IndexType) if v == 1 && cachedOne.nonEmpty =>
-              state.valueMap(c.res) = cachedOne.get
+            case IntegerAttr(IntData(v), _: IndexType) if v == 1 =>
+              val one = constCache.one(newBlocks.head)
+              state.valueMap(c.res) = one
             case _ =>
               val copied = state.deepCopyOp(c).asInstanceOf[llvm.Constant]
               emit(newBlock, copied)
               state.valueMap(c.res) = copied.res
               c.value match
-                case IntegerAttr(IntData(v), _: IndexType) if v == 1 => cachedOne = Some(copied.res)
-                case IntegerAttr(IntData(v), _: IndexType) if v == 0 => cachedZero = Some(copied.res)
+                case IntegerAttr(IntData(v), _: IndexType) => constCache.seed(copied.res, v)
                 case _                                               => ()
         case _: dTensor.NatConst     => ()
         case _: dTensor.IndexToNat   => ()

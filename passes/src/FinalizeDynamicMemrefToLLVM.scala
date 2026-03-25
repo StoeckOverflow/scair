@@ -11,8 +11,6 @@ import scair.passes.llvm_helpers.*
 import scair.transformations.*
 import scair.transformations.patterns.*
 
-import scala.collection.mutable
-
 private def overflowNSWNuw: ArrayAttribute[StringData] =
   ArrayAttribute(Seq(StringData("nsw"), StringData("nuw")))
 
@@ -23,8 +21,7 @@ private def gepInboundsNuw: ArrayAttribute[StringData] =
 // lowering must replace descriptor-valued operations and preserve SSA uses.
 private final class Builder(val funcOp: func.Func):
   private val state = FunctionLoweringState(funcOp)
-  private var cachedOne: Option[Value[Attribute]] = None
-  private var cachedZero: Option[Value[Attribute]] = None
+  private var cachedIndexConstants: Option[CachedIndexConstants] = None
 
   private def remap(v: Value[Attribute]): Value[Attribute] =
     state.remap(v)
@@ -32,15 +29,11 @@ private final class Builder(val funcOp: func.Func):
   private def emit(block: Block, op: Operation): Unit =
     block.addOp(op)
 
+  private def constCache: CachedIndexConstants =
+    cachedIndexConstants.get
+
   private def constIndex(v: BigInt, block: Block): Value[Attribute] =
-    if v == 0 && cachedZero.nonEmpty then cachedZero.get
-    else if v == 1 && cachedOne.nonEmpty then cachedOne.get
-    else
-      val c = llvm.Constant(idxAttr(v), Result(IndexType()))
-      emit(block, c)
-      if v == 0 then cachedZero = Some(c.res)
-      if v == 1 then cachedOne = Some(c.res)
-      c.res
+    constCache.constIndex(v, block)
 
   private def descriptor(
       desc: Value[Attribute],
@@ -65,21 +58,6 @@ private final class Builder(val funcOp: func.Func):
         v
     }
 
-  private def defaultStrides(
-      dims: Seq[Value[Attribute]],
-      block: Block,
-  ): Seq[Value[Attribute]] =
-    if dims.isEmpty then Seq.empty
-    else
-      val one = constIndex(1, block)
-      val rev = mutable.ArrayBuffer[Value[Attribute]](one)
-      dims.reverse.drop(1).foreach { dim =>
-        val mul = llvm.Mul(asIndex(dim), asIndex(rev.last), Result(IndexType()))
-        emit(block, mul)
-        rev += mul.res
-      }
-      rev.reverse.toSeq
-
   private def lowerAllocLike(
       ty: RankedMemrefType,
       dynamicSizes: Seq[Value[Attribute]],
@@ -87,7 +65,7 @@ private final class Builder(val funcOp: func.Func):
   ): Value[Attribute] =
     val dims = materializeRankedDims(ty, dynamicSizes.map(remap), block)
     val offset = constIndex(0, block)
-    val strides = defaultStrides(dims, block)
+    val strides = buildDefaultStrides(dims, block, constCache)
     val numElems =
       if dims.isEmpty then constIndex(1, block)
       else dims.tail.foldLeft(dims.head) { (acc, dim) =>
@@ -95,21 +73,10 @@ private final class Builder(val funcOp: func.Func):
         emit(block, mul)
         mul.res
       }
-    val nullPtr = llvm.Zero(Result(llvm.Ptr()))
-    emit(block, nullPtr)
-    val sizePtr = llvm.GetElementPtr(
-      asPtr(nullPtr.res),
-      Seq(asIndex(numElems)),
-      Result(llvm.Ptr()),
-      dynamicIndexSentinel,
-      ty.elementType,
-    )
-    emit(block, sizePtr)
-    val sizeBytes = llvm.PtrToInt(asPtr(sizePtr.res), Result(IndexType()))
-    emit(block, sizeBytes)
+    val sizeBytes = computeAllocationSizeBytes(numElems, ty.elementType, block)
     val malloc = llvm.Call(
       SymbolRefAttr(StringData("malloc")),
-      Seq(sizeBytes.out.asInstanceOf[Operand[Attribute]]),
+      Seq(sizeBytes.asInstanceOf[Operand[Attribute]]),
       Seq(Result(llvm.Ptr())),
     )
     emit(block, malloc)
@@ -242,10 +209,7 @@ private final class Builder(val funcOp: func.Func):
     Seq(base, offset) ++ sizes ++ strides
 
   private def lowerDealloc(desc: Value[Attribute], block: Block): Unit =
-    val rank = desc.typ match
-      case llvm.StructType(fields) =>
-        fields(3).asInstanceOf[llvm.ArrayType].size.value.toInt
-      case _ => 0
+    val rank = RankedMemrefDescriptorHelper.rankOfDescriptorType(desc.typ).getOrElse(0)
     val ptr = descriptor(desc, rank, block).allocatedPtr()
     emit(
       block,
@@ -258,6 +222,7 @@ private final class Builder(val funcOp: func.Func):
 
   def lower(): func.Func =
     val clonedBlocks = state.makeClonedBlocks()
+    cachedIndexConstants = Some(CachedIndexConstants(clonedBlocks.head))
     funcOp.body.blocks.zip(clonedBlocks).foreach { case (oldBlock, newBlock) =>
       oldBlock.operations.foreach {
         case c: llvm.Constant =>
@@ -265,10 +230,8 @@ private final class Builder(val funcOp: func.Func):
           emit(newBlock, copied)
           state.valueMap(c.res) = copied.res
           c.value match
-            case IntegerAttr(IntData(v), _: IndexType) if v == 1 =>
-              cachedOne = Some(copied.res)
-            case IntegerAttr(IntData(v), _: IndexType) if v == 0 =>
-              cachedZero = Some(copied.res)
+            case IntegerAttr(IntData(v), _: IndexType) =>
+              constCache.seed(copied.res, v)
             case _ => ()
         case op: memref.Alloc =>
           state.valueMap(op.memref) = lowerAlloc(op, newBlock)
