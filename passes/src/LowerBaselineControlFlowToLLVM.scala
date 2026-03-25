@@ -48,43 +48,12 @@ private final class Builder(val funcOp: func.Func):
       case Right(v) => remapper(v)
     }
 
-  private def collectExternalOperands(
-      block: Block,
-      parentDefs: Set[Value[Attribute]] = Set.empty,
-  ): Seq[Value[Attribute]] =
-    val seen = mutable.LinkedHashSet.empty[Value[Attribute]]
-
-    def walkBlock(block: Block, incomingDefs: Set[Value[Attribute]]): Unit =
-      var defs = incomingDefs ++ block.arguments.map(_.asInstanceOf[Value[Attribute]])
-      block.operations.foreach { op =>
-        op.operands.foreach { operand =>
-          val value = operand.asInstanceOf[Value[Attribute]]
-          if !defs.contains(value) then seen += value
-        }
-        op.regions.foreach(_.blocks.foreach(nested => walkBlock(nested, defs)))
-        defs ++= op.results.map(_.asInstanceOf[Value[Attribute]])
-      }
-
-    walkBlock(block, parentDefs)
-    seen.toSeq
-
-  private def needsCapture(v: Value[Attribute]): Boolean =
-    v.owner match
-      case Some(block: Block) =>
-        block ne funcOp.body.blocks.head
-      case Some(op: Operation) =>
-        op.containerBlock match
-          case Some(block) => block ne funcOp.body.blocks.head
-          case None        => false
-      case _ => false
-
   private def lowerSimpleOp(
       op: Operation,
-      continuationCaptures: Seq[Value[Attribute]] = Seq.empty,
   ): Unit =
     op match
       case nested: For =>
-        lowerLoop(nested, continuationCaptures)
+        lowerLoop(nested)
       case other =>
         val copied = deepCopyOp(other)
         emit(copied)
@@ -106,136 +75,107 @@ private final class Builder(val funcOp: func.Func):
     val innerBody = inner.body.blocks.head
     lowerBound(op.lowerBoundOperands, op.lowerBoundMap).map { outerLb =>
       val init = remap(op.inits.head)
-      val captures =
-        (
-          op.lowerBoundOperands.map(_.asInstanceOf[Value[Attribute]]) ++
-            op.upperBoundOperands.map(_.asInstanceOf[Value[Attribute]]) ++
-            inner.lowerBoundOperands.map(_.asInstanceOf[Value[Attribute]]) ++
-            inner.upperBoundOperands.map(_.asInstanceOf[Value[Attribute]]) ++
-            collectExternalOperands(outerBody)
-        ).distinct.filter(needsCapture)
-      val outerHeader = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
+      val outerHeader = Block(Seq(IndexType(), init.typ), Seq.empty)
       cfg.appendBlock(outerHeader)
-      val outerBodyEntry = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
+      val outerBodyEntry = Block(Seq.empty, Seq.empty)
       cfg.appendBlock(outerBodyEntry)
-      val prefixResultTypes = prefixOps.flatMap(_.results.map(_.typ))
-      val innerHeader = Block(Seq(IndexType(), IndexType(), init.typ) ++ prefixResultTypes ++ captures.map(_.typ), Seq.empty)
+      val innerHeader = Block(Seq(IndexType(), init.typ), Seq.empty)
       cfg.appendBlock(innerHeader)
-      val innerBodyEntry = Block(Seq(IndexType(), IndexType(), init.typ) ++ prefixResultTypes ++ captures.map(_.typ), Seq.empty)
+      val innerBodyEntry = Block(Seq.empty, Seq.empty)
       cfg.appendBlock(innerBodyEntry)
-      val outerLatch = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
+      val outerLatch = Block(Seq.empty, Seq.empty)
       cfg.appendBlock(outerLatch)
-      val exit = Block(Seq(init.typ), Seq.empty)
+      val exit = Block(Seq.empty, Seq.empty)
       cfg.appendBlock(exit)
 
-      // The nested-loop lowering uses an explicit outer-header / inner-header /
-      // latch structure so loop-carried values remain visible as block arguments.
-      cfg.emitBr(current, Seq(outerLb, init) ++ captures.map(remap), outerHeader)
+      // The nested-loop lowering uses block arguments only for true loop-carried
+      // values, relying on SSA dominance for invariant descriptor/layout state.
+      cfg.emitBr(current, Seq(outerLb, init), outerHeader)
 
       val outerIv = outerHeader.arguments.head
       val outerAcc = outerHeader.arguments(1)
-      val outerHeaderCaptures = outerHeader.arguments.drop(2)
-      val outerHeaderMap = captures.zip(outerHeaderCaptures).toMap
       val outerUb = lowerBoundWith(
         op.upperBoundOperands,
         op.upperBoundMap,
-        v => outerHeaderMap.getOrElse(v, remap(v)),
+        remap,
         outerHeader,
       ).get
       val outerCmp = cfg.emitICmpSlt(outerHeader, outerIv, outerUb)
       cfg.emitCondBr(
         outerHeader,
         outerCmp,
-        Seq(outerIv, outerAcc) ++ outerHeaderCaptures,
-        Seq(outerAcc),
+        Seq.empty,
+        Seq.empty,
         outerBodyEntry,
         exit,
       )
 
-      val outerBodyIv = outerBodyEntry.arguments.head
-      val outerBodyAcc = outerBodyEntry.arguments(1)
-      val outerBodyCaptures = outerBodyEntry.arguments.drop(2)
       current = outerBodyEntry
-      val savedOuter = mutable.Map.from(state.valueMap)
       state.valueMap.addAll(
-        Seq(outerBody.arguments.head -> outerBodyIv, outerBody.arguments(1) -> outerBodyAcc) ++
-          captures.zip(outerBodyCaptures)
+        Seq(outerBody.arguments.head -> outerIv, outerBody.arguments(1) -> outerAcc)
       )
-      prefixOps.foreach(op => lowerSimpleOp(op, Seq(outerBody.arguments.head, outerBody.arguments(1)) ++ captures))
-      val prefixValues = prefixOps.flatMap(_.results.map(r => remap(r)))
+      prefixOps.foreach(op => lowerSimpleOp(op))
       val innerLb = lowerBoundWith(
         inner.lowerBoundOperands,
         inner.lowerBoundMap,
         remap,
         outerBodyEntry,
       ).get
-      state.valueMap.clear(); state.valueMap.addAll(savedOuter)
       cfg.emitBr(
         outerBodyEntry,
-        Seq(outerBodyIv, innerLb, outerBodyAcc) ++ prefixValues ++ outerBodyCaptures,
+        Seq(innerLb, outerAcc),
         innerHeader,
       )
 
-      val innerOuterIv = innerHeader.arguments.head
-      val innerIv = innerHeader.arguments(1)
-      val innerAcc = innerHeader.arguments(2)
-      val innerExtras = innerHeader.arguments.drop(3).take(prefixResultTypes.size)
-      val innerCaptures = innerHeader.arguments.drop(3 + prefixResultTypes.size)
-      val innerHeaderMap =
-        captures.zip(innerCaptures).toMap ++
-          prefixOps.flatMap(_.results).zip(innerExtras) ++
-          Seq(outerBody.arguments.head -> innerOuterIv, outerBody.arguments(1) -> innerAcc)
+      val innerIv = innerHeader.arguments.head
+      val innerAcc = innerHeader.arguments(1)
       val innerUb = lowerBoundWith(
         inner.upperBoundOperands,
         inner.upperBoundMap,
-        v => innerHeaderMap.getOrElse(v, remap(v)),
+        remap,
         innerHeader,
       ).get
       val innerCmp = cfg.emitICmpSlt(innerHeader, innerIv, innerUb)
       cfg.emitCondBr(
         innerHeader,
         innerCmp,
-        Seq(innerOuterIv, innerIv, innerAcc) ++ innerExtras ++ innerCaptures,
-        Seq(innerOuterIv, innerAcc) ++ innerCaptures,
+        Seq.empty,
+        Seq.empty,
         innerBodyEntry,
         outerLatch,
       )
 
       current = innerBodyEntry
-      val saved = mutable.Map.from(state.valueMap)
       state.valueMap.addAll(
         Seq(
-          outerBody.arguments.head -> innerBodyEntry.arguments.head,
-          outerBody.arguments(1) -> outerBodyAcc,
-          innerBody.arguments.head -> innerBodyEntry.arguments(1),
-          innerBody.arguments(1) -> innerBodyEntry.arguments(2),
-        ) ++ prefixOps.flatMap(_.results).zip(innerBodyEntry.arguments.drop(3).take(prefixResultTypes.size)) ++
-          captures.zip(innerBodyEntry.arguments.drop(3 + prefixResultTypes.size))
+          outerBody.arguments.head -> outerIv,
+          outerBody.arguments(1) -> outerAcc,
+          innerBody.arguments.head -> innerIv,
+          innerBody.arguments(1) -> innerAcc,
+        )
       )
       var yielded: Option[Value[Attribute]] = None
       innerBody.operations.foreach {
         case y: Yield => yielded = Some(remap(y.arguments.head))
-        case other    => lowerSimpleOp(other, Seq(outerBody.arguments.head, outerBody.arguments(1)) ++ captures)
+        case other    => lowerSimpleOp(other)
       }
-      state.valueMap.clear(); state.valueMap.addAll(saved)
       yielded.foreach { y =>
         val step = cfg.emitIndexConstant(current, op.step.value.value)
-        val nextIv = cfg.emitAdd(current, innerBodyEntry.arguments(1), step)
+        val nextIv = cfg.emitAdd(current, innerIv, step)
         cfg.emitBr(
           current,
-          Seq(innerBodyEntry.arguments.head, nextIv, y) ++ innerBodyEntry.arguments.drop(3),
+          Seq(nextIv, y),
           innerHeader,
         )
       }
 
       current = outerLatch
-      val outerLatchCaptures = outerLatch.arguments.drop(2)
       val outerStep = cfg.emitIndexConstant(current, op.step.value.value)
-      val nextOuter = cfg.emitAdd(current, outerLatch.arguments.head, outerStep)
-      cfg.emitBr(current, Seq(nextOuter, outerLatch.arguments(1)) ++ outerLatchCaptures, outerHeader)
+      val nextOuter = cfg.emitAdd(current, outerIv, outerStep)
+      cfg.emitBr(current, Seq(nextOuter, innerAcc), outerHeader)
 
       current = exit
-      exit.arguments.head
+      outerAcc
     }
 
   private def lowerFor(op: For): Option[Value[Attribute]] =
@@ -245,129 +185,98 @@ private final class Builder(val funcOp: func.Func):
       lowerBound(op.lowerBoundOperands, op.lowerBoundMap).map { lb =>
         val init = remap(op.inits.head)
         val bodyBlock = op.body.blocks.head
-        val captures =
-          (
-            op.lowerBoundOperands.map(_.asInstanceOf[Value[Attribute]]) ++
-              op.upperBoundOperands.map(_.asInstanceOf[Value[Attribute]]) ++
-              collectExternalOperands(bodyBlock)
-          ).distinct.filter(needsCapture)
-        val header = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
+        val header = Block(Seq(IndexType(), init.typ), Seq.empty)
         cfg.appendBlock(header)
-        val body = Block(Seq(IndexType(), init.typ) ++ captures.map(_.typ), Seq.empty)
+        val body = Block(Seq.empty, Seq.empty)
         cfg.appendBlock(body)
-        val exit = Block(Seq(init.typ), Seq.empty)
+        val exit = Block(Seq.empty, Seq.empty)
         cfg.appendBlock(exit)
-        cfg.emitBr(current, Seq(lb, init) ++ captures.map(remap), header)
+        cfg.emitBr(current, Seq(lb, init), header)
         val iv = header.arguments.head
         val acc = header.arguments(1)
-        val headerCaptures = header.arguments.drop(2)
-        val headerMap = captures.zip(headerCaptures).toMap
         val ub = lowerBoundWith(
           op.upperBoundOperands,
           op.upperBoundMap,
-          v => headerMap.getOrElse(v, remap(v)),
+          remap,
           header,
         ).get
         val cmp = cfg.emitICmpSlt(header, iv, ub)
-        cfg.emitCondBr(header, cmp, Seq(iv, acc) ++ headerCaptures, Seq(acc), body, exit)
+        cfg.emitCondBr(header, cmp, Seq.empty, Seq.empty, body, exit)
         current = body
-        val saved = mutable.Map.from(state.valueMap)
         state.valueMap.addAll(
-          Seq(bodyBlock.arguments.head -> body.arguments.head, bodyBlock.arguments(1) -> body.arguments(1)) ++
-            captures.zip(body.arguments.drop(2))
+          Seq(bodyBlock.arguments.head -> iv, bodyBlock.arguments(1) -> acc)
         )
         var yielded: Option[Value[Attribute]] = None
         bodyBlock.operations.foreach {
           case y: Yield => yielded = Some(remap(y.arguments.head))
-          case other    => lowerSimpleOp(other, Seq(bodyBlock.arguments.head, bodyBlock.arguments(1)) ++ captures)
+          case other    => lowerSimpleOp(other)
         }
-        state.valueMap.clear(); state.valueMap.addAll(saved)
         yielded.foreach { y =>
           val step = cfg.emitIndexConstant(current, op.step.value.value)
-          val nextIv = cfg.emitAdd(current, remap(bodyBlock.arguments.head), step)
-          cfg.emitBr(current, Seq(nextIv, y) ++ captures.map(remap), header)
+          val nextIv = cfg.emitAdd(current, iv, step)
+          cfg.emitBr(current, Seq(nextIv, y), header)
         }
         current = exit
-        exit.arguments.head
+        acc
       }
 
   private def lowerVoidFor(
       op: For,
-      continuationCaptures: Seq[Value[Attribute]],
   ): Boolean =
     if op.inits.nonEmpty || op.res.nonEmpty || op.body.blocks.size != 1 then false
     else
       val bodyBlock = op.body.blocks.head
-      val controlOperands =
-        (op.lowerBoundOperands ++ op.upperBoundOperands).map(_.asInstanceOf[Value[Attribute]])
-      val captures =
-        (controlOperands ++ collectExternalOperands(bodyBlock) ++ continuationCaptures).distinct.filter(needsCapture)
-      val remappedCaptures = captures.map(remap)
-
-      val header = Block(Seq(IndexType()) ++ remappedCaptures.map(_.typ), Seq.empty)
+      val header = Block(Seq(IndexType()), Seq.empty)
       cfg.appendBlock(header)
-      val body = Block(Seq(IndexType()) ++ remappedCaptures.map(_.typ), Seq.empty)
+      val body = Block(Seq.empty, Seq.empty)
       cfg.appendBlock(body)
-      val exit = Block(remappedCaptures.map(_.typ), Seq.empty)
+      val exit = Block(Seq.empty, Seq.empty)
       cfg.appendBlock(exit)
 
-      val preheaderMap = captures.zip(remappedCaptures).toMap
       val lb = lowerBoundWith(
         op.lowerBoundOperands,
         op.lowerBoundMap,
-        v => preheaderMap.getOrElse(v, remap(v)),
+        remap,
         current,
       )
       lb match
         case None => false
         case Some(lbVal) =>
-          cfg.emitBr(current, Seq(lbVal) ++ remappedCaptures, header)
+          cfg.emitBr(current, Seq(lbVal), header)
           val iv = header.arguments.head
-          val headerCaptures = header.arguments.drop(1).toSeq
-          val headerMap = captures.zip(headerCaptures).toMap
           val ub = lowerBoundWith(
             op.upperBoundOperands,
             op.upperBoundMap,
-            v => headerMap.getOrElse(v, remap(v)),
+            remap,
             header,
           )
           ub match
             case None => false
             case Some(ubVal) =>
               val cmp = cfg.emitICmpSlt(header, iv, ubVal)
-              cfg.emitCondBr(header, cmp, Seq(iv) ++ headerCaptures, headerCaptures, body, exit)
+              cfg.emitCondBr(header, cmp, Seq.empty, Seq.empty, body, exit)
               current = body
-              val saved = mutable.Map.from(state.valueMap)
               state.valueMap.addAll(
-                Seq(bodyBlock.arguments.head -> body.arguments.head) ++ captures.zip(body.arguments.drop(1))
+                Seq(bodyBlock.arguments.head -> iv)
               )
               bodyBlock.operations.toSeq.foreach {
                 case _: Yield =>
                 case nested: For =>
-                  lowerLoop(
-                    nested,
-                    Seq(bodyBlock.arguments.head) ++ captures ++ continuationCaptures,
-                  )
+                  lowerLoop(nested)
                 case other =>
-                  lowerSimpleOp(other, Seq(bodyBlock.arguments.head) ++ captures ++ continuationCaptures)
+                  lowerSimpleOp(other)
               }
-              val liveArgs = current.arguments
-              val liveIv = liveArgs.head
-              val liveCaptures = liveArgs.drop(1)
               val step = cfg.emitIndexConstant(current, op.step.value.value)
-              val nextIv = cfg.emitAdd(current, liveIv, step)
-              cfg.emitBr(current, Seq(nextIv) ++ liveCaptures, header)
+              val nextIv = cfg.emitAdd(current, iv, step)
+              cfg.emitBr(current, Seq(nextIv), header)
               current = exit
-              state.valueMap.clear(); state.valueMap.addAll(saved)
-              state.valueMap.addAll(captures.zip(exit.arguments))
               true
 
   private def lowerLoop(
       op: For,
-      continuationCaptures: Seq[Value[Attribute]] = Seq.empty,
   ): Unit =
     if op.inits.isEmpty && op.res.isEmpty then
-      lowerVoidFor(op, continuationCaptures)
+      lowerVoidFor(op)
     else
       lowerFor(op).foreach(v => state.valueMap(op.results.head) = v)
 

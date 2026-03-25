@@ -90,7 +90,7 @@ builtin.module {
 
 // -----
 
-// Block argument is only valid in its defining block (should fail).
+// Block argument dominates blocks dominated by its defining block (should pass).
 builtin.module {
   "test.region"() ({
   ^bb0(%arg0: i32):
@@ -101,4 +101,12 @@ builtin.module {
   }) : () -> ()
 }
 
-// CHECK: ssa-dominance: value Value{{.*}} does not dominate its use in op `test.use`
+// CHECK-LABEL: builtin.module {
+// CHECK: "test.region"() ({
+// CHECK: ^bb0(%0: i32):
+// CHECK: "test.br"()[^bb1] : () -> ()
+// CHECK: ^bb1:
+// CHECK: "test.use"(%0) : (i32) -> ()
+// CHECK: "test.ret"() : () -> ()
+// CHECK: }) : () -> ()
+// CHECK: }

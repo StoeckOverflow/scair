@@ -49,27 +49,27 @@ builtin.module {
 // CHECK-NEXT:    "llvm.br"(%8, %9)[^bb0] : (index, f32) -> ()
 // CHECK-NEXT: ^bb0(%15: index, %16: f32):
 // CHECK-NEXT:    %17 = "llvm.icmp"(%15, %6) <{predicate = "slt"}> : (index, index) -> i1
-// CHECK-NEXT:    "llvm.cond_br"(%17, %15, %16, %16)[^bb1, ^bb2] <{operandSegmentSizes = array<i32: 1, 2, 1>}> : (i1, index, f32, f32) -> ()
-// CHECK-NEXT: ^bb1(%18: index, %19: f32):
-// CHECK-NEXT:    "llvm.br"(%18, %8, %19)[^bb3] : (index, index, f32) -> ()
-// CHECK-NEXT: ^bb3(%20: index, %21: index, %22: f32):
-// CHECK-NEXT:    %23 = "llvm.icmp"(%21, %7) <{predicate = "slt"}> : (index, index) -> i1
-// CHECK-NEXT:    "llvm.cond_br"(%23, %20, %21, %22, %20, %22)[^bb4, ^bb5] <{operandSegmentSizes = array<i32: 1, 3, 2>}> : (i1, index, index, f32, index, f32) -> ()
-// CHECK-NEXT: ^bb4(%24: index, %25: index, %26: f32):
-// CHECK-NEXT:    %27 = llvm.mlir.constant 256 : index : index
-// CHECK-NEXT:    %28 = llvm.mlir.constant 1024 : index : index
-// CHECK-NEXT:    %29 = "llvm.mul"(%24, %3) : (index, index) -> index
-// CHECK-NEXT:    %30 = "llvm.mul"(%25, %4) : (index, index) -> index
-// CHECK-NEXT:    %31 = "llvm.add"(%29, %30) : (index, index) -> index
-// CHECK-NEXT:    %32 = "llvm.getelementptr"(%14, %31) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// CHECK-NEXT:    %33 = llvm.load %32 : !llvm.ptr -> f32
-// CHECK-NEXT:    %34 = "llvm.fadd"(%26, %33) : (f32, f32) -> f32
-// CHECK-NEXT:    %35 = "llvm.add"(%25, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// CHECK-NEXT:    "llvm.br"(%24, %35, %34)[^bb3] : (index, index, f32) -> ()
-// CHECK-NEXT: ^bb5(%36: index, %37: f32):
-// CHECK-NEXT:    %38 = "llvm.add"(%36, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// CHECK-NEXT:    "llvm.br"(%38, %37)[^bb0] : (index, f32) -> ()
-// CHECK-NEXT: ^bb2(%39: f32):
+// CHECK-NEXT:    "llvm.cond_br"(%17)[^bb1, ^bb2] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+// CHECK-NEXT: ^bb1:
+// CHECK-NEXT:    "llvm.br"(%15, %8, %16)[^bb3] : (index, index, f32) -> ()
+// CHECK-NEXT: ^bb3(%18: index, %19: index, %20: f32):
+// CHECK-NEXT:    %21 = "llvm.icmp"(%19, %7) <{predicate = "slt"}> : (index, index) -> i1
+// CHECK-NEXT:    "llvm.cond_br"(%21)[^bb4, ^bb5] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+// CHECK-NEXT: ^bb4:
+// CHECK-NEXT:    %22 = llvm.mlir.constant 256 : index : index
+// CHECK-NEXT:    %23 = llvm.mlir.constant 1024 : index : index
+// CHECK-NEXT:    %24 = "llvm.mul"(%18, %3) : (index, index) -> index
+// CHECK-NEXT:    %25 = "llvm.mul"(%19, %4) : (index, index) -> index
+// CHECK-NEXT:    %26 = "llvm.add"(%24, %25) : (index, index) -> index
+// CHECK-NEXT:    %27 = "llvm.getelementptr"(%14, %26) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// CHECK-NEXT:    %28 = llvm.load %27 : !llvm.ptr -> f32
+// CHECK-NEXT:    %29 = "llvm.fadd"(%20, %28) : (f32, f32) -> f32
+// CHECK-NEXT:    %30 = "llvm.add"(%19, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// CHECK-NEXT:    "llvm.br"(%18, %30, %29)[^bb3] : (index, index, f32) -> ()
+// CHECK-NEXT: ^bb5:
+// CHECK-NEXT:    %31 = "llvm.add"(%18, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// CHECK-NEXT:    "llvm.br"(%31, %20)[^bb0] : (index, f32) -> ()
+// CHECK-NEXT: ^bb2:
 // CHECK-NEXT:    "llvm.call"(%14) <{callee = @free}> : (!llvm.ptr) -> ()
-// CHECK-NEXT:    "llvm.return"(%39) : (f32) -> ()
+// CHECK-NEXT:    "llvm.return"(%16) : (f32) -> ()
 // CHECK-NEXT: }

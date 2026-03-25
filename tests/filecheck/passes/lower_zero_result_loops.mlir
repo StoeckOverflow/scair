@@ -110,26 +110,26 @@ builtin.module {
 // BASE: "llvm.br"(%1)[^bb0] : (index) -> ()
 // BASE: ^bb0(%28: index):
 // BASE: %29 = "llvm.icmp"(%28, %0) <{predicate = "slt"}> : (index, index) -> i1
-// BASE: "llvm.cond_br"(%29, %28)[^bb1, ^bb2]
-// BASE: ^bb1(%30: index):
-// BASE: "llvm.br"(%1, %30)[^bb3] : (index, index) -> ()
-// BASE: ^bb3(%32: index, %33: index):
-// BASE: %34 = "llvm.icmp"(%32, %0) <{predicate = "slt"}> : (index, index) -> i1
-// BASE: "llvm.cond_br"(%34, %32, %33, %33)[^bb4, ^bb5]
-// BASE: ^bb4(%35: index, %36: index):
-// BASE: %37 = "llvm.extractvalue"(%27) <{position = array<i32: 1>}>
-// BASE: %38 = "llvm.extractvalue"(%27) <{position = array<i32: 4, 0>}>
-// BASE: %39 = "llvm.mul"(%36, %38) : (index, index) -> index
-// BASE: %40 = "llvm.extractvalue"(%27) <{position = array<i32: 4, 1>}>
-// BASE: %41 = "llvm.mul"(%35, %40) : (index, index) -> index
-// BASE: %42 = "llvm.add"(%39, %41) : (index, index) -> index
-// BASE: %43 = "llvm.getelementptr"(%37, %42) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// BASE: llvm.store %4, %43 : f32, !llvm.ptr
-// BASE: %44 = "llvm.add"(%35, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// BASE: "llvm.br"(%44, %36)[^bb3] : (index, index) -> ()
-// BASE: ^bb5(%45: index):
-// BASE: %46 = "llvm.add"(%45, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// BASE: "llvm.br"(%46)[^bb0] : (index) -> ()
+// BASE: "llvm.cond_br"(%29)[^bb1, ^bb2]
+// BASE: ^bb1:
+// BASE: "llvm.br"(%1)[^bb3] : (index) -> ()
+// BASE: ^bb3(%31: index):
+// BASE: %32 = "llvm.icmp"(%31, %0) <{predicate = "slt"}> : (index, index) -> i1
+// BASE: "llvm.cond_br"(%32)[^bb4, ^bb5]
+// BASE: ^bb4:
+// BASE: %33 = "llvm.extractvalue"(%27) <{position = array<i32: 1>}>
+// BASE: %34 = "llvm.extractvalue"(%27) <{position = array<i32: 4, 0>}>
+// BASE: %35 = "llvm.mul"(%28, %34) : (index, index) -> index
+// BASE: %36 = "llvm.extractvalue"(%27) <{position = array<i32: 4, 1>}>
+// BASE: %37 = "llvm.mul"(%31, %36) : (index, index) -> index
+// BASE: %38 = "llvm.add"(%35, %37) : (index, index) -> index
+// BASE: %39 = "llvm.getelementptr"(%33, %38) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// BASE: llvm.store %4, %39 : f32, !llvm.ptr
+// BASE: %40 = "llvm.add"(%31, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// BASE: "llvm.br"(%40)[^bb3] : (index) -> ()
+// BASE: ^bb5:
+// BASE: %41 = "llvm.add"(%28, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// BASE: "llvm.br"(%41)[^bb0] : (index) -> ()
 
 // -----------------------------------------------------------------------------
 // mixed zero-result init loop followed by reduction loop. The init loop stores
@@ -145,51 +145,51 @@ builtin.module {
 // BASE: "llvm.br"(%1)[^bb0] : (index) -> ()
 // BASE: ^bb0(%29: index):
 // BASE: %30 = "llvm.icmp"(%29, %0) <{predicate = "slt"}> : (index, index) -> i1
-// BASE: "llvm.cond_br"(%30, %29)[^bb1, ^bb2]
-// BASE: ^bb1(%31: index):
-// BASE: "llvm.br"(%1, %31)[^bb3] : (index, index) -> ()
+// BASE: "llvm.cond_br"(%30)[^bb1, ^bb2]
+// BASE: ^bb1:
+// BASE: "llvm.br"(%1)[^bb3] : (index) -> ()
 // BASE: ^bb2:
 // BASE: "llvm.br"(%1, %4)[^bb4] : (index, f32) -> ()
-// BASE: ^bb3(%32: index, %33: index):
-// BASE: %34 = "llvm.icmp"(%32, %0) <{predicate = "slt"}> : (index, index) -> i1
-// BASE: "llvm.cond_br"(%34, %32, %33, %33)[^bb5, ^bb6]
-// BASE: ^bb5(%35: index, %36: index):
-// BASE: %37 = "llvm.extractvalue"(%28) <{position = array<i32: 1>}>
-// BASE: %38 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 0>}>
-// BASE: %39 = "llvm.mul"(%36, %38) : (index, index) -> index
-// BASE: %40 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 1>}>
-// BASE: %41 = "llvm.mul"(%35, %40) : (index, index) -> index
-// BASE: %42 = "llvm.add"(%39, %41) : (index, index) -> index
-// BASE: %43 = "llvm.getelementptr"(%37, %42) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// BASE: llvm.store %5, %43 : f32, !llvm.ptr
-// BASE: %44 = "llvm.add"(%35, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// BASE: "llvm.br"(%44, %36)[^bb3] : (index, index) -> ()
-// BASE: ^bb6(%45: index):
-// BASE: %46 = "llvm.add"(%45, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// BASE: "llvm.br"(%46)[^bb0] : (index) -> ()
-// BASE: ^bb4(%47: index, %48: f32):
-// BASE: %49 = "llvm.icmp"(%47, %0) <{predicate = "slt"}> : (index, index) -> i1
-// BASE: "llvm.cond_br"(%49, %47, %48, %48)[^bb7, ^bb8]
-// BASE: ^bb7(%50: index, %51: f32):
-// BASE: "llvm.br"(%50, %1, %51)[^bb9] : (index, index, f32) -> ()
-// BASE: ^bb9(%52: index, %53: index, %54: f32):
-// BASE: %55 = "llvm.icmp"(%53, %0) <{predicate = "slt"}> : (index, index) -> i1
-// BASE: "llvm.cond_br"(%55, %52, %53, %54, %52, %54)[^bb10, ^bb11]
-// BASE: ^bb10(%56: index, %57: index, %58: f32):
-// BASE: %59 = "llvm.extractvalue"(%28) <{position = array<i32: 1>}>
-// BASE: %60 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 0>}>
-// BASE: %61 = "llvm.mul"(%56, %60) : (index, index) -> index
-// BASE: %62 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 1>}>
-// BASE: %63 = "llvm.mul"(%57, %62) : (index, index) -> index
-// BASE: %64 = "llvm.add"(%61, %63) : (index, index) -> index
-// BASE: %65 = "llvm.getelementptr"(%59, %64) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// BASE: %66 = llvm.load %65 : !llvm.ptr -> f32
-// BASE: %67 = "llvm.fadd"(%58, %66) : (f32, f32) -> f32
-// BASE: %68 = "llvm.add"(%57, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// BASE: "llvm.br"(%56, %68, %67)[^bb9] : (index, index, f32) -> ()
-// BASE: ^bb11(%69: index, %70: f32):
-// BASE: %71 = "llvm.add"(%69, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// BASE: "llvm.br"(%71, %70)[^bb4] : (index, f32) -> ()
+// BASE: ^bb3(%31: index):
+// BASE: %32 = "llvm.icmp"(%31, %0) <{predicate = "slt"}> : (index, index) -> i1
+// BASE: "llvm.cond_br"(%32)[^bb5, ^bb6]
+// BASE: ^bb5:
+// BASE: %33 = "llvm.extractvalue"(%28) <{position = array<i32: 1>}>
+// BASE: %34 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 0>}>
+// BASE: %35 = "llvm.mul"(%29, %34) : (index, index) -> index
+// BASE: %36 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 1>}>
+// BASE: %37 = "llvm.mul"(%31, %36) : (index, index) -> index
+// BASE: %38 = "llvm.add"(%35, %37) : (index, index) -> index
+// BASE: %39 = "llvm.getelementptr"(%33, %38) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// BASE: llvm.store %5, %39 : f32, !llvm.ptr
+// BASE: %40 = "llvm.add"(%31, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// BASE: "llvm.br"(%40)[^bb3] : (index) -> ()
+// BASE: ^bb6:
+// BASE: %41 = "llvm.add"(%29, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// BASE: "llvm.br"(%41)[^bb0] : (index) -> ()
+// BASE: ^bb4(%42: index, %43: f32):
+// BASE: %44 = "llvm.icmp"(%42, %0) <{predicate = "slt"}> : (index, index) -> i1
+// BASE: "llvm.cond_br"(%44)[^bb7, ^bb8]
+// BASE: ^bb7:
+// BASE: "llvm.br"(%42, %1, %43)[^bb9] : (index, index, f32) -> ()
+// BASE: ^bb9(%45: index, %46: index, %47: f32):
+// BASE: %48 = "llvm.icmp"(%46, %0) <{predicate = "slt"}> : (index, index) -> i1
+// BASE: "llvm.cond_br"(%48)[^bb10, ^bb11]
+// BASE: ^bb10:
+// BASE: %49 = "llvm.extractvalue"(%28) <{position = array<i32: 1>}>
+// BASE: %50 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 0>}>
+// BASE: %51 = "llvm.mul"(%45, %50) : (index, index) -> index
+// BASE: %52 = "llvm.extractvalue"(%28) <{position = array<i32: 4, 1>}>
+// BASE: %53 = "llvm.mul"(%46, %52) : (index, index) -> index
+// BASE: %54 = "llvm.add"(%51, %53) : (index, index) -> index
+// BASE: %55 = "llvm.getelementptr"(%49, %54) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// BASE: %56 = llvm.load %55 : !llvm.ptr -> f32
+// BASE: %57 = "llvm.fadd"(%47, %56) : (f32, f32) -> f32
+// BASE: %58 = "llvm.add"(%46, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// BASE: "llvm.br"(%45, %58, %57)[^bb9] : (index, index, f32) -> ()
+// BASE: ^bb11:
+// BASE: %59 = "llvm.add"(%45, %2) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// BASE: "llvm.br"(%59, %47)[^bb4] : (index, f32) -> ()
 
 // -----------------------------------------------------------------------------
 // optimized zero-result nested loops keep explicit outer/inner CFG, with stores
@@ -204,24 +204,24 @@ builtin.module {
 // OPT: "llvm.br"(%2)[^bb0] : (index) -> ()
 // OPT: ^bb0(%9: index):
 // OPT: %10 = "llvm.icmp"(%9, %1) <{predicate = "slt"}> : (index, index) -> i1
-// OPT: "llvm.cond_br"(%10, %9)[^bb1, ^bb2]
-// OPT: ^bb1(%11: index):
-// OPT: %12 = "llvm.mul"(%11, %1) : (index, index) -> index
-// OPT: "llvm.br"(%2, %12, %11)[^bb3] : (index, index, index) -> ()
-// OPT: ^bb3(%13: index, %14: index, %15: index):
-// OPT: %16 = "llvm.icmp"(%13, %1) <{predicate = "slt"}> : (index, index) -> i1
-// OPT: "llvm.cond_br"(%16, %13, %14, %15, %14, %15)[^bb4, ^bb5]
-// OPT: ^bb4(%17: index, %18: index, %19: index):
-// OPT: %20 = "llvm.mul"(%17, %0) : (index, index) -> index
-// OPT: %21 = "llvm.add"(%2, %18) : (index, index) -> index
-// OPT: %22 = "llvm.add"(%21, %20) : (index, index) -> index
-// OPT: %23 = "llvm.getelementptr"(%8, %22) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// OPT: llvm.store %3, %23 : f32, !llvm.ptr
-// OPT: %24 = "llvm.add"(%17, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// OPT: "llvm.br"(%24, %18, %19)[^bb3] : (index, index, index) -> ()
-// OPT: ^bb5(%25: index, %26: index):
-// OPT: %27 = "llvm.add"(%25, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// OPT: "llvm.br"(%27, %26)[^bb0] : (index, index) -> ()
+// OPT: "llvm.cond_br"(%10)[^bb1, ^bb2]
+// OPT: ^bb1:
+// OPT: %11 = "llvm.mul"(%9, %1) : (index, index) -> index
+// OPT: "llvm.br"(%2)[^bb3] : (index) -> ()
+// OPT: ^bb3(%12: index):
+// OPT: %13 = "llvm.icmp"(%12, %1) <{predicate = "slt"}> : (index, index) -> i1
+// OPT: "llvm.cond_br"(%13)[^bb4, ^bb5]
+// OPT: ^bb4:
+// OPT: %14 = "llvm.mul"(%12, %0) : (index, index) -> index
+// OPT: %15 = "llvm.add"(%2, %11) : (index, index) -> index
+// OPT: %16 = "llvm.add"(%15, %14) : (index, index) -> index
+// OPT: %17 = "llvm.getelementptr"(%8, %16) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// OPT: llvm.store %3, %17 : f32, !llvm.ptr
+// OPT: %18 = "llvm.add"(%12, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// OPT: "llvm.br"(%18)[^bb3] : (index) -> ()
+// OPT: ^bb5:
+// OPT: %19 = "llvm.add"(%9, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// OPT: "llvm.br"(%19)[^bb0] : (index) -> ()
 
 // -----------------------------------------------------------------------------
 // optimized mixed init + reduction keeps the init-store nest and then lowers
@@ -237,44 +237,44 @@ builtin.module {
 // OPT: "llvm.br"(%2)[^bb0] : (index) -> ()
 // OPT: ^bb0(%10: index):
 // OPT: %11 = "llvm.icmp"(%10, %1) <{predicate = "slt"}> : (index, index) -> i1
-// OPT: "llvm.cond_br"(%11, %10)[^bb1, ^bb2]
-// OPT: ^bb1(%12: index):
-// OPT: %13 = "llvm.mul"(%12, %1) : (index, index) -> index
-// OPT: "llvm.br"(%2, %13, %12)[^bb3] : (index, index, index) -> ()
+// OPT: "llvm.cond_br"(%11)[^bb1, ^bb2]
+// OPT: ^bb1:
+// OPT: %12 = "llvm.mul"(%10, %1) : (index, index) -> index
+// OPT: "llvm.br"(%2)[^bb3] : (index) -> ()
 // OPT: ^bb2:
 // OPT: "llvm.br"(%2, %3)[^bb4] : (index, f32) -> ()
-// OPT: ^bb3(%14: index, %15: index, %16: index):
-// OPT: %17 = "llvm.icmp"(%14, %1) <{predicate = "slt"}> : (index, index) -> i1
-// OPT: "llvm.cond_br"(%17, %14, %15, %16, %15, %16)[^bb5, ^bb6]
-// OPT: ^bb5(%18: index, %19: index, %20: index):
-// OPT: %21 = "llvm.mul"(%18, %0) : (index, index) -> index
-// OPT: %22 = "llvm.add"(%2, %19) : (index, index) -> index
-// OPT: %23 = "llvm.add"(%22, %21) : (index, index) -> index
-// OPT: %24 = "llvm.getelementptr"(%9, %23) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// OPT: llvm.store %4, %24 : f32, !llvm.ptr
-// OPT: %25 = "llvm.add"(%18, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// OPT: "llvm.br"(%25, %19, %20)[^bb3] : (index, index, index) -> ()
-// OPT: ^bb6(%26: index, %27: index):
-// OPT: %28 = "llvm.add"(%26, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// OPT: "llvm.br"(%28, %27)[^bb0] : (index, index) -> ()
-// OPT: ^bb4(%29: index, %30: f32):
-// OPT: %31 = "llvm.icmp"(%29, %1) <{predicate = "slt"}> : (index, index) -> i1
-// OPT: "llvm.cond_br"(%31, %29, %30, %30)[^bb7, ^bb8]
-// OPT: ^bb7(%32: index, %33: f32):
-// OPT: %34 = "llvm.mul"(%32, %1) : (index, index) -> index
-// OPT: "llvm.br"(%32, %2, %33, %34)[^bb9] : (index, index, f32, index) -> ()
-// OPT: ^bb9(%35: index, %36: index, %37: f32, %38: index):
-// OPT: %39 = "llvm.icmp"(%36, %1) <{predicate = "slt"}> : (index, index) -> i1
-// OPT: "llvm.cond_br"(%39, %35, %36, %37, %38, %35, %37)[^bb10, ^bb11]
-// OPT: ^bb10(%40: index, %41: index, %42: f32, %43: index):
-// OPT: %44 = "llvm.mul"(%41, %0) : (index, index) -> index
-// OPT: %45 = "llvm.add"(%2, %43) : (index, index) -> index
-// OPT: %46 = "llvm.add"(%45, %44) : (index, index) -> index
-// OPT: %47 = "llvm.getelementptr"(%9, %46) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// OPT: %48 = llvm.load %47 : !llvm.ptr -> f32
-// OPT: %49 = "llvm.fadd"(%42, %48) : (f32, f32) -> f32
-// OPT: %50 = "llvm.add"(%41, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// OPT: "llvm.br"(%40, %50, %49, %43)[^bb9] : (index, index, f32, index) -> ()
-// OPT: ^bb11(%51: index, %52: f32):
-// OPT: %53 = "llvm.add"(%51, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// OPT: "llvm.br"(%53, %52)[^bb4] : (index, f32) -> ()
+// OPT: ^bb3(%13: index):
+// OPT: %14 = "llvm.icmp"(%13, %1) <{predicate = "slt"}> : (index, index) -> i1
+// OPT: "llvm.cond_br"(%14)[^bb5, ^bb6]
+// OPT: ^bb5:
+// OPT: %15 = "llvm.mul"(%13, %0) : (index, index) -> index
+// OPT: %16 = "llvm.add"(%2, %12) : (index, index) -> index
+// OPT: %17 = "llvm.add"(%16, %15) : (index, index) -> index
+// OPT: %18 = "llvm.getelementptr"(%9, %17) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// OPT: llvm.store %4, %18 : f32, !llvm.ptr
+// OPT: %19 = "llvm.add"(%13, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// OPT: "llvm.br"(%19)[^bb3] : (index) -> ()
+// OPT: ^bb6:
+// OPT: %20 = "llvm.add"(%10, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// OPT: "llvm.br"(%20)[^bb0] : (index) -> ()
+// OPT: ^bb4(%21: index, %22: f32):
+// OPT: %23 = "llvm.icmp"(%21, %1) <{predicate = "slt"}> : (index, index) -> i1
+// OPT: "llvm.cond_br"(%23)[^bb7, ^bb8]
+// OPT: ^bb7:
+// OPT: %24 = "llvm.mul"(%21, %1) : (index, index) -> index
+// OPT: "llvm.br"(%21, %2, %22, %24)[^bb9] : (index, index, f32, index) -> ()
+// OPT: ^bb9(%25: index, %26: index, %27: f32, %28: index):
+// OPT: %29 = "llvm.icmp"(%26, %1) <{predicate = "slt"}> : (index, index) -> i1
+// OPT: "llvm.cond_br"(%29)[^bb10, ^bb11]
+// OPT: ^bb10:
+// OPT: %30 = "llvm.mul"(%26, %0) : (index, index) -> index
+// OPT: %31 = "llvm.add"(%2, %28) : (index, index) -> index
+// OPT: %32 = "llvm.add"(%31, %30) : (index, index) -> index
+// OPT: %33 = "llvm.getelementptr"(%9, %32) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// OPT: %34 = llvm.load %33 : !llvm.ptr -> f32
+// OPT: %35 = "llvm.fadd"(%27, %34) : (f32, f32) -> f32
+// OPT: %36 = "llvm.add"(%26, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// OPT: "llvm.br"(%25, %36, %35, %28)[^bb9] : (index, index, f32, index) -> ()
+// OPT: ^bb11:
+// OPT: %37 = "llvm.add"(%25, %0) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// OPT: "llvm.br"(%37, %27)[^bb4] : (index, f32) -> ()
