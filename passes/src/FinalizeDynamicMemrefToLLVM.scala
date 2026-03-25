@@ -180,6 +180,61 @@ private final class Builder(val funcOp: func.Func):
       block,
     )
 
+  private def lowerStore(
+      desc: Value[Attribute],
+      ty: RankedMemrefType,
+      idxs: Seq[Value[Attribute]],
+      value: Value[Attribute],
+      block: Block,
+  ): Unit =
+    val memrefDesc = descriptor(desc, idxs.size, block)
+    val base = memrefDesc.alignedPtr()
+    val layout = ty.encoding.collect { case s: StridedLayoutAttr => s }
+    val flagged = layout.exists(_.offset.data == 0) && idxs.size == 2
+    val terms = idxs.zipWithIndex.map { case (idx, axis) =>
+      val stride = memrefDesc.stride(axis)
+      val mul = llvm.Mul(
+        asIndex(idx),
+        asIndex(stride),
+        Result(IndexType()),
+        if flagged then Some(overflowNSWNuw) else None,
+      )
+      emit(block, mul)
+      mul.res
+    }
+    val linear =
+      if terms.size == 1 then terms.head
+      else
+        terms.reduce { (l, r) =>
+          val add = llvm.Add(
+            asIndex(l),
+            asIndex(r),
+            Result(IndexType()),
+            if flagged then Some(overflowNSWNuw) else None,
+          )
+          emit(block, add)
+          add.res
+        }
+    val gep = llvm.GetElementPtr(
+      asPtr(base),
+      Seq(asIndex(linear)),
+      Result(llvm.Ptr()),
+      dynamicIndexSentinel,
+      ty.elementType,
+      if flagged then Some(gepInboundsNuw) else None,
+    )
+    emit(block, gep)
+    emit(block, llvm.Store(value.asInstanceOf[Operand[Attribute]], asPtr(gep.res)))
+
+  private def lowerStore(op: memref.Store, block: Block): Unit =
+    lowerStore(
+      remap(op.memref),
+      op.memref.typ.asInstanceOf[RankedMemrefType],
+      op.indices.map(remap),
+      remap(op.value),
+      block,
+    )
+
   private def lowerExtractStridedMetadata(
       op: memref.ExtractStridedMetadata,
       block: Block,
@@ -241,6 +296,8 @@ private final class Builder(val funcOp: func.Func):
           state.valueMap.addAll(op.results.zip(lowerExtractStridedMetadata(op, newBlock)))
         case op: memref.Load =>
           state.valueMap(op.result) = lowerLoad(op, newBlock)
+        case op: memref.Store =>
+          lowerStore(op, newBlock)
         case op: memref.Dealloc =>
           lowerDealloc(remap(op.memref), newBlock)
         case ret: func.Return =>
@@ -258,7 +315,7 @@ private final class Builder(val funcOp: func.Func):
 
 private val LowerFunc = pattern {
   case op: func.Func if op.body.blocks.exists(_.operations.exists {
-        case _: memref.Alloc | _: memref.ReinterpretCast | _: memref.ExtractStridedMetadata | _: memref.Load | _: memref.Dealloc | _: func.Return =>
+        case _: memref.Alloc | _: memref.ReinterpretCast | _: memref.ExtractStridedMetadata | _: memref.Load | _: memref.Store | _: memref.Dealloc | _: func.Return =>
           true
         case _ => false
       }) =>

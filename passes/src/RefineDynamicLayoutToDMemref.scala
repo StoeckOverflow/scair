@@ -64,12 +64,28 @@ private def lowerRegion(
                 Result(op.result.typ.asInstanceOf[TypeAttribute]),
               )
             )
+          case op: affine.Store if identityMap(op.map, op.indices.size) =>
+            Seq(
+              d_memref.Store(
+                remapValue(op.value, localMapper).asInstanceOf[Operand[TypeAttribute]],
+                remapValue(op.memref, localMapper).asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+                op.indices.map(v => remapValue(v, localMapper).asInstanceOf[Operand[IndexType]]),
+              )
+            )
           case op: memref.Load =>
             Seq(
               d_memref.Load(
                 remapValue(op.memref, localMapper).asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
                 op.indices.map(v => remapValue(v, localMapper).asInstanceOf[Operand[IndexType]]),
                 Result(op.result.typ.asInstanceOf[TypeAttribute]),
+              )
+            )
+          case op: memref.Store =>
+            Seq(
+              d_memref.Store(
+                remapValue(op.value, localMapper).asInstanceOf[Operand[TypeAttribute]],
+                remapValue(op.memref, localMapper).asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+                op.indices.map(v => remapValue(v, localMapper).asInstanceOf[Operand[IndexType]]),
               )
             )
           case other =>
@@ -187,6 +203,15 @@ private val RefineLoad = pattern {
     )
 }
 
+private val RefineStore = pattern {
+  case op: memref.Store =>
+    d_memref.Store(
+      op.value.asInstanceOf[Operand[TypeAttribute]],
+      op.memref.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+      op.indices,
+    )
+}
+
 private val RefineReinterpret = pattern {
   case op: memref.ReinterpretCast =>
     op.res.typ match
@@ -229,6 +254,15 @@ private val RefineAffineLoad = pattern {
     )
 }
 
+private val RefineAffineStore = pattern {
+  case op: affine.Store if identityMap(op.map, op.indices.size) =>
+    d_memref.Store(
+      op.value.asInstanceOf[Operand[TypeAttribute]],
+      op.memref.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+      op.indices,
+    )
+}
+
 // Refines baseline memref/affine IR into d_memref/d_affine IR.
 // Example: `memref.alloc` / `memref.reinterpret_cast` / `affine.for`
 //   -> `d_memref.alloc` / `d_memref.reinterpret_cast` / `d_affine.for`,
@@ -243,7 +277,9 @@ final class RefineDynamicLayoutToDMemref(ctx: MLContext) extends WalkerPass(ctx)
           RefineReinterpret,
           RefineDealloc,
           RefineLoad,
+          RefineStore,
           RefineAffineLoad,
+          RefineAffineStore,
           RefineAffineYield,
           RefineAffineFor,
         )
