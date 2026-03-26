@@ -1,6 +1,7 @@
 package scair.passes.lower_memref_to_llvm
 
 import scair.MLContext
+import scair.exceptions.VerifyException
 import scair.passes.convert_arith_to_llvm.ConvertArithToLLVM
 import scair.passes.finalize_dynamic_memref_to_llvm.FinalizeDynamicMemrefToLLVM
 import scair.passes.finalize_refined_dmemref_to_llvm.FinalizeRefinedDMemrefToLLVM
@@ -12,9 +13,21 @@ import scair.passes.refine_dynamic_layout_to_dmemref.RefineDynamicLayoutToDMemre
 import scair.passes.dce.DeadCodeElimination
 import scair.transformations.ModulePass
 import scair.ir.Operation
+import scair.verify.Verifier
+
+private def verifyAfterPass(op: Operation, pass: ModulePass): Operation =
+  Verifier.verify(op, Verifier.defaultChecks) match
+    case scair.utils.Err(errorMsg) =>
+      throw VerifyException(
+        s"verification failed after pass '${pass.name}':\n$errorMsg"
+      )
+    case _ => op
 
 private def runPipeline(op: Operation, passes: Seq[ModulePass]): Operation =
-  passes.foldLeft(op)((cur, pass) => pass.transform(cur))
+  passes.foldLeft(op) { (cur, pass) =>
+    val out = pass.transform(cur)
+    verifyAfterPass(out, pass)
+  }
 
 private def baselineDynamicTail(ctx: MLContext): Seq[ModulePass] =
   Seq(
