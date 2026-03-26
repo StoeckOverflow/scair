@@ -77,6 +77,6 @@ final class LowerDynamicMemrefToLLVM(ctx: MLContext) extends ModulePass(ctx):
 //   -> pointer-based LLVM GEP/load/store without descriptors.
 final class LowerDMemrefToLLVM(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "lower-dmemref-to-llvm"
-  private val passes = pointerBasedRefinedTail(ctx)
+  private val passes = pointerBasedRefinedTail(ctx) ++ Seq(DeadCodeElimination(ctx))
   override def transform(op: Operation): Operation =
     runPipeline(op, passes)

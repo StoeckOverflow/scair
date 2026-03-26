@@ -114,15 +114,15 @@ builtin.module {
 }
 
 // P1-LABEL: func.func @semi_affine_layout_map(%0: index, %1: index) -> f32 {
-// P1-NEXT:    %2 = llvm.mlir.constant 256 : index : index
-// P1-NEXT:    %3 = llvm.mlir.constant 1024 : index : index
-// P1-NEXT:    %4 = llvm.mlir.constant 0 : index : index
-// P1-NEXT:    %5 = llvm.mlir.constant 0 : i32 : i32
-// P1-NEXT:    %6 = llvm.mlir.constant 0.0 : f32 : f32
-// P1-NEXT:    %7 = llvm.mlir.constant 1.0 : f32 : f32
+// P1-NEXT:    %2 = "llvm.mlir.constant"() <{value = 256 : index}> : () -> index
+// P1-NEXT:    %3 = "llvm.mlir.constant"() <{value = 1024 : index}> : () -> index
+// P1-NEXT:    %4 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
+// P1-NEXT:    %5 = "llvm.mlir.constant"() <{value = 0 : i32}> : () -> i32
+// P1-NEXT:    %6 = "llvm.mlir.constant"() <{value = 0.0 : f32}> : () -> f32
+// P1-NEXT:    %7 = "llvm.mlir.constant"() <{value = 1.0 : f32}> : () -> f32
 // P1-NEXT:    %8 = "llvm.mul"(%2, %0) : (index, index) -> index
-// P1-NEXT:    %9 = llvm.mlir.constant 1 : index : index
-// P1-NEXT:    %10 = llvm.mlir.zero : !llvm.ptr
+// P1-NEXT:    %9 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
+// P1-NEXT:    %10 = "llvm.mlir.zero"() : () -> !llvm.ptr
 // P1-NEXT:    %11 = "llvm.getelementptr"(%10, %8) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
 // P1-NEXT:    %12 = "llvm.ptrtoint"(%11) : (!llvm.ptr) -> index
 // P1-NEXT:    %13 = "llvm.call"(%12) <{callee = @malloc}> : (index) -> !llvm.ptr
@@ -161,12 +161,12 @@ builtin.module {
 // P1-NEXT:    %38 = "llvm.mul"(%32, %37) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // P1-NEXT:    %39 = "llvm.add"(%36, %38) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // P1-NEXT:    %40 = "llvm.getelementptr"(%34, %39) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32, gepFlags = ["inbounds", "nuw"]}> : (!llvm.ptr, index) -> !llvm.ptr
-// P1-NEXT:    llvm.store %7, %40 : f32, !llvm.ptr
-// P1-NEXT:    %41 = llvm.mlir.constant 1 : index : index
+// P1-NEXT:    "llvm.store"(%7, %40) : (f32, !llvm.ptr) -> ()
+// P1-NEXT:    %41 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
 // P1-NEXT:    %42 = "llvm.add"(%32, %41) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // P1-NEXT:    "llvm.br"(%42)[^bb3] : (index) -> ()
 // P1-NEXT:  ^bb6:
-// P1-NEXT:    %43 = llvm.mlir.constant 1 : index : index
+// P1-NEXT:    %43 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
 // P1-NEXT:    %44 = "llvm.add"(%30, %43) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // P1-NEXT:    "llvm.br"(%44)[^bb0] : (index) -> ()
 // P1-NEXT:  ^bb4(%45: index, %46: f32):
@@ -187,11 +187,11 @@ builtin.module {
 // P1-NEXT:    %57 = "llvm.getelementptr"(%51, %56) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32, gepFlags = ["inbounds", "nuw"]}> : (!llvm.ptr, index) -> !llvm.ptr
 // P1-NEXT:    %58 = llvm.load %57 : !llvm.ptr -> f32
 // P1-NEXT:    %59 = "llvm.fadd"(%49, %58) : (f32, f32) -> f32
-// P1-NEXT:    %60 = llvm.mlir.constant 1 : index : index
+// P1-NEXT:    %60 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
 // P1-NEXT:    %61 = "llvm.add"(%48, %60) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // P1-NEXT:    "llvm.br"(%61, %59)[^bb9] : (index, f32) -> ()
 // P1-NEXT:  ^bb11:
-// P1-NEXT:    %62 = llvm.mlir.constant 1 : index : index
+// P1-NEXT:    %62 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
 // P1-NEXT:    %63 = "llvm.add"(%45, %62) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // P1-NEXT:    "llvm.br"(%63, %49)[^bb4] : (index, f32) -> ()
 // P1-NEXT:  ^bb8:
@@ -201,17 +201,17 @@ builtin.module {
 // P1-NEXT:  }
 
 // P2-LABEL: func.func @semi_affine_layout_map(%0: index, %1: index) -> f32 {
-// P2-NEXT:    %2 = llvm.mlir.constant 0 : index : index
+// P2-NEXT:    %2 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
 // P2-NEXT:    %3 = "llvm.add"(%0, %2) : (index, index) -> index
 // P2-NEXT:    %4 = "llvm.add"(%1, %2) : (index, index) -> index
-// P2-NEXT:    %5 = llvm.mlir.constant 1 : index : index
-// P2-NEXT:    %6 = llvm.mlir.constant 256 : index : index
-// P2-NEXT:    %7 = llvm.mlir.constant 1024 : index : index
-// P2-NEXT:    %8 = llvm.mlir.constant 0 : index : index
-// P2-NEXT:    %9 = llvm.mlir.constant 0.0 : f32 : f32
-// P2-NEXT:    %10 = llvm.mlir.constant 1.0 : f32 : f32
+// P2-NEXT:    %5 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
+// P2-NEXT:    %6 = "llvm.mlir.constant"() <{value = 256 : index}> : () -> index
+// P2-NEXT:    %7 = "llvm.mlir.constant"() <{value = 1024 : index}> : () -> index
+// P2-NEXT:    %8 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
+// P2-NEXT:    %9 = "llvm.mlir.constant"() <{value = 0.0 : f32}> : () -> f32
+// P2-NEXT:    %10 = "llvm.mlir.constant"() <{value = 1.0 : f32}> : () -> f32
 // P2-NEXT:    %11 = "llvm.mul"(%6, %3) : (index, index) -> index
-// P2-NEXT:    %12 = llvm.mlir.zero : !llvm.ptr
+// P2-NEXT:    %12 = "llvm.mlir.zero"() : () -> !llvm.ptr
 // P2-NEXT:    %13 = "llvm.getelementptr"(%12, %11) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
 // P2-NEXT:    %14 = "llvm.ptrtoint"(%13) : (!llvm.ptr) -> index
 // P2-NEXT:    %15 = "llvm.call"(%14) <{callee = @malloc}> : (index) -> !llvm.ptr
@@ -232,7 +232,7 @@ builtin.module {
 // P2-NEXT:    %22 = "llvm.mul"(%20, %4) : (index, index) -> index
 // P2-NEXT:    %23 = "llvm.add"(%19, %22) : (index, index) -> index
 // P2-NEXT:    %24 = "llvm.getelementptr"(%15, %23) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// P2-NEXT:    llvm.store %10, %24 : f32, !llvm.ptr
+// P2-NEXT:    "llvm.store"(%10, %24) : (f32, !llvm.ptr) -> ()
 // P2-NEXT:    %25 = "llvm.add"(%20, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // P2-NEXT:    "llvm.br"(%25)[^bb3] : (index) -> ()
 // P2-NEXT:  ^bb6:
@@ -265,16 +265,16 @@ builtin.module {
 // P2-NEXT:  }
 
 // P3-LABEL: func.func @semi_affine_layout_map(%0: index, %1: index) -> f32 {
-// P3-NEXT:    %2 = llvm.mlir.constant 0 : index : index
+// P3-NEXT:    %2 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
 // P3-NEXT:    %3 = "llvm.add"(%0, %2) : (index, index) -> index
 // P3-NEXT:    %4 = "llvm.add"(%1, %2) : (index, index) -> index
-// P3-NEXT:    %5 = llvm.mlir.constant 1 : index : index
-// P3-NEXT:    %6 = llvm.mlir.constant 256 : index : index
-// P3-NEXT:    %7 = llvm.mlir.constant 1024 : index : index
-// P3-NEXT:    %8 = llvm.mlir.constant 0 : index : index
-// P3-NEXT:    %9 = llvm.mlir.constant 0.0 : f32 : f32
+// P3-NEXT:    %5 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
+// P3-NEXT:    %6 = "llvm.mlir.constant"() <{value = 256 : index}> : () -> index
+// P3-NEXT:    %7 = "llvm.mlir.constant"() <{value = 1024 : index}> : () -> index
+// P3-NEXT:    %8 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
+// P3-NEXT:    %9 = "llvm.mlir.constant"() <{value = 0.0 : f32}> : () -> f32
 // P3-NEXT:    %10 = "llvm.mul"(%6, %3) : (index, index) -> index
-// P3-NEXT:    %11 = llvm.mlir.zero : !llvm.ptr
+// P3-NEXT:    %11 = "llvm.mlir.zero"() : () -> !llvm.ptr
 // P3-NEXT:    %12 = "llvm.getelementptr"(%11, %10) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
 // P3-NEXT:    %13 = "llvm.ptrtoint"(%12) : (!llvm.ptr) -> index
 // P3-NEXT:    %14 = "llvm.call"(%13) <{callee = @malloc}> : (index) -> !llvm.ptr
@@ -288,19 +288,17 @@ builtin.module {
 // P3-NEXT:    %21 = "llvm.icmp"(%19, %7) <{predicate = "slt"}> : (index, index) -> i1
 // P3-NEXT:    "llvm.cond_br"(%21)[^bb4, ^bb5] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
 // P3-NEXT:  ^bb4:
-// P3-NEXT:    %22 = llvm.mlir.constant 256 : index : index
-// P3-NEXT:    %23 = llvm.mlir.constant 1024 : index : index
-// P3-NEXT:    %24 = "llvm.mul"(%18, %3) : (index, index) -> index
-// P3-NEXT:    %25 = "llvm.mul"(%19, %4) : (index, index) -> index
-// P3-NEXT:    %26 = "llvm.add"(%24, %25) : (index, index) -> index
-// P3-NEXT:    %27 = "llvm.getelementptr"(%14, %26) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// P3-NEXT:    %28 = llvm.load %27 : !llvm.ptr -> f32
-// P3-NEXT:    %29 = "llvm.fadd"(%20, %28) : (f32, f32) -> f32
-// P3-NEXT:    %30 = "llvm.add"(%19, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// P3-NEXT:    "llvm.br"(%18, %30, %29)[^bb3] : (index, index, f32) -> ()
+// P3-NEXT:    %22 = "llvm.mul"(%18, %3) : (index, index) -> index
+// P3-NEXT:    %23 = "llvm.mul"(%19, %4) : (index, index) -> index
+// P3-NEXT:    %24 = "llvm.add"(%22, %23) : (index, index) -> index
+// P3-NEXT:    %25 = "llvm.getelementptr"(%14, %24) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// P3-NEXT:    %26 = llvm.load %25 : !llvm.ptr -> f32
+// P3-NEXT:    %27 = "llvm.fadd"(%20, %26) : (f32, f32) -> f32
+// P3-NEXT:    %28 = "llvm.add"(%19, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// P3-NEXT:    "llvm.br"(%18, %28, %27)[^bb3] : (index, index, f32) -> ()
 // P3-NEXT:  ^bb5:
-// P3-NEXT:    %31 = "llvm.add"(%18, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// P3-NEXT:    "llvm.br"(%31, %20)[^bb0] : (index, f32) -> ()
+// P3-NEXT:    %29 = "llvm.add"(%18, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// P3-NEXT:    "llvm.br"(%29, %20)[^bb0] : (index, f32) -> ()
 // P3-NEXT:  ^bb2:
 // P3-NEXT:    "llvm.call"(%14) <{callee = @free}> : (!llvm.ptr) -> ()
 // P3-NEXT:    "llvm.return"(%16) : (f32) -> ()

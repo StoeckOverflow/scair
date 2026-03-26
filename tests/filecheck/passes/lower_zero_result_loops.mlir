@@ -108,10 +108,10 @@ builtin.module {
 // -----------------------------------------------------------------------------
 
 // BASE-LABEL: func.func @zero_result_nested(%0: index, %1: index) {
-// BASE: %2 = llvm.mlir.constant 8 : index : index
-// BASE: %3 = llvm.mlir.constant 0 : index : index
-// BASE: %4 = llvm.mlir.constant 1 : index : index
-// BASE: %5 = llvm.mlir.constant 1.0 : f32 : f32
+// BASE: %2 = "llvm.mlir.constant"() <{value = 8 : index}> : () -> index
+// BASE: %3 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
+// BASE: %4 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
+// BASE: %5 = "llvm.mlir.constant"() <{value = 1.0 : f32}> : () -> f32
 // BASE: %6 = "llvm.mul"(%2, %0) : (index, index) -> index
 // BASE: "llvm.br"(%3)[^bb0] : (index) -> ()
 // BASE: ^bb0(%27: index):
@@ -130,21 +130,21 @@ builtin.module {
 // BASE: %36 = "llvm.mul"(%30, %35) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // BASE: %37 = "llvm.add"(%34, %36) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // BASE: %38 = "llvm.getelementptr"(%32, %37) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32, gepFlags = ["inbounds", "nuw"]}> : (!llvm.ptr, index) -> !llvm.ptr
-// BASE: llvm.store %5, %38 : f32, !llvm.ptr
-// BASE: %39 = llvm.mlir.constant 1 : index : index
+// BASE: "llvm.store"(%5, %38) : (f32, !llvm.ptr) -> ()
+// BASE: %39 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
 // BASE: %40 = "llvm.add"(%30, %39) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // BASE: "llvm.br"(%40)[^bb3] : (index) -> ()
 // BASE: ^bb5:
-// BASE: %41 = llvm.mlir.constant 1 : index : index
+// BASE: %41 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
 // BASE: %42 = "llvm.add"(%27, %41) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // BASE: "llvm.br"(%42)[^bb0] : (index) -> ()
 
 // BASE-LABEL: func.func @zero_then_reduction(%0: index, %1: index) -> f32 {
-// BASE: %2 = llvm.mlir.constant 8 : index : index
-// BASE: %3 = llvm.mlir.constant 0 : index : index
-// BASE: %4 = llvm.mlir.constant 1 : index : index
-// BASE: %5 = llvm.mlir.constant 0.0 : f32 : f32
-// BASE: %6 = llvm.mlir.constant 1.0 : f32 : f32
+// BASE: %2 = "llvm.mlir.constant"() <{value = 8 : index}> : () -> index
+// BASE: %3 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
+// BASE: %4 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
+// BASE: %5 = "llvm.mlir.constant"() <{value = 0.0 : f32}> : () -> f32
+// BASE: %6 = "llvm.mlir.constant"() <{value = 1.0 : f32}> : () -> f32
 // BASE: %7 = "llvm.mul"(%2, %0) : (index, index) -> index
 // BASE: "llvm.br"(%3)[^bb0] : (index) -> ()
 // BASE: ^bb0(%28: index):
@@ -163,8 +163,8 @@ builtin.module {
 // BASE: %36 = "llvm.mul"(%30, %35) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // BASE: %37 = "llvm.add"(%34, %36) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // BASE: %38 = "llvm.getelementptr"(%32, %37) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32, gepFlags = ["inbounds", "nuw"]}> : (!llvm.ptr, index) -> !llvm.ptr
-// BASE: llvm.store %6, %38 : f32, !llvm.ptr
-// BASE: %39 = llvm.mlir.constant 1 : index : index
+// BASE: "llvm.store"(%6, %38) : (f32, !llvm.ptr) -> ()
+// BASE: %39 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
 // BASE: %40 = "llvm.add"(%30, %39) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // BASE: "llvm.br"(%40)[^bb3] : (index) -> ()
 // BASE: ^bb4(%43: index, %44: f32):
@@ -185,7 +185,7 @@ builtin.module {
 // BASE: %55 = "llvm.getelementptr"(%49, %54) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32, gepFlags = ["inbounds", "nuw"]}> : (!llvm.ptr, index) -> !llvm.ptr
 // BASE: %56 = llvm.load %55 : !llvm.ptr -> f32
 // BASE: %57 = "llvm.fadd"(%47, %56) : (f32, f32) -> f32
-// BASE: %58 = llvm.mlir.constant 1 : index : index
+// BASE: %58 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
 // BASE: %59 = "llvm.add"(%46, %58) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // BASE: "llvm.br"(%59, %57)[^bb9] : (index, f32) -> ()
 
@@ -195,13 +195,13 @@ builtin.module {
 // -----------------------------------------------------------------------------
 
 // OPT-LABEL: func.func @zero_result_nested(%0: index, %1: index) {
-// OPT: %2 = llvm.mlir.constant 0 : index : index
+// OPT: %2 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
 // OPT: %3 = "llvm.add"(%0, %2) : (index, index) -> index
 // OPT: %4 = "llvm.add"(%1, %2) : (index, index) -> index
-// OPT: %5 = llvm.mlir.constant 1 : index : index
-// OPT: %6 = llvm.mlir.constant 8 : index : index
-// OPT: %7 = llvm.mlir.constant 0 : index : index
-// OPT: %8 = llvm.mlir.constant 1.0 : f32 : f32
+// OPT: %5 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
+// OPT: %6 = "llvm.mlir.constant"() <{value = 8 : index}> : () -> index
+// OPT: %7 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
+// OPT: %8 = "llvm.mlir.constant"() <{value = 1.0 : f32}> : () -> f32
 // OPT: "llvm.br"(%7)[^bb0] : (index) -> ()
 // OPT: ^bb0(%14: index):
 // OPT: %15 = "llvm.icmp"(%14, %6) <{predicate = "slt"}> : (index, index) -> i1
@@ -217,7 +217,7 @@ builtin.module {
 // OPT: %20 = "llvm.mul"(%18, %4) : (index, index) -> index
 // OPT: %21 = "llvm.add"(%17, %20) : (index, index) -> index
 // OPT: %22 = "llvm.getelementptr"(%13, %21) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// OPT: llvm.store %8, %22 : f32, !llvm.ptr
+// OPT: "llvm.store"(%8, %22) : (f32, !llvm.ptr) -> ()
 // OPT: %23 = "llvm.add"(%18, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // OPT: "llvm.br"(%23)[^bb3] : (index) -> ()
 // OPT: ^bb5:
@@ -225,14 +225,14 @@ builtin.module {
 // OPT: "llvm.br"(%24)[^bb0] : (index) -> ()
 
 // OPT-LABEL: func.func @zero_then_reduction(%0: index, %1: index) -> f32 {
-// OPT: %2 = llvm.mlir.constant 0 : index : index
+// OPT: %2 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
 // OPT: %3 = "llvm.add"(%0, %2) : (index, index) -> index
 // OPT: %4 = "llvm.add"(%1, %2) : (index, index) -> index
-// OPT: %5 = llvm.mlir.constant 1 : index : index
-// OPT: %6 = llvm.mlir.constant 8 : index : index
-// OPT: %7 = llvm.mlir.constant 0 : index : index
-// OPT: %8 = llvm.mlir.constant 0.0 : f32 : f32
-// OPT: %9 = llvm.mlir.constant 1.0 : f32 : f32
+// OPT: %5 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
+// OPT: %6 = "llvm.mlir.constant"() <{value = 8 : index}> : () -> index
+// OPT: %7 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
+// OPT: %8 = "llvm.mlir.constant"() <{value = 0.0 : f32}> : () -> f32
+// OPT: %9 = "llvm.mlir.constant"() <{value = 1.0 : f32}> : () -> f32
 // OPT: "llvm.br"(%7)[^bb0] : (index) -> ()
 // OPT: ^bb0(%15: index):
 // OPT: %16 = "llvm.icmp"(%15, %6) <{predicate = "slt"}> : (index, index) -> i1
@@ -248,7 +248,7 @@ builtin.module {
 // OPT: %21 = "llvm.mul"(%19, %4) : (index, index) -> index
 // OPT: %22 = "llvm.add"(%18, %21) : (index, index) -> index
 // OPT: %23 = "llvm.getelementptr"(%14, %22) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// OPT: llvm.store %9, %23 : f32, !llvm.ptr
+// OPT: "llvm.store"(%9, %23) : (f32, !llvm.ptr) -> ()
 // OPT: %24 = "llvm.add"(%19, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // OPT: "llvm.br"(%24)[^bb3] : (index) -> ()
 // OPT: ^bb4(%26: index, %27: f32):
