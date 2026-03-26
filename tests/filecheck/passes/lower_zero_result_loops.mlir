@@ -208,17 +208,17 @@ builtin.module {
 // OPT: "llvm.cond_br"(%15)[^bb1, ^bb2]
 // OPT: ^bb1:
 // OPT: %16 = "llvm.mul"(%14, %3) : (index, index) -> index
+// OPT: %17 = "llvm.add"(%7, %16) : (index, index) -> index
 // OPT: "llvm.br"(%7)[^bb3] : (index) -> ()
-// OPT: ^bb3(%17: index):
-// OPT: %18 = "llvm.icmp"(%17, %6) <{predicate = "slt"}> : (index, index) -> i1
-// OPT: "llvm.cond_br"(%18)[^bb4, ^bb5]
+// OPT: ^bb3(%18: index):
+// OPT: %19 = "llvm.icmp"(%18, %6) <{predicate = "slt"}> : (index, index) -> i1
+// OPT: "llvm.cond_br"(%19)[^bb4, ^bb5]
 // OPT: ^bb4:
-// OPT: %19 = "llvm.mul"(%17, %4) : (index, index) -> index
-// OPT: %20 = "llvm.add"(%7, %16) : (index, index) -> index
-// OPT: %21 = "llvm.add"(%20, %19) : (index, index) -> index
+// OPT: %20 = "llvm.mul"(%18, %4) : (index, index) -> index
+// OPT: %21 = "llvm.add"(%17, %20) : (index, index) -> index
 // OPT: %22 = "llvm.getelementptr"(%13, %21) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
 // OPT: llvm.store %8, %22 : f32, !llvm.ptr
-// OPT: %23 = "llvm.add"(%17, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// OPT: %23 = "llvm.add"(%18, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // OPT: "llvm.br"(%23)[^bb3] : (index) -> ()
 // OPT: ^bb5:
 // OPT: %24 = "llvm.add"(%14, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
@@ -239,33 +239,33 @@ builtin.module {
 // OPT: "llvm.cond_br"(%16)[^bb1, ^bb2]
 // OPT: ^bb1:
 // OPT: %17 = "llvm.mul"(%15, %3) : (index, index) -> index
+// OPT: %18 = "llvm.add"(%7, %17) : (index, index) -> index
 // OPT: "llvm.br"(%7)[^bb3] : (index) -> ()
-// OPT: ^bb3(%18: index):
-// OPT: %19 = "llvm.icmp"(%18, %6) <{predicate = "slt"}> : (index, index) -> i1
-// OPT: "llvm.cond_br"(%19)[^bb5, ^bb6]
+// OPT: ^bb3(%19: index):
+// OPT: %20 = "llvm.icmp"(%19, %6) <{predicate = "slt"}> : (index, index) -> i1
+// OPT: "llvm.cond_br"(%20)[^bb5, ^bb6]
 // OPT: ^bb5:
-// OPT: %20 = "llvm.mul"(%18, %4) : (index, index) -> index
-// OPT: %21 = "llvm.add"(%7, %17) : (index, index) -> index
-// OPT: %22 = "llvm.add"(%21, %20) : (index, index) -> index
+// OPT: %21 = "llvm.mul"(%19, %4) : (index, index) -> index
+// OPT: %22 = "llvm.add"(%18, %21) : (index, index) -> index
 // OPT: %23 = "llvm.getelementptr"(%14, %22) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
 // OPT: llvm.store %9, %23 : f32, !llvm.ptr
-// OPT: %24 = "llvm.add"(%18, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// OPT: %24 = "llvm.add"(%19, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // OPT: "llvm.br"(%24)[^bb3] : (index) -> ()
 // OPT: ^bb4(%26: index, %27: f32):
 // OPT: %28 = "llvm.icmp"(%26, %6) <{predicate = "slt"}> : (index, index) -> i1
 // OPT: "llvm.cond_br"(%28)[^bb7, ^bb8]
 // OPT: ^bb7:
 // OPT: %29 = "llvm.mul"(%26, %3) : (index, index) -> index
-// OPT: "llvm.br"(%26, %7, %27, %29)[^bb9] : (index, index, f32, index) -> ()
-// OPT: ^bb9(%30: index, %31: index, %32: f32, %33: index):
-// OPT: %34 = "llvm.icmp"(%31, %6) <{predicate = "slt"}> : (index, index) -> i1
-// OPT: "llvm.cond_br"(%34)[^bb10, ^bb11]
+// OPT: %30 = "llvm.add"(%7, %29) : (index, index) -> index
+// OPT: "llvm.br"(%26, %7, %27, %29, %30)[^bb9] : (index, index, f32, index, index) -> ()
+// OPT: ^bb9(%31: index, %32: index, %33: f32, %34: index, %35: index):
+// OPT: %36 = "llvm.icmp"(%32, %6) <{predicate = "slt"}> : (index, index) -> i1
+// OPT: "llvm.cond_br"(%36)[^bb10, ^bb11]
 // OPT: ^bb10:
-// OPT: %35 = "llvm.mul"(%31, %4) : (index, index) -> index
-// OPT: %36 = "llvm.add"(%7, %33) : (index, index) -> index
-// OPT: %37 = "llvm.add"(%36, %35) : (index, index) -> index
-// OPT: %38 = "llvm.getelementptr"(%14, %37) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// OPT: %39 = llvm.load %38 : !llvm.ptr -> f32
-// OPT: %40 = "llvm.fadd"(%32, %39) : (f32, f32) -> f32
-// OPT: %41 = "llvm.add"(%31, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// OPT: "llvm.br"(%30, %41, %40, %33)[^bb9] : (index, index, f32, index) -> ()
+// OPT: %37 = "llvm.mul"(%32, %4) : (index, index) -> index
+// OPT: %38 = "llvm.add"(%35, %37) : (index, index) -> index
+// OPT: %39 = "llvm.getelementptr"(%14, %38) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// OPT: %40 = llvm.load %39 : !llvm.ptr -> f32
+// OPT: %41 = "llvm.fadd"(%33, %40) : (f32, f32) -> f32
+// OPT: %42 = "llvm.add"(%32, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// OPT: "llvm.br"(%31, %42, %41, %34, %35)[^bb9] : (index, index, f32, index, index) -> ()

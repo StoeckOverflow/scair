@@ -1,4 +1,4 @@
-// RUN: scair-opt %s -p normalize-refined-layout-accesses,hoist-refined-layout-invariants | filecheck %s
+// RUN: scair-opt %s -p normalize-refined-layout-accesses,d-affine-loop-invariant-code-motion | filecheck %s
 
 #map = affine_map<(d0)[] -> (d0)>
 
@@ -41,15 +41,15 @@ builtin.module {
 // CHECK-NEXT:    %11 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 // CHECK-NEXT:    %12 = d_affine.for %13 = #map(%7) to #map(%2) step 1 : i32 iter_args(%14 = %11 : f32) {
 // CHECK-NEXT:      %15 = "arith.muli"(%13, %0) : (index, index) -> index
-// CHECK-NEXT:      %16 = d_affine.for %17 = #map(%7) to #map(%6) step 1 : i32 iter_args(%18 = %14 : f32) {
-// CHECK-NEXT:        %19 = "arith.muli"(%17, %1) : (index, index) -> index
-// CHECK-NEXT:        %20 = "arith.addi"(%7, %15) : (index, index) -> index
-// CHECK-NEXT:        %21 = "arith.addi"(%20, %19) : (index, index) -> index
+// CHECK-NEXT:      %16 = "arith.addi"(%7, %15) : (index, index) -> index
+// CHECK-NEXT:      %17 = d_affine.for %18 = #map(%7) to #map(%6) step 1 : i32 iter_args(%19 = %14 : f32) {
+// CHECK-NEXT:        %20 = "arith.muli"(%18, %1) : (index, index) -> index
+// CHECK-NEXT:        %21 = "arith.addi"(%16, %20) : (index, index) -> index
 // CHECK-NEXT:        %22 = d_memref.load %5[%21] : !d_memref.memref<[%4], f32> -> f32
-// CHECK-NEXT:        %23 = "arith.addf"(%18, %22) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
+// CHECK-NEXT:        %23 = "arith.addf"(%19, %22) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
 // CHECK-NEXT:        d_affine.yield %23 : (f32)
 // CHECK-NEXT:      }
-// CHECK-NEXT:      d_affine.yield %16 : (f32)
+// CHECK-NEXT:      d_affine.yield %17 : (f32)
 // CHECK-NEXT:    }
 // CHECK-NEXT:    func.return %12 : f32
 // CHECK-NEXT:  }

@@ -17,7 +17,7 @@ import scair.passes.d_memref_bounds.DMemrefBoundsCheck
 import scair.passes.dtensor_matmul_to_tiled_dmemref.DTensorMatmulToTiledDMemref
 import scair.passes.finalize_dynamic_memref_to_llvm.FinalizeDynamicMemrefToLLVM
 import scair.passes.finalize_refined_dmemref_to_llvm.FinalizeRefinedDMemrefToLLVM
-import scair.passes.hoist_refined_layout_invariants.HoistRefinedLayoutInvariants
+import scair.passes.d_affine_loop_invariant_code_motion.DAffineLoopInvariantCodeMotion
 import scair.passes.lower_baseline_control_flow_to_llvm.LowerBaselineControlFlowToLLVM
 import scair.passes.lower_refined_control_flow_to_llvm.LowerRefinedControlFlowToLLVM
 import scair.passes.lower_memref_to_llvm.LowerDMemrefToLLVM
@@ -55,7 +55,7 @@ val allPasses: Seq[MLContext => ModulePass] =
     DeadCodeElimination(_),
     RefineDynamicLayoutToDMemref(_),
     NormalizeRefinedLayoutAccesses(_),
-    HoistRefinedLayoutInvariants(_),
+    DAffineLoopInvariantCodeMotion(_),
     LowerDTensorToDLinalg(_),
     BufferizeDLinalgToDMemref(_),
     LowerDLinalgToDAffine(_),

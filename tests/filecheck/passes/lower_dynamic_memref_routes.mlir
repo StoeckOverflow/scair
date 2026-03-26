@@ -221,19 +221,19 @@ builtin.module {
 // P2-NEXT:    "llvm.cond_br"(%17)[^bb1, ^bb2] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
 // P2-NEXT:  ^bb1:
 // P2-NEXT:    %18 = "llvm.mul"(%16, %3) : (index, index) -> index
+// P2-NEXT:    %19 = "llvm.add"(%8, %18) : (index, index) -> index
 // P2-NEXT:    "llvm.br"(%8)[^bb3] : (index) -> ()
 // P2-NEXT:  ^bb2:
 // P2-NEXT:    "llvm.br"(%8, %9)[^bb4] : (index, f32) -> ()
-// P2-NEXT:  ^bb3(%19: index):
-// P2-NEXT:    %20 = "llvm.icmp"(%19, %7) <{predicate = "slt"}> : (index, index) -> i1
-// P2-NEXT:    "llvm.cond_br"(%20)[^bb5, ^bb6] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+// P2-NEXT:  ^bb3(%20: index):
+// P2-NEXT:    %21 = "llvm.icmp"(%20, %7) <{predicate = "slt"}> : (index, index) -> i1
+// P2-NEXT:    "llvm.cond_br"(%21)[^bb5, ^bb6] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
 // P2-NEXT:  ^bb5:
-// P2-NEXT:    %21 = "llvm.mul"(%19, %4) : (index, index) -> index
-// P2-NEXT:    %22 = "llvm.add"(%8, %18) : (index, index) -> index
-// P2-NEXT:    %23 = "llvm.add"(%22, %21) : (index, index) -> index
+// P2-NEXT:    %22 = "llvm.mul"(%20, %4) : (index, index) -> index
+// P2-NEXT:    %23 = "llvm.add"(%19, %22) : (index, index) -> index
 // P2-NEXT:    %24 = "llvm.getelementptr"(%15, %23) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
 // P2-NEXT:    llvm.store %10, %24 : f32, !llvm.ptr
-// P2-NEXT:    %25 = "llvm.add"(%19, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// P2-NEXT:    %25 = "llvm.add"(%20, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
 // P2-NEXT:    "llvm.br"(%25)[^bb3] : (index) -> ()
 // P2-NEXT:  ^bb6:
 // P2-NEXT:    %26 = "llvm.add"(%16, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
@@ -243,22 +243,22 @@ builtin.module {
 // P2-NEXT:    "llvm.cond_br"(%29)[^bb7, ^bb8] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
 // P2-NEXT:  ^bb7:
 // P2-NEXT:    %30 = "llvm.mul"(%27, %3) : (index, index) -> index
-// P2-NEXT:    "llvm.br"(%27, %8, %28, %30)[^bb9] : (index, index, f32, index) -> ()
-// P2-NEXT:  ^bb9(%31: index, %32: index, %33: f32, %34: index):
-// P2-NEXT:    %35 = "llvm.icmp"(%32, %7) <{predicate = "slt"}> : (index, index) -> i1
-// P2-NEXT:    "llvm.cond_br"(%35)[^bb10, ^bb11] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+// P2-NEXT:    %31 = "llvm.add"(%8, %30) : (index, index) -> index
+// P2-NEXT:    "llvm.br"(%27, %8, %28, %30, %31)[^bb9] : (index, index, f32, index, index) -> ()
+// P2-NEXT:  ^bb9(%32: index, %33: index, %34: f32, %35: index, %36: index):
+// P2-NEXT:    %37 = "llvm.icmp"(%33, %7) <{predicate = "slt"}> : (index, index) -> i1
+// P2-NEXT:    "llvm.cond_br"(%37)[^bb10, ^bb11] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
 // P2-NEXT:  ^bb10:
-// P2-NEXT:    %36 = "llvm.mul"(%32, %4) : (index, index) -> index
-// P2-NEXT:    %37 = "llvm.add"(%8, %34) : (index, index) -> index
-// P2-NEXT:    %38 = "llvm.add"(%37, %36) : (index, index) -> index
-// P2-NEXT:    %39 = "llvm.getelementptr"(%15, %38) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// P2-NEXT:    %40 = llvm.load %39 : !llvm.ptr -> f32
-// P2-NEXT:    %41 = "llvm.fadd"(%33, %40) : (f32, f32) -> f32
-// P2-NEXT:    %42 = "llvm.add"(%32, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// P2-NEXT:    "llvm.br"(%31, %42, %41, %34)[^bb9] : (index, index, f32, index) -> ()
+// P2-NEXT:    %38 = "llvm.mul"(%33, %4) : (index, index) -> index
+// P2-NEXT:    %39 = "llvm.add"(%36, %38) : (index, index) -> index
+// P2-NEXT:    %40 = "llvm.getelementptr"(%15, %39) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
+// P2-NEXT:    %41 = llvm.load %40 : !llvm.ptr -> f32
+// P2-NEXT:    %42 = "llvm.fadd"(%34, %41) : (f32, f32) -> f32
+// P2-NEXT:    %43 = "llvm.add"(%33, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// P2-NEXT:    "llvm.br"(%32, %43, %42, %35, %36)[^bb9] : (index, index, f32, index, index) -> ()
 // P2-NEXT:  ^bb11:
-// P2-NEXT:    %43 = "llvm.add"(%31, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
-// P2-NEXT:    "llvm.br"(%43, %33)[^bb4] : (index, f32) -> ()
+// P2-NEXT:    %44 = "llvm.add"(%32, %5) <{overflowFlags = ["nsw", "nuw"]}> : (index, index) -> index
+// P2-NEXT:    "llvm.br"(%44, %34)[^bb4] : (index, f32) -> ()
 // P2-NEXT:  ^bb8:
 // P2-NEXT:    "llvm.call"(%15) <{callee = @free}> : (!llvm.ptr) -> ()
 // P2-NEXT:    "llvm.return"(%28) : (f32) -> ()
