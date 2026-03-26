@@ -1,4 +1,4 @@
-package scair.passes.convert_refined_arith_to_llvm
+package scair.passes.convert_arith_to_llvm
 
 import scair.MLContext
 import scair.dialects.arith
@@ -86,7 +86,7 @@ private val LowerFunc = pattern {
 // Converts scalar arithmetic to LLVM arithmetic.
 // Example: `arith.constant` / `arith.addi` / `arith.muli`
 //   -> `llvm.constant` / `llvm.add` / `llvm.mul`.
-final class ConvertRefinedArithToLLVM(ctx: MLContext) extends WalkerPass(ctx):
-  override val name: String = "convert-refined-arith-to-llvm"
+final class ConvertArithToLLVM(ctx: MLContext) extends WalkerPass(ctx):
+  override val name: String = "convert-arith-to-llvm"
   override val walker: PatternRewriteWalker =
     PatternRewriteWalker(GreedyRewritePatternApplier(Seq(LowerFunc)))
