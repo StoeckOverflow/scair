@@ -38,16 +38,17 @@ private def baselineDynamicTail(ctx: MLContext): Seq[ModulePass] =
 
 private def pointerBasedRefinedTail(ctx: MLContext): Seq[ModulePass] =
   Seq(
+    NormalizeRefinedLayoutAccesses(ctx),
+    DAffineLoopInvariantCodeMotion(ctx),
     LowerRefinedControlFlowToLLVM(ctx),
     ConvertArithToLLVM(ctx),
     FinalizeRefinedDMemrefToLLVM(ctx),
+    DeadCodeElimination(ctx),
   )
 
 private def dynamicToRefinedPrefix(ctx: MLContext): Seq[ModulePass] =
   Seq(
     RefineDynamicLayoutToDMemref(ctx),
-    NormalizeRefinedLayoutAccesses(ctx),
-    DAffineLoopInvariantCodeMotion(ctx),
   )
 
 // Baseline dynamic route.
@@ -65,10 +66,7 @@ final class LowerDynamicMemrefToLLVMBaseline(ctx: MLContext) extends ModulePass(
 //   -> pointer-based LLVM GEP/load/store without descriptors.
 final class LowerDynamicMemrefToLLVM(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "lower-dynamic-memref-to-llvm"
-  private val passes =
-    dynamicToRefinedPrefix(ctx) ++
-      pointerBasedRefinedTail(ctx) ++
-      Seq(DeadCodeElimination(ctx))
+  private val passes = dynamicToRefinedPrefix(ctx) ++ pointerBasedRefinedTail(ctx)
   override def transform(op: Operation): Operation =
     runPipeline(op, passes)
 
@@ -77,6 +75,6 @@ final class LowerDynamicMemrefToLLVM(ctx: MLContext) extends ModulePass(ctx):
 //   -> pointer-based LLVM GEP/load/store without descriptors.
 final class LowerDMemrefToLLVM(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "lower-dmemref-to-llvm"
-  private val passes = pointerBasedRefinedTail(ctx) ++ Seq(DeadCodeElimination(ctx))
+  private val passes = pointerBasedRefinedTail(ctx)
   override def transform(op: Operation): Operation =
     runPipeline(op, passes)
