@@ -10,17 +10,19 @@ import scala.collection.mutable
 private def i32Attr(v: Int): IntegerAttr =
   IntegerAttr(IntData(v), I32)
 
+val llvmIndexType: IntegerType = I64
+
 def densePath(indices: Int*): DenseArrayAttr =
   DenseArrayAttr(I32, indices.map(i => i32Attr(i)))
 
 def dynamicIndexSentinel: DenseArrayAttr =
   DenseArrayAttr(I32, Seq(i32Attr(-2147483648)))
 
-def idxAttr(v: BigInt): IntegerAttr =
-  IntegerAttr(IntData(v), IndexType())
+def llvmIndexAttr(v: BigInt): IntegerAttr =
+  IntegerAttr(IntData(v), llvmIndexType)
 
-def asIndex(v: Value[Attribute]): Operand[IndexType] =
-  v.asInstanceOf[Operand[IndexType]]
+def asLLVMIndex(v: Value[Attribute]): Operand[IntegerType | IndexType] =
+  v.asInstanceOf[Operand[IntegerType | IndexType]]
 
 def asPtr(v: Value[Attribute]): Operand[llvm.Ptr] =
   v.asInstanceOf[Operand[llvm.Ptr]]
@@ -79,13 +81,13 @@ final class RankedMemrefDescriptorHelper(
     builder.extract(desc, Seq(1), llvm.Ptr())
 
   def offset(): Value[Attribute] =
-    builder.extract(desc, Seq(2), IndexType())
+    builder.extract(desc, Seq(2), llvmIndexType)
 
   def size(i: Int): Value[Attribute] =
-    builder.extract(desc, Seq(3, i), IndexType())
+    builder.extract(desc, Seq(3, i), llvmIndexType)
 
   def stride(i: Int): Value[Attribute] =
-    builder.extract(desc, Seq(4, i), IndexType())
+    builder.extract(desc, Seq(4, i), llvmIndexType)
 
   private def updated(nextDesc: Value[Attribute]): RankedMemrefDescriptorHelper =
     RankedMemrefDescriptorHelper(nextDesc, rank, block)
@@ -111,9 +113,9 @@ object RankedMemrefDescriptorHelper:
       Seq(
         llvm.Ptr(),
         llvm.Ptr(),
-        IndexType(),
-        llvm.ArrayType(IntData(rank), IndexType()),
-        llvm.ArrayType(IntData(rank), IndexType()),
+        llvmIndexType,
+        llvm.ArrayType(IntData(rank), llvmIndexType),
+        llvm.ArrayType(IntData(rank), llvmIndexType),
       )
     )
 
@@ -123,9 +125,9 @@ object RankedMemrefDescriptorHelper:
             Seq(
               _: llvm.Ptr,
               _: llvm.Ptr,
-              _: IndexType,
-              llvm.ArrayType(IntData(rank), _: IndexType),
-              llvm.ArrayType(_, _: IndexType),
+              _: IntegerType,
+              llvm.ArrayType(IntData(rank), _: IntegerType),
+              llvm.ArrayType(_, _: IntegerType),
             )
           ) =>
         Some(rank.toInt)
@@ -165,7 +167,7 @@ def buildDefaultStrides(
     val one = cache.one(block)
     val rev = mutable.ArrayBuffer[Value[Attribute]](one)
     dims.reverse.drop(1).foreach { dim =>
-      val mul = llvm.Mul(asIndex(dim), asIndex(rev.last), Result(IndexType()))
+      val mul = llvm.Mul(asLLVMIndex(dim), asLLVMIndex(rev.last), Result(llvmIndexType))
       block.addOp(mul)
       rev += mul.res
     }
@@ -180,13 +182,13 @@ def computeAllocationSizeBytes(
   block.addOp(nullPtr)
   val sizePtr = llvm.GetElementPtr(
     asPtr(nullPtr.res),
-    Seq(asIndex(numElems)),
+    Seq(asLLVMIndex(numElems)),
     Result(llvm.Ptr()),
     dynamicIndexSentinel,
     elemTy,
   )
   block.addOp(sizePtr)
-  val sizeBytes = llvm.PtrToInt(asPtr(sizePtr.res), Result(IndexType()))
+  val sizeBytes = llvm.PtrToInt(asPtr(sizePtr.res), Result(llvmIndexType))
   block.addOp(sizeBytes)
   sizeBytes.out
 
@@ -202,7 +204,7 @@ final class CachedIndexConstants(defaultBlock: Block):
     if v == 0 && cachedZero.nonEmpty then cachedZero.get
     else if v == 1 && cachedOne.nonEmpty then cachedOne.get
     else
-      val c = llvm.Constant(idxAttr(v), Result(IndexType()))
+      val c = llvm.Constant(llvmIndexAttr(v), Result(llvmIndexType))
       block.addOp(c)
       seed(c.res, v)
       c.res

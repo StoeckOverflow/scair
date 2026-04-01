@@ -7,14 +7,16 @@ import scair.ir.*
 
 import scala.collection.mutable
 
-def asIndex(v: Value[Attribute]): Operand[IndexType] =
-  v.asInstanceOf[Operand[IndexType]]
+val llvmIndexType: IntegerType = I64
+
+def asLLVMIndex(v: Value[Attribute]): Operand[IntegerType | IndexType] =
+  v.asInstanceOf[Operand[IntegerType | IndexType]]
 
 def asI1(v: Value[Attribute]): Operand[IntegerType] =
   v.asInstanceOf[Operand[IntegerType]]
 
-def idxAttr(v: BigInt): IntegerAttr =
-  IntegerAttr(IntData(v), IndexType())
+def llvmIndexAttr(v: BigInt): IntegerAttr =
+  IntegerAttr(IntData(v), llvmIndexType)
 
 def overflowNSWNuw: ArrayAttribute[StringData] =
   ArrayAttribute(Seq(StringData("nsw"), StringData("nuw")))
@@ -38,7 +40,7 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
     blocks += block
 
   def emitIndexConstant(block: Block, v: BigInt): Value[Attribute] =
-    val c = llvm.Constant(idxAttr(v), Result(IndexType()))
+    val c = llvm.Constant(llvmIndexAttr(v), Result(llvmIndexType))
     block.addOp(c)
     c.res
 
@@ -47,7 +49,7 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
       lhs: Value[Attribute],
       rhs: Value[Attribute],
   ): Value[Attribute] =
-    val cmp = llvm.ICmp(asIndex(lhs), asIndex(rhs), StringData("slt"), Result(I1))
+    val cmp = llvm.ICmp(asLLVMIndex(lhs), asLLVMIndex(rhs), StringData("slt"), Result(I1))
     block.addOp(cmp)
     cmp.res
 
@@ -57,10 +59,9 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
       rhs: Value[Attribute],
   ): Value[Attribute] =
     val add = llvm.Add(
-      asIndex(lhs),
-      asIndex(rhs),
-      Result(IndexType()),
-      Some(overflowNSWNuw),
+      asLLVMIndex(lhs),
+      asLLVMIndex(rhs),
+      Result(llvmIndexType),
     )
     block.addOp(add)
     add.res
