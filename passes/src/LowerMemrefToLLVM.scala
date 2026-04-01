@@ -5,7 +5,6 @@ import scair.exceptions.VerifyException
 import scair.passes.convert_arith_to_llvm.ConvertArithToLLVM
 import scair.passes.finalize_dynamic_memref_to_llvm.FinalizeDynamicMemrefToLLVM
 import scair.passes.finalize_refined_dmemref_to_llvm.FinalizeRefinedDMemrefToLLVM
-import scair.passes.d_affine_loop_invariant_code_motion.DAffineLoopInvariantCodeMotion
 import scair.passes.lower_baseline_control_flow_to_llvm.LowerBaselineControlFlowToLLVM
 import scair.passes.lower_refined_control_flow_to_llvm.LowerRefinedControlFlowToLLVM
 import scair.passes.normalize_refined_layout_accesses.NormalizeRefinedLayoutAccesses
@@ -36,10 +35,12 @@ private def baselineDynamicTail(ctx: MLContext): Seq[ModulePass] =
     FinalizeDynamicMemrefToLLVM(ctx),
   )
 
-private def pointerBasedRefinedTail(ctx: MLContext): Seq[ModulePass] =
+private def pointerBasedRefinedTail(
+    ctx: MLContext,
+): Seq[ModulePass] =
   Seq(
     NormalizeRefinedLayoutAccesses(ctx),
-    DAffineLoopInvariantCodeMotion(ctx),
+  ) ++ Seq(
     LowerRefinedControlFlowToLLVM(ctx),
     ConvertArithToLLVM(ctx),
     FinalizeRefinedDMemrefToLLVM(ctx),

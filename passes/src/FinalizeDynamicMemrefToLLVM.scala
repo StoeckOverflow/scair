@@ -35,6 +35,23 @@ private final class Builder(val funcOp: func.Func):
   private def constIndex(v: BigInt, block: Block): Value[Attribute] =
     constCache.constIndex(v, block)
 
+  private def convertCarrierType(attr: Attribute): Attribute =
+    attr match
+      case ranked: RankedMemrefType =>
+        RankedMemrefDescriptorHelper.descriptorType(ranked.shape.attrValues.size)
+      case _: IndexType => llvmIndexType
+      case other => other
+
+  private def loweredFunctionType: FunctionType =
+    val inputTypes =
+      if funcOp.body.blocks.nonEmpty then
+        funcOp.body.blocks.head.arguments.map(arg => convertCarrierType(arg.typ).asInstanceOf[TypeAttribute]).toSeq
+      else funcOp.function_type.inputs.map(i => convertCarrierType(i).asInstanceOf[TypeAttribute])
+    FunctionType(
+      inputTypes,
+      funcOp.function_type.outputs.map(o => convertCarrierType(o).asInstanceOf[TypeAttribute]),
+    )
+
   private def descriptor(
       desc: Value[Attribute],
       rank: Int,
@@ -69,7 +86,7 @@ private final class Builder(val funcOp: func.Func):
     val numElems =
       if dims.isEmpty then constIndex(1, block)
       else dims.tail.foldLeft(dims.head) { (acc, dim) =>
-        val mul = llvm.Mul(asIndex(acc), asIndex(dim), Result(IndexType()))
+        val mul = llvm.Mul(asLLVMIndex(acc), asLLVMIndex(dim), Result(llvmIndexType))
         emit(block, mul)
         mul.res
       }
@@ -140,31 +157,28 @@ private final class Builder(val funcOp: func.Func):
     val terms = idxs.zipWithIndex.map { case (idx, axis) =>
       val stride = memrefDesc.stride(axis)
       val mul = llvm.Mul(
-        asIndex(idx),
-        asIndex(stride),
-        Result(IndexType()),
-        if flagged then Some(overflowNSWNuw) else None,
+        asLLVMIndex(idx),
+        asLLVMIndex(stride),
+        Result(llvmIndexType),
       )
       emit(block, mul)
       mul.res
     }
     val linear = terms.reduce { (l, r) =>
       val add = llvm.Add(
-        asIndex(l),
-        asIndex(r),
-        Result(IndexType()),
-        if flagged then Some(overflowNSWNuw) else None,
+        asLLVMIndex(l),
+        asLLVMIndex(r),
+        Result(llvmIndexType),
       )
       emit(block, add)
       add.res
     }
     val gep = llvm.GetElementPtr(
       asPtr(base),
-      Seq(asIndex(linear)),
+      Seq(asLLVMIndex(linear)),
       Result(llvm.Ptr()),
       dynamicIndexSentinel,
       ty.elementType,
-      if flagged then Some(gepInboundsNuw) else None,
     )
     emit(block, gep)
     val load = llvm.Load(asPtr(gep.res), Result(resultTy))
@@ -194,10 +208,9 @@ private final class Builder(val funcOp: func.Func):
     val terms = idxs.zipWithIndex.map { case (idx, axis) =>
       val stride = memrefDesc.stride(axis)
       val mul = llvm.Mul(
-        asIndex(idx),
-        asIndex(stride),
-        Result(IndexType()),
-        if flagged then Some(overflowNSWNuw) else None,
+        asLLVMIndex(idx),
+        asLLVMIndex(stride),
+        Result(llvmIndexType),
       )
       emit(block, mul)
       mul.res
@@ -207,21 +220,19 @@ private final class Builder(val funcOp: func.Func):
       else
         terms.reduce { (l, r) =>
           val add = llvm.Add(
-            asIndex(l),
-            asIndex(r),
-            Result(IndexType()),
-            if flagged then Some(overflowNSWNuw) else None,
+            asLLVMIndex(l),
+            asLLVMIndex(r),
+            Result(llvmIndexType),
           )
           emit(block, add)
           add.res
         }
     val gep = llvm.GetElementPtr(
       asPtr(base),
-      Seq(asIndex(linear)),
+      Seq(asLLVMIndex(linear)),
       Result(llvm.Ptr()),
       dynamicIndexSentinel,
       ty.elementType,
-      if flagged then Some(gepInboundsNuw) else None,
     )
     emit(block, gep)
     emit(block, llvm.Store(value.asInstanceOf[Operand[Attribute]], asPtr(gep.res)))
@@ -276,16 +287,26 @@ private final class Builder(val funcOp: func.Func):
     )
 
   def lower(): func.Func =
-    val clonedBlocks = state.makeClonedBlocks()
+    val clonedBlocks = funcOp.body.blocks.map { oldBlock =>
+      val nb = Block(oldBlock.arguments.map(arg => convertCarrierType(arg.typ)), Seq.empty)
+      state.blockMap(oldBlock) = nb
+      state.valueMap.addAll(oldBlock.arguments.zip(nb.arguments))
+      nb
+    }
     cachedIndexConstants = Some(CachedIndexConstants(clonedBlocks.head))
     funcOp.body.blocks.zip(clonedBlocks).foreach { case (oldBlock, newBlock) =>
       oldBlock.operations.foreach {
         case c: llvm.Constant =>
-          val copied = state.deepCopyOp(c).asInstanceOf[llvm.Constant]
+          val copied =
+            c.value match
+              case IntegerAttr(IntData(v), _: IndexType) =>
+                llvm.Constant(llvmIndexAttr(v), Result(llvmIndexType))
+              case _ =>
+                state.deepCopyOp(c).asInstanceOf[llvm.Constant]
           emit(newBlock, copied)
           state.valueMap(c.res) = copied.res
           c.value match
-            case IntegerAttr(IntData(v), _: IndexType) =>
+            case IntegerAttr(IntData(v), _: IndexType | _: IntegerType) =>
               constCache.seed(copied.res, v)
             case _ => ()
         case op: memref.Alloc =>
@@ -311,7 +332,13 @@ private final class Builder(val funcOp: func.Func):
           state.valueMap.addAll(other.results.zip(copied.results))
       }
     }
-    func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(clonedBlocks))
+    val lowered = func.Func(funcOp.sym_name, loweredFunctionType, funcOp.sym_visibility, Region(clonedBlocks))
+    lowered.attributes.addAll(funcOp.attributes)
+    if !lowered.attributes.contains("scair.original_function_type") &&
+        lowered.attributes.contains("llvm.emit_c_interface")
+    then
+      lowered.attributes += ("scair.original_function_type" -> funcOp.function_type)
+    lowered
 
 private val LowerFunc = pattern {
   case op: func.Func if op.body.blocks.exists(_.operations.exists {

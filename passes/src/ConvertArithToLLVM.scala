@@ -3,6 +3,8 @@ package scair.passes.convert_arith_to_llvm
 import scair.MLContext
 import scair.dialects.arith
 import scair.dialects.builtin.*
+import scair.dialects.dTensor
+import scair.dialects.d_memref
 import scair.dialects.func
 import scair.dialects.llvm
 import scair.ir.*
@@ -11,11 +13,28 @@ import scair.transformations.patterns.*
 
 import scala.collection.mutable
 
-private def asIndex(v: Value[Attribute]): Operand[IndexType] =
-  v.asInstanceOf[Operand[IndexType]]
+private val llvmIndexType: IntegerType = I64
+
+private def asLLVMIndex(v: Value[Attribute]): Operand[IntegerType | IndexType] =
+  v.asInstanceOf[Operand[IntegerType | IndexType]]
 
 private def asFloat(v: Value[Attribute]): Operand[FloatType] =
   v.asInstanceOf[Operand[FloatType]]
+
+private def convertLLVMValueType(attr: Attribute): Attribute =
+  attr match
+    case _: IndexType => llvmIndexType
+    case other        => other
+
+private def convertLLVMIntegerType(attr: Attribute): IntegerType | IndexType =
+  attr match
+    case _: IndexType => llvmIndexType
+    case other: IntegerType => other
+
+private def convertLLVMConstantAttr(attr: Attribute): Attribute =
+  attr match
+    case IntegerAttr(IntData(v), _: IndexType) => IntegerAttr(IntData(v), llvmIndexType)
+    case other                                 => other
 
 // This builder performs a whole-function rebuild so arithmetic conversion can
 // preserve block order and SSA remapping without relying on full conversion
@@ -23,30 +42,62 @@ private def asFloat(v: Value[Attribute]): Operand[FloatType] =
 private final class Builder(val funcOp: func.Func):
   val blockMap = mutable.Map.empty[Block, Block]
   val valueMap = mutable.Map.empty[Value[Attribute], Value[Attribute]]
+  private val preserveIndexTypes =
+    funcOp.body.blocks.exists(_.arguments.exists(arg =>
+      arg.typ.isInstanceOf[d_memref.dMemrefMemrefType] || arg.typ.isInstanceOf[dTensor.dTensorNatType]
+    )) ||
+      funcOp.body.blocks.exists(_.operations.exists {
+        case _: d_memref.Alloc | _: d_memref.ReinterpretCast | _: d_memref.ExtractStridedMetadata |
+            _: d_memref.Load | _: d_memref.Store | _: d_memref.Cast |
+            _: d_memref.Dealloc | _: dTensor.NatConst | _: dTensor.IndexToNat |
+            _: dTensor.ShapeToIndex =>
+          true
+        case _ => false
+      })
 
   private def remap(v: Value[Attribute]): Value[Attribute] =
     valueMap.getOrElse(v, v)
 
   private def lowerConstant(op: arith.Constant, block: Block): Operation =
-    val lowered = llvm.Constant(op.value, Result(op.result.typ))
+    val lowered = llvm.Constant(
+      if preserveIndexTypes then op.value else convertLLVMConstantAttr(op.value),
+      Result(if preserveIndexTypes then op.result.typ else convertLLVMValueType(op.result.typ)),
+    )
     valueMap(op.result) = lowered.res
     lowered
 
   private def lowerOp(op: Operation): Seq[Operation] =
     op match
       case c: arith.Constant =>
-        Seq(llvm.Constant(c.value, Result(c.result.typ)))
+        Seq(
+          llvm.Constant(
+            if preserveIndexTypes then c.value else convertLLVMConstantAttr(c.value),
+            Result(if preserveIndexTypes then c.result.typ else convertLLVMValueType(c.result.typ)),
+          )
+        )
       case add: arith.AddI =>
-        val lowered = llvm.Add(asIndex(remap(add.lhs)), asIndex(remap(add.rhs)), Result(add.result.typ))
+        val lowered = llvm.Add(
+          asLLVMIndex(remap(add.lhs)),
+          asLLVMIndex(remap(add.rhs)),
+          Result(if preserveIndexTypes then add.result.typ else convertLLVMIntegerType(add.result.typ)),
+        )
         valueMap(add.result) = lowered.res
         Seq(lowered)
       case mul: arith.MulI =>
-        val lowered = llvm.Mul(asIndex(remap(mul.lhs)), asIndex(remap(mul.rhs)), Result(mul.result.typ))
+        val lowered = llvm.Mul(
+          asLLVMIndex(remap(mul.lhs)),
+          asLLVMIndex(remap(mul.rhs)),
+          Result(if preserveIndexTypes then mul.result.typ else convertLLVMIntegerType(mul.result.typ)),
+        )
         valueMap(mul.result) = lowered.res
         Seq(lowered)
       case add: arith.AddF =>
         val lowered = llvm.FAdd(asFloat(remap(add.lhs)), asFloat(remap(add.rhs)), Result(add.result.typ))
         valueMap(add.result) = lowered.res
+        Seq(lowered)
+      case mul: arith.MulF =>
+        val lowered = llvm.FMul(asFloat(remap(mul.lhs)), asFloat(remap(mul.rhs)), Result(mul.result.typ))
+        valueMap(mul.result) = lowered.res
         Seq(lowered)
       case other =>
         val copied = other.deepCopy(using blockMap, valueMap)
@@ -73,12 +124,14 @@ private final class Builder(val funcOp: func.Func):
         case other             => newBlock.addOps(lowerOp(other))
       }
     }
-    func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(newBlocks))
+    val lowered = func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(newBlocks))
+    lowered.attributes.addAll(funcOp.attributes)
+    lowered
 
 private val LowerFunc = pattern {
   case op: func.Func if op.body.blocks.exists(_.operations.exists {
-        case _: arith.Constant | _: arith.AddI | _: arith.MulI | _: arith.AddF => true
-        case _                                                                  => false
+        case _: arith.Constant | _: arith.AddI | _: arith.MulI | _: arith.AddF | _: arith.MulF => true
+        case _                                                                                  => false
       }) =>
     Builder(op).lower()
 }

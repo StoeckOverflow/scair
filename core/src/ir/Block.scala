@@ -43,6 +43,18 @@ object Block:
   ): Block =
     new Block(argumentsTypes, operationsExpr)
 
+  def fromArguments(
+      arguments: Iterable[Value[Attribute]],
+      operations: Iterable[Operation] | Operation = Seq(),
+  ): Block =
+    new Block((arguments, operations))
+
+  def fromArguments(
+      arguments: Iterable[Value[Attribute]],
+      operationsExpr: Iterable[Value[Attribute]] => Iterable[Operation] | Operation,
+  ): Block =
+    new Block((arguments, operationsExpr(arguments)))
+
 /** A basic block.
   *
   * @param arguments

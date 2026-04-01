@@ -318,7 +318,9 @@ private final class Builder(val funcOp: func.Func):
       case other =>
         lowerSimpleOp(other)
     }
-    func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(blocks.toSeq))
+    val lowered = func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(blocks.toSeq))
+    lowered.attributes.addAll(funcOp.attributes)
+    lowered
 
 private def lowerFunc(op: func.Func): Option[func.Func] =
   if op.body.blocks.size != 1 then None else Some(Builder(op).lower())

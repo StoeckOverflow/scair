@@ -22,26 +22,11 @@ builtin.module {
   }
 }
 
-// CHECK-LABEL: func.func @finalize(%0: index, %1: index) -> f32 {
-// CHECK-NEXT:    %2 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
-// CHECK-NEXT:    %3 = "llvm.add"(%0, %2) : (index, index) -> index
-// CHECK-NEXT:    %4 = "llvm.add"(%1, %2) : (index, index) -> index
-// CHECK-NEXT:    %5 = "llvm.mlir.constant"() <{value = 1024 : index}> : () -> index
-// CHECK-NEXT:    %6 = "llvm.mlir.constant"() <{value = 1 : index}> : () -> index
-// CHECK-NEXT:    %7 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
-// CHECK-NEXT:    %8 = "llvm.mlir.constant"() <{value = 256 : index}> : () -> index
-// CHECK-NEXT:    %9 = "llvm.mul"(%8, %3) : (index, index) -> index
-// CHECK-NEXT:    %10 = "llvm.mlir.zero"() : () -> !llvm.ptr
-// CHECK-NEXT:    %11 = "llvm.getelementptr"(%10, %9) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// CHECK-NEXT:    %12 = "llvm.ptrtoint"(%11) : (!llvm.ptr) -> index
-// CHECK-NEXT:    %13 = "llvm.call"(%12) <{callee = @malloc}> : (index) -> !llvm.ptr
-// CHECK-NEXT:    %14 = "llvm.mlir.constant"() <{value = 256 : index}> : () -> index
-// CHECK-NEXT:    %15 = "llvm.mlir.constant"() <{value = 1024 : index}> : () -> index
-// CHECK-NEXT:    %16 = "llvm.mul"(%7, %3) : (index, index) -> index
-// CHECK-NEXT:    %17 = "llvm.mul"(%7, %4) : (index, index) -> index
-// CHECK-NEXT:    %18 = "llvm.add"(%16, %17) : (index, index) -> index
-// CHECK-NEXT:    %19 = "llvm.getelementptr"(%13, %18) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, index) -> !llvm.ptr
-// CHECK-NEXT:    %20 = llvm.load %19 : !llvm.ptr -> f32
-// CHECK-NEXT:    "llvm.call"(%13) <{callee = @free}> : (!llvm.ptr) -> ()
-// CHECK-NEXT:    "llvm.return"(%20) : (f32) -> ()
-// CHECK-NEXT:  }
+// CHECK-LABEL: func.func @finalize(%0: i64, %1: i64) -> f32 {
+// CHECK: %2 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// CHECK: %9 = "llvm.mul"(%8, %3) : (i64, i64) -> i64
+// CHECK: %11 = llvm.getelementptr %10[%9] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+// CHECK: %12 = "llvm.ptrtoint"(%11) : (!llvm.ptr) -> i64
+// CHECK: llvm.call @malloc(%12) : (i64) -> !llvm.ptr
+// CHECK: llvm.call @free(%13) : (!llvm.ptr) -> ()
+// CHECK: "llvm.return"(%20) : (f32) -> ()

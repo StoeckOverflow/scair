@@ -75,11 +75,11 @@ private final class Builder(val funcOp: func.Func):
     val innerBody = inner.body.blocks.head
     lowerBound(op.lowerBoundOperands, op.lowerBoundMap).map { outerLb =>
       val init = remap(op.inits.head)
-      val outerHeader = Block(Seq(IndexType(), init.typ), Seq.empty)
+      val outerHeader = Block(Seq(llvmIndexType, init.typ), Seq.empty)
       cfg.appendBlock(outerHeader)
       val outerBodyEntry = Block(Seq.empty, Seq.empty)
       cfg.appendBlock(outerBodyEntry)
-      val innerHeader = Block(Seq(IndexType(), init.typ), Seq.empty)
+      val innerHeader = Block(Seq(llvmIndexType, init.typ), Seq.empty)
       cfg.appendBlock(innerHeader)
       val innerBodyEntry = Block(Seq.empty, Seq.empty)
       cfg.appendBlock(innerBodyEntry)
@@ -185,7 +185,7 @@ private final class Builder(val funcOp: func.Func):
       lowerBound(op.lowerBoundOperands, op.lowerBoundMap).map { lb =>
         val init = remap(op.inits.head)
         val bodyBlock = op.body.blocks.head
-        val header = Block(Seq(IndexType(), init.typ), Seq.empty)
+        val header = Block(Seq(llvmIndexType, init.typ), Seq.empty)
         cfg.appendBlock(header)
         val body = Block(Seq.empty, Seq.empty)
         cfg.appendBlock(body)
@@ -226,7 +226,7 @@ private final class Builder(val funcOp: func.Func):
     if op.inits.nonEmpty || op.res.nonEmpty || op.body.blocks.size != 1 then false
     else
       val bodyBlock = op.body.blocks.head
-      val header = Block(Seq(IndexType()), Seq.empty)
+      val header = Block(Seq(llvmIndexType), Seq.empty)
       cfg.appendBlock(header)
       val body = Block(Seq.empty, Seq.empty)
       cfg.appendBlock(body)
@@ -285,7 +285,9 @@ private final class Builder(val funcOp: func.Func):
       case loop: For => lowerLoop(loop)
       case other     => lowerSimpleOp(other)
     }
-    func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(blocks.toSeq))
+    val lowered = func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(blocks.toSeq))
+    lowered.attributes.addAll(funcOp.attributes)
+    lowered
 
 private val LowerFunc = pattern {
   case op: func.Func if op.body.blocks.exists(_.operations.exists(_.isInstanceOf[For])) =>

@@ -9,6 +9,8 @@ import scair.passes.cdt.TestReplacementPass
 import scair.passes.d_affine_to_scf.DAffineToSCF
 import scair.passes.cse.CommonSubexpressionElimination
 import scair.passes.convert_arith_to_llvm.ConvertArithToLLVM
+import scair.passes.convert_func_to_llvm.ConvertFuncToLLVM
+import scair.passes.convert_llvm_export_abi.ConvertLLVMExportABI
 import scair.passes.d_affine_min_simplify.DAffineMinSimplify
 import scair.passes.dce.DeadCodeElimination
 import scair.passes.d_linalg_to_d_affine.LowerDLinalgToDAffine
@@ -62,6 +64,8 @@ val allPasses: Seq[MLContext => ModulePass] =
     LowerBaselineControlFlowToLLVM(_),
     LowerRefinedControlFlowToLLVM(_),
     ConvertArithToLLVM(_),
+    ConvertFuncToLLVM(_),
+    ConvertLLVMExportABI(_),
     FinalizeDynamicMemrefToLLVM(_),
     FinalizeRefinedDMemrefToLLVM(_),
     LowerDynamicMemrefToLLVMBaseline(_),
