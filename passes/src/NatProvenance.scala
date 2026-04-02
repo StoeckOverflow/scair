@@ -1,7 +1,7 @@
-package scair.passes.analysis
+package scair.passes
 
-import scair.dialects.arith
 import scair.dialects.affine.*
+import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.dTensor.*
 import scair.dialects.d_affine
@@ -105,12 +105,6 @@ object NatProvenance:
                 case _       => None
           case _ => None
 
-  /** Canonical pass-layer provenance API.
-    *
-    * Dialect/type well-formedness remains in `dTensorTypeUtil`.
-    * Passes/analyses should use this object instead of re-implementing
-    * nat/index provenance recovery or constant reconstruction logic.
-    */
   def resolveNat(v: Value[Attribute]): Option[Value[Attribute]] =
     dTensorTypeUtil.resolveNatProvenance(v) match
       case OK(nat) => Some(nat)
@@ -125,9 +119,6 @@ object NatProvenance:
       case (Some(l), Some(r)) => l eq r
       case _                  => false
 
-  /** Conservatively reconstructs an exact integer value when possible.
-    * Unknown/unprovable values return None.
-    */
   def exactConst(v: Value[Attribute]): Option[BigInt] =
     val memo = mutable.Map.empty[Value[Attribute], Option[BigInt]]
     val inProgress = mutable.Set.empty[Value[Attribute]]

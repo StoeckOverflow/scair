@@ -9,11 +9,6 @@ private def asNatInt(x: Any, where: String): Int =
     case i: Int => i
     case _      => throw new Exception(s"$where expects Int nat values, got: $x")
 
-private def asShapedArray(x: Any, where: String): ShapedArray =
-  x match
-    case a: ShapedArray => a
-    case _              => throw new Exception(s"$where expects ShapedArray, got: $x")
-
 private def evalAffineExpr(
     expr: AffineExpr,
     dims: Map[String, Int],
@@ -60,21 +55,6 @@ private def evalSingleResultMap(
   val dims = map.affineMap.dimensions.zip(operands.take(dimCount)).toMap
   val syms = map.affineMap.symbols.zip(operands.drop(dimCount)).toMap
   evalAffineExpr(exprs.head, dims, syms)
-
-private def evalMapResults(
-    map: AffineMapAttr,
-    operands: Seq[Int],
-    where: String,
-): Seq[Int] =
-  val dimCount = map.affineMap.dimensions.size
-  val symCount = map.affineMap.symbols.size
-  if operands.size != dimCount + symCount then
-    throw new Exception(
-      s"$where expected ${dimCount + symCount} operands, got ${operands.size}"
-    )
-  val dims = map.affineMap.dimensions.zip(operands.take(dimCount)).toMap
-  val syms = map.affineMap.symbols.zip(operands.drop(dimCount)).toMap
-  map.affineMap.affineExprs.map(expr => evalAffineExpr(expr, dims, syms))
 
 object run_d_affine_apply extends OpImpl[d_affine.Apply]:
 
@@ -153,87 +133,9 @@ object run_d_affine_yield extends OpImpl[d_affine.Yield]:
   ): Option[Any] =
     None
 
-object run_d_affine_min extends OpImpl[d_affine.Min]:
-
-  def compute(
-      op: d_affine.Min,
-      interpreter: Interpreter,
-      ctx: RuntimeCtx,
-      args: Seq[Any],
-  ): Option[Any] =
-    val dimCount = op.dimOperands.size
-    val symCount = op.symbolOperands.size
-    if args.size != dimCount + symCount then
-      throw new Exception(
-        s"d_affine.min expected ${dimCount + symCount} operands, got ${args.size}"
-      )
-    val dimInts = args.take(dimCount).map(asNatInt(_, "d_affine.min dim operand"))
-    val symInts = args.drop(dimCount).map(asNatInt(_, "d_affine.min symbol operand"))
-    Some(evalSingleResultMap(op.map, dimInts ++ symInts, "d_affine.min"))
-
-object run_d_affine_load extends OpImpl[d_affine.Load]:
-
-  def compute(
-      op: d_affine.Load,
-      interpreter: Interpreter,
-      ctx: RuntimeCtx,
-      args: Seq[Any],
-  ): Option[Any] =
-    args match
-      case Seq(memrefAny, operands @ _*) =>
-        val memref = asShapedArray(memrefAny, "d_affine.load memref")
-        val ints = operands.map(asNatInt(_, "d_affine.load map operand"))
-        val idxs = evalMapResults(op.map, ints, "d_affine.load")
-        Some(memref(idxs))
-      case _ =>
-        throw new Exception("d_affine.load expects (memref, mapOperands...)")
-
-object run_d_affine_store extends OpImpl[d_affine.Store]:
-
-  def compute(
-      op: d_affine.Store,
-      interpreter: Interpreter,
-      ctx: RuntimeCtx,
-      args: Seq[Any],
-  ): Option[Any] =
-    args match
-      case Seq(value, memrefAny, operands @ _*) =>
-        val memref = asShapedArray(memrefAny, "d_affine.store memref")
-        val ints = operands.map(asNatInt(_, "d_affine.store map operand"))
-        val idxs = evalMapResults(op.map, ints, "d_affine.store")
-        memref(idxs) = value
-        None
-      case _ =>
-        throw new Exception("d_affine.store expects (value, memref, mapOperands...)")
-
-object run_d_affine_if extends OpImpl[d_affine.If]:
-
-  def compute(
-      op: d_affine.If,
-      interpreter: Interpreter,
-      ctx: RuntimeCtx,
-      args: Seq[Any],
-  ): Option[Any] =
-    throw new Exception("d_affine.if interpreter semantics are deferred in this stage")
-
-object run_d_affine_parallel extends OpImpl[d_affine.Parallel]:
-
-  def compute(
-      op: d_affine.Parallel,
-      interpreter: Interpreter,
-      ctx: RuntimeCtx,
-      args: Seq[Any],
-  ): Option[Any] =
-    throw new Exception("d_affine.parallel interpreter semantics are deferred in this stage")
-
 val InterpreterdAffineDialect: InterpreterDialect =
   Seq(
     run_d_affine_apply,
     run_d_affine_for,
     run_d_affine_yield,
-    run_d_affine_min,
-    run_d_affine_load,
-    run_d_affine_store,
-    run_d_affine_if,
-    run_d_affine_parallel,
   )

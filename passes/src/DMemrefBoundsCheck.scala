@@ -7,7 +7,7 @@ import scair.dialects.d_affine
 import scair.dialects.d_memref
 import scair.exceptions.VerifyException
 import scair.ir.*
-import scair.passes.analysis.NatProvenance
+import scair.passes.NatProvenance
 import scair.transformations.ModulePass
 
 /**
@@ -17,15 +17,6 @@ import scair.transformations.ModulePass
  * operations, using loop structure and nat provenance to prove simple index and
  * slice bounds facts. It is a checking pass: safe operations are kept unchanged,
  * and provably out-of-bounds operations cause verification to fail.
- *
- * Rewrite / effect shape:
- * `<d_memref.load | d_memref.store | d_memref.subview with provably safe bounds>`
- * `->`
- * `<same operation preserved>`
- *
- * `<d_memref.load | d_memref.store | d_memref.subview with provably out-of-bounds access>`
- * `->`
- * `<VerifyException>`
  */
 final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "d-memref-bounds-check"
@@ -67,7 +58,6 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
       opName: String,
       axis: Int,
   ): Unit =
-    // Safe by loop semantics: iv in d_affine.for always satisfies iv < ub in body.
     val safeByLoop =
       loopIvUpperBound(idx).exists(ub => NatProvenance.sameNat(ub, dim))
     if safeByLoop then return
@@ -109,14 +99,11 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
           s"d_memref-bounds: `d_memref.subview` axis $axis provably out of bounds ($o + $s > $d)"
         )
       case _ =>
-        // Fast safe pattern used by shape-preserving subviews.
         val isZeroOffset = offConst.contains(0)
         if isZeroOffset && NatProvenance.sameNat(size, dim) then ()
         else ()
 
-  private def walk(
-      op: Operation,
-  ): Unit =
+  private def walk(op: Operation): Unit =
     op match
       case d_memref.Load(memref, indices, _) =>
         indices.zip(memref.typ.params).zipWithIndex.foreach { case ((idx, d), i) =>

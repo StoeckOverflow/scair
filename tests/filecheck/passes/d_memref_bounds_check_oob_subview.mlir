@@ -9,7 +9,6 @@ builtin.module {
   %one_idx = "arith.constant"() <{value = 1 : index}> : () -> index
   %src = d_memref.alloc : () -> !d_memref.memref<[%eight], i32>
   %sv = d_memref.subview %src[%five_idx][%four_idx][%one_idx] : !d_memref.memref<[%eight], i32> -> !d_memref.memref<[%four], i32>
-  "test.keep"(%sv) : (!d_memref.memref<[%four], i32>) -> ()
 }
 
 // CHECK: d_memref-bounds: `d_memref.subview` axis 0 provably out of bounds (5 + 4 > 8)
