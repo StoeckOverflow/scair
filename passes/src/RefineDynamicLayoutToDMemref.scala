@@ -345,7 +345,9 @@ private def lowerFunction(funcOp: func.Func): func.Func =
     )
     lowered.attributes.addAll(funcOp.attributes)
     if lowered.attributes.contains("scair.original_function_type") ||
-        lowered.attributes.contains("llvm.emit_c_interface")
+        lowered.attributes.contains("llvm.emit_c_interface") ||
+        lowered.attributes.contains("scair.emit_bare_interface") ||
+        lowered.attributes.contains("scair.emit_descriptor_pointer_interface")
     then
       lowered.attributes += ("scair.original_function_type" -> funcOp.function_type)
     lowered

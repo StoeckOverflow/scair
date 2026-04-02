@@ -1,0 +1,98 @@
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct {
+  float *allocated;
+  float *aligned;
+  int64_t offset;
+  int64_t sizes[2];
+  int64_t strides[2];
+} MemRef2D_f32;
+
+typedef struct {
+  float *allocated;
+  float *aligned;
+  int64_t offset;
+  int64_t sizes[1];
+  int64_t strides[1];
+} MemRef1D_f32;
+
+extern void matmul_dynamic(
+    int64_t n, int64_t m, int64_t k,
+    MemRef2D_f32 *A,
+    MemRef2D_f32 *B,
+    MemRef2D_f32 *C);
+
+extern void checksum_dynamic(
+    int64_t n, int64_t m,
+    MemRef2D_f32 *C,
+    MemRef1D_f32 *out);
+
+static MemRef2D_f32 make2D(float *ptr, int64_t rows, int64_t cols) {
+  MemRef2D_f32 m;
+  m.allocated = ptr;
+  m.aligned = ptr;
+  m.offset = 0;
+  m.sizes[0] = rows;
+  m.sizes[1] = cols;
+  m.strides[0] = cols;
+  m.strides[1] = 1;
+  return m;
+}
+
+static MemRef1D_f32 make1D(float *ptr, int64_t n) {
+  MemRef1D_f32 m;
+  m.allocated = ptr;
+  m.aligned = ptr;
+  m.offset = 0;
+  m.sizes[0] = n;
+  m.strides[0] = 1;
+  return m;
+}
+
+int main(int argc, char **argv) {
+  if (argc != 4) {
+    fprintf(stderr, "usage: %s n m k\n", argv[0]);
+    return 1;
+  }
+
+  const int64_t n = strtoll(argv[1], NULL, 10);
+  const int64_t m = strtoll(argv[2], NULL, 10);
+  const int64_t k = strtoll(argv[3], NULL, 10);
+
+  float *A = (float *)malloc((size_t)(n * k) * sizeof(float));
+  float *B = (float *)malloc((size_t)(k * m) * sizeof(float));
+  float *C = (float *)malloc((size_t)(n * m) * sizeof(float));
+  float *out = (float *)malloc(sizeof(float));
+
+  if (!A || !B || !C || !out) {
+    fprintf(stderr, "allocation failed\n");
+    free(A);
+    free(B);
+    free(C);
+    free(out);
+    return 2;
+  }
+
+  for (int64_t i = 0; i < n * k; ++i) A[i] = 1.0f;
+  for (int64_t i = 0; i < k * m; ++i) B[i] = 1.0f;
+  for (int64_t i = 0; i < n * m; ++i) C[i] = 0.0f;
+  out[0] = 0.0f;
+
+  MemRef2D_f32 Aref = make2D(A, n, k);
+  MemRef2D_f32 Bref = make2D(B, k, m);
+  MemRef2D_f32 Cref = make2D(C, n, m);
+  MemRef1D_f32 Oref = make1D(out, 1);
+
+  matmul_dynamic(n, m, k, &Aref, &Bref, &Cref);
+  checksum_dynamic(n, m, &Cref, &Oref);
+
+  printf("checksum = %.1f\n", out[0]);
+
+  free(A);
+  free(B);
+  free(C);
+  free(out);
+  return 0;
+}

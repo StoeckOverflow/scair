@@ -98,6 +98,15 @@ private def containsInternalABIType(attr: Attribute): Boolean =
 private def isEmitCInterface(op: llvm.Func): Boolean =
   op.attributes.contains("llvm.emit_c_interface")
 
+private val bareInterfaceAttr = "scair.emit_bare_interface"
+private val descriptorPointerInterfaceAttr = "scair.emit_descriptor_pointer_interface"
+
+private def isBareInterface(op: llvm.Func): Boolean =
+  op.attributes.contains(bareInterfaceAttr)
+
+private def isDescriptorPointerInterface(op: llvm.Func): Boolean =
+  op.attributes.contains(descriptorPointerInterfaceAttr)
+
 private def wrapperResultTypes(orig: FunctionType): Seq[TypeAttribute] =
   if orig.outputs.exists(_.isInstanceOf[RankedMemrefType]) then
     throw new Exception("convert-llvm-export-abi does not yet support memref returns")
@@ -168,6 +177,75 @@ private def buildCInterfaceWrapper(internal: llvm.Func): llvm.Func =
     Region(entry),
   )
 
+private final class DescriptorPointerInterfaceBuilder(internal: llvm.Func):
+  private val blockMap = mutable.Map.empty[Block, Block]
+  private val valueMap = mutable.Map.empty[Value[Attribute], Value[Attribute]]
+
+  def build(): llvm.Func =
+    val origTy = originalFunctionType(internal)
+    if containsInternalABIType(origTy) then
+      throw new Exception(
+        s"original external ABI metadata for ${internal.sym_name.data} was overwritten: $origTy"
+      )
+
+    val argTypes = wrapperArgTypes(origTy)
+    val newBlocks = internal.body.blocks.zipWithIndex.map { case (oldBlock, idx) =>
+      val block =
+        if idx == 0 then Block(argTypes, Seq.empty)
+        else Block(oldBlock.arguments.map(_.typ), Seq.empty)
+      blockMap(oldBlock) = block
+      block
+    }
+
+    internal.body.blocks.zip(newBlocks).zipWithIndex.foreach { case ((oldBlock, newBlock), idx) =>
+      if idx == 0 then
+        var wrapperArgIdx = 0
+        var internalArgIdx = 0
+        origTy.inputs.foreach {
+          case ranked: RankedMemrefType =>
+            val rank = ranked.shape.attrValues.size
+            val ptrArg = newBlock.arguments(wrapperArgIdx).asInstanceOf[Operand[llvm.Ptr]]
+            wrapperArgIdx += 1
+            internal.function_type.inputs.lift(internalArgIdx) match
+              case Some(structTy: llvm.StructType)
+                  if RankedMemrefDescriptorHelper.rankOfDescriptorType(structTy).contains(rank) =>
+                val load = llvm.Load(ptrArg, Result(structTy))
+                newBlock.addOp(load)
+                valueMap(oldBlock.arguments(internalArgIdx)) =
+                  load.res.asInstanceOf[Value[Attribute]]
+                internalArgIdx += 1
+              case other =>
+                throw new Exception(
+                  s"descriptor-pointer interface only supports baseline descriptor ABI in ${internal.sym_name.data}: $other"
+                )
+          case _ =>
+            valueMap(oldBlock.arguments(internalArgIdx)) =
+              newBlock.arguments(wrapperArgIdx).asInstanceOf[Value[Attribute]]
+            wrapperArgIdx += 1
+            internalArgIdx += 1
+        }
+      else
+        valueMap.addAll(oldBlock.arguments.zip(newBlock.arguments))
+
+      oldBlock.operations.foreach { op =>
+        val copied = op.deepCopy(using blockMap, valueMap)
+        newBlock.addOp(copied)
+        valueMap.addAll(op.results.zip(copied.results))
+      }
+    }
+
+    val lowered = llvm.Func(
+      internal.sym_name,
+      FunctionType(argTypes, internal.function_type.outputs),
+      internal.sym_visibility,
+      Region(newBlocks),
+    )
+    lowered.attributes.addAll(internal.attributes)
+    lowered.attributes.remove(bareInterfaceAttr)
+    lowered.attributes.remove(descriptorPointerInterfaceAttr)
+    lowered.attributes.remove("llvm.emit_c_interface")
+    lowered
+
 final class ConvertLLVMExportABI(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "convert-llvm-export-abi"
 
@@ -179,8 +257,15 @@ final class ConvertLLVMExportABI(ctx: MLContext) extends ModulePass(ctx):
           block.operations.foreach {
             case funcOp: llvm.Func =>
               val legalized = FunctionLegalizer(funcOp).lower()
-              newTop.addOp(legalized)
-              if isEmitCInterface(legalized) && legalized.body.blocks.nonEmpty then
+              if isBareInterface(legalized) then
+                legalized.attributes.remove(bareInterfaceAttr)
+              if isDescriptorPointerInterface(legalized) && legalized.body.blocks.nonEmpty then
+                newTop.addOp(DescriptorPointerInterfaceBuilder(legalized).build())
+              else
+                newTop.addOp(legalized)
+              if isEmitCInterface(legalized) && !isDescriptorPointerInterface(
+                  legalized
+                ) && legalized.body.blocks.nonEmpty then
                 newTop.addOp(buildCInterfaceWrapper(legalized))
             case other =>
               newTop.addOp(other.deepCopy.asInstanceOf[Operation])
