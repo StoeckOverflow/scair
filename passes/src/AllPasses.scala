@@ -26,6 +26,10 @@ import scair.passes.reconcile.ReconcileUnrealizedCasts
 import scair.passes.dtensor_shape_canonicalize.DTensorShapeCanonicalize
 import scair.passes.dtensor_to_dmemref.DTensorToDMemrefShapePreserving
 import scair.transformations.ModulePass
+import scair.passes.MonomorphizePass
+import scair.passes.LowerTLamToFuncPass
+import scair.passes.EraseTLamPass
+import scair.passes.BetaReduceTLamPass
 
 //
 // ░█████╗░ ██╗░░░░░ ██╗░░░░░
@@ -47,10 +51,14 @@ val allPasses: Seq[MLContext => ModulePass] =
   Seq(
     BenchmarkConstantFolding(_),
     DTensorShapeCanonicalize(_),
+    BetaReduceTLamPass(_),
     CommonSubexpressionElimination(_),
     DeadCodeElimination(_),
     RefineDynamicLayoutToDMemref(_),
     NormalizeRefinedLayoutAccesses(_),
+    MonomorphizePass(_),
+    EraseTLamPass(_),
+    LowerTLamToFuncPass(_),
     DAffineLoopInvariantCodeMotion(_),
     LowerBaselineControlFlowToLLVM(_),
     LowerRefinedControlFlowToLLVM(_),

@@ -17,6 +17,7 @@ import scair.dialects.scf.SCFDialect
 import scair.dialects.dTensor.dTensorDialect
 import scair.dialects.test.Test
 import scair.ir.Dialect
+import scair.dialects.tlam.TlamDialect
 
 //
 // ░█████╗░ ██╗░░░░░ ██╗░░░░░
@@ -52,4 +53,5 @@ val allDialects: Seq[Dialect] =
     FuncDialect,
     LLVMDialect,
     SCFDialect,
+    TlamDialect
   )
