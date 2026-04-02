@@ -16,6 +16,7 @@ import scair.dialects.memref.MemrefDialect
 import scair.dialects.scf.SCFDialect
 import scair.dialects.dTensor.dTensorDialect
 import scair.dialects.test.Test
+import scair.dialects.tlam_de_bruijn.TlamDeBruijnDialect
 import scair.ir.Dialect
 import scair.dialects.tlam.TlamDialect
 
@@ -42,6 +43,7 @@ val allDialects: Seq[Dialect] =
     dTensorDialect,
     dLinalgDialect,
     MathDialect,
+    TlamDeBruijnDialect,
     Test,
     IRDL,
     ArithDialect,

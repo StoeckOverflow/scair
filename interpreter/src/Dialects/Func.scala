@@ -1,8 +1,10 @@
 package scair.interpreter
 
 import scair.dialects.builtin.FunctionType
+import scair.dialects.builtin.FunctionType
 import scair.dialects.builtin.SymbolRefAttr
 import scair.dialects.func
+import scair.ir.Attribute
 import scair.ir.Attribute
 import scair.ir.Result
 

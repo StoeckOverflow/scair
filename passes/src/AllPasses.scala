@@ -30,6 +30,10 @@ import scair.passes.MonomorphizePass
 import scair.passes.LowerTLamToFuncPass
 import scair.passes.EraseTLamPass
 import scair.passes.BetaReduceTLamPass
+import scair.passes.MonomorphizeTlamDeBruijnPass
+import scair.passes.LowerTlamDeBruijnToFuncPass
+import scair.passes.EraseTlamDeBruijnPass
+import scair.passes.BetaReduceTlamDeBruijnPass
 
 //
 // ░█████╗░ ██╗░░░░░ ██╗░░░░░
@@ -52,13 +56,17 @@ val allPasses: Seq[MLContext => ModulePass] =
     BenchmarkConstantFolding(_),
     DTensorShapeCanonicalize(_),
     BetaReduceTLamPass(_),
+    BetaReduceTlamDeBruijnPass(_),
     CommonSubexpressionElimination(_),
     DeadCodeElimination(_),
     RefineDynamicLayoutToDMemref(_),
     NormalizeRefinedLayoutAccesses(_),
     MonomorphizePass(_),
+    MonomorphizeTlamDeBruijnPass(_),
     EraseTLamPass(_),
+    EraseTlamDeBruijnPass(_),
     LowerTLamToFuncPass(_),
+    LowerTlamDeBruijnToFuncPass(_),
     DAffineLoopInvariantCodeMotion(_),
     LowerBaselineControlFlowToLLVM(_),
     LowerRefinedControlFlowToLLVM(_),

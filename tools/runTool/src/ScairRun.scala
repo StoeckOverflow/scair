@@ -8,6 +8,7 @@ import scair.tools.ScairToolBase
 import scair.utils.*
 import scair.verify.Verifier
 import scair.dialects.tlam.verify.DeBruijnIndicesCheck
+import scair.dialects.tlam_de_bruijn.verify.TlamDeBruijnIndicesCheck
 import scopt.OParser
 
 import scala.collection.mutable
@@ -77,7 +78,9 @@ trait ScairRunBase extends ScairToolBase[ScairRunArgs]:
     Array(inputModule)
 
   private def verifyWithChecks(op: Operation): OK[Operation] =
-    val checks = Verifier.defaultChecks :+ DeBruijnIndicesCheck
+    val checks =
+      Verifier.defaultChecks ++
+        Seq(DeBruijnIndicesCheck, TlamDeBruijnIndicesCheck)
     Verifier.verify(op, checks)
 
   def main(args: Array[String]): Unit =

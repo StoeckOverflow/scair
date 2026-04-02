@@ -8,6 +8,7 @@ import scair.tools.ScairToolBase
 import scair.utils.*
 import scair.verify.Verifier
 import scair.dialects.tlam.verify.DeBruijnIndicesCheck
+import scair.dialects.tlam_de_bruijn.verify.TlamDeBruijnIndicesCheck
 import scopt.OParser
 
 import scala.io.BufferedSource
@@ -76,7 +77,9 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
     )
 
   private def verifyWithChecks(op: Operation): OK[Operation] =
-    val checks = Seq(DeBruijnIndicesCheck) ++ Verifier.defaultChecks
+    val checks =
+      Seq(DeBruijnIndicesCheck, TlamDeBruijnIndicesCheck) ++
+        Verifier.defaultChecks
     Verifier.verify(op, checks)
 
   override def parseArgs(args: Array[String]): ScairOptArgs =
