@@ -1,0 +1,69 @@
+builtin.module {
+  func.func @control_flow_selected_allocation_reduction(
+    %sel : i1,
+    %n : index,
+    %out : memref<1xi64>
+  ) attributes {scair.emit_descriptor_pointer_interface = true} {
+    %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %i1 = "arith.constant"() <{value = 1 : i64}> : () -> i64
+    %i2 = "arith.constant"() <{value = 2 : i64}> : () -> i64
+    %i0 = "arith.constant"() <{value = 0 : i64}> : () -> i64
+
+    // Exact baseline route: branch-local dynamic allocs are selected as a
+    // memref value, then the chosen memref descriptor is carried through the
+    // reduction loop.
+    %buf = "scf.if"(%sel) ({
+      %route0 = "memref.alloc"(%n)
+        <{alignment = 0 : i64, operandSegmentSizes = array<i32: 1, 0>}>
+        : (index) -> memref<?xi64>
+
+      %carry0 = "affine.for"(%c0, %n, %i1) <{
+        lowerBoundMap = affine_map<(d0) -> (d0)>,
+        upperBoundMap = affine_map<(d0) -> (d0)>,
+        step = 1 : index,
+        operandSegmentSizes = array<i32: 1, 1, 1>
+      }> ({
+      ^bb0(%i: index, %cur_value: i64):
+        "memref.store"(%cur_value, %route0, %i) : (i64, memref<?xi64>, index) -> ()
+        %next_value = "arith.addi"(%cur_value, %i1) : (i64, i64) -> i64
+        "affine.yield"(%next_value) : (i64) -> ()
+      }) : (index, index, i64) -> i64
+
+      "scf.yield"(%route0) : (memref<?xi64>) -> ()
+    }, {
+      %route1 = "memref.alloc"(%n)
+        <{alignment = 0 : i64, operandSegmentSizes = array<i32: 1, 0>}>
+        : (index) -> memref<?xi64>
+
+      %carry1 = "affine.for"(%c0, %n, %i2) <{
+        lowerBoundMap = affine_map<(d0) -> (d0)>,
+        upperBoundMap = affine_map<(d0) -> (d0)>,
+        step = 1 : index,
+        operandSegmentSizes = array<i32: 1, 1, 1>
+      }> ({
+      ^bb0(%i: index, %cur_value: i64):
+        "memref.store"(%cur_value, %route1, %i) : (i64, memref<?xi64>, index) -> ()
+        %next_value = "arith.addi"(%cur_value, %i2) : (i64, i64) -> i64
+        "affine.yield"(%next_value) : (i64) -> ()
+      }) : (index, index, i64) -> i64
+
+      "scf.yield"(%route1) : (memref<?xi64>) -> ()
+    }) : (i1) -> memref<?xi64>
+
+    %carry_buf, %sum = "affine.for"(%c0, %n, %buf, %i0) <{
+      lowerBoundMap = affine_map<(d0) -> (d0)>,
+      upperBoundMap = affine_map<(d0) -> (d0)>,
+      step = 1 : index,
+      operandSegmentSizes = array<i32: 1, 1, 2>
+    }> ({
+    ^bb0(%i: index, %cur: memref<?xi64>, %acc: i64):
+      %v = "memref.load"(%cur, %i) : (memref<?xi64>, index) -> i64
+      %next = "arith.addi"(%acc, %v) : (i64, i64) -> i64
+      "affine.yield"(%cur, %next) : (memref<?xi64>, i64) -> ()
+    }) : (index, index, memref<?xi64>, i64) -> (memref<?xi64>, i64)
+
+    "memref.store"(%sum, %out, %c0) : (i64, memref<1xi64>, index) -> ()
+    "memref.dealloc"(%carry_buf) : (memref<?xi64>) -> ()
+    "func.return"() : () -> ()
+  }
+}
