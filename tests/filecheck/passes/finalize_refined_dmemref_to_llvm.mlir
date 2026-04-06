@@ -25,7 +25,7 @@ builtin.module {
 // CHECK-LABEL: func.func @finalize(%0: i64, %1: i64) -> f32 {
 // CHECK: %2 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
 // CHECK: %9 = "llvm.mul"(%8, %3) : (i64, i64) -> i64
-// CHECK: %11 = llvm.getelementptr %10[%9] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+// CHECK: %11 = "llvm.getelementptr"(%10, %9) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // CHECK: %12 = "llvm.ptrtoint"(%11) : (!llvm.ptr) -> i64
 // CHECK: llvm.call @malloc(%12) : (i64) -> !llvm.ptr
 // CHECK: llvm.call @free(%13) : (!llvm.ptr) -> ()

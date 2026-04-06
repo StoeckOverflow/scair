@@ -234,9 +234,9 @@ builtin.module {
 // P1-NEXT:    %16 = llvm.insertvalue %2, %15[3, 1] : !llvm.struct<(!llvm.ptr, !llvm.ptr, i64, !llvm.array<2 x i64>, !llvm.array<2 x i64>)>
 // P1:         %40 = llvm.icmp "slt" %39, %0 : i64
 // P1-NEXT:    "llvm.cond_br"(%40)[^bb1, ^bb2] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
-// P1:         %54 = llvm.getelementptr %48[%53] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+// P1:         %54 = "llvm.getelementptr"(%48, %53) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // P1-NEXT:    %55 = llvm.load %54 : !llvm.ptr -> f32
-// P1:         %74 = llvm.getelementptr %68[%73] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+// P1:         %74 = "llvm.getelementptr"(%68, %73) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // P1-NEXT:    "llvm.store"(%46, %74) : (f32, !llvm.ptr) -> ()
 
 // P1-LABEL: func.func @main() -> i32 {
@@ -266,9 +266,9 @@ builtin.module {
 // P2-NEXT:  ^bb0(%16: i64):
 // P2-NEXT:    %17 = llvm.icmp "slt" %16, %10 : i64
 // P2-NEXT:    "llvm.cond_br"(%17)[^bb1, ^bb2] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
-// P2:         %28 = llvm.getelementptr %4[%27] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+// P2:         %28 = "llvm.getelementptr"(%4, %27) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // P2-NEXT:    %29 = llvm.load %28 : !llvm.ptr -> f32
-// P2:         %43 = llvm.getelementptr %8[%42] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+// P2:         %43 = "llvm.getelementptr"(%8, %42) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // P2-NEXT:    "llvm.store"(%22, %43) : (f32, !llvm.ptr) -> ()
 
 // P2-LABEL: func.func @main() -> i32 {
@@ -299,7 +299,7 @@ builtin.module {
 // P3-NEXT:    %9 = "llvm.mul"(%3, %2) : (i64, i64) -> i64
 // P3-NEXT:    %10 = "llvm.mul"(%1, %2) : (i64, i64) -> i64
 // P3-NEXT:    %11 = "llvm.mlir.zero"() : () -> !llvm.ptr
-// P3-NEXT:    %12 = llvm.getelementptr %11[%8] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+// P3-NEXT:    %12 = "llvm.getelementptr"(%11, %8) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // P3-NEXT:    %13 = "llvm.ptrtoint"(%12) : (!llvm.ptr) -> i64
 // P3-NEXT:    %14 = llvm.call @malloc(%13) : (i64) -> !llvm.ptr
 // P3:         %65 = "llvm.fmul"(%58, %64) : (f32, f32) -> f32

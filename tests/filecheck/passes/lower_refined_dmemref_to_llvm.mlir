@@ -42,10 +42,10 @@ builtin.module {
 // CHECK-LABEL: func.func @semi_affine_layout_map(%0: i64, %1: i64) -> f32 {
 // CHECK: %2 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
 // CHECK: %11 = "llvm.mul"(%6, %3) : (i64, i64) -> i64
-// CHECK: %13 = llvm.getelementptr %12[%11] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+// CHECK: %13 = "llvm.getelementptr"(%12, %11) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // CHECK: %14 = "llvm.ptrtoint"(%13) : (!llvm.ptr) -> i64
 // CHECK: %17 = llvm.icmp "slt" %16, %6 : i64
-// CHECK: %24 = llvm.getelementptr %15[%23] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+// CHECK: %24 = "llvm.getelementptr"(%15, %23) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // CHECK: %39 = llvm.load %38 : !llvm.ptr -> f32
 // CHECK: llvm.call @free(%15) : (!llvm.ptr) -> ()
 // CHECK: "llvm.return"(%28) : (f32) -> ()
