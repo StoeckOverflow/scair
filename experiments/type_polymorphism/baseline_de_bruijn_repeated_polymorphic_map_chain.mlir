@@ -5,7 +5,7 @@
 // Expected comparison story: this should lower similarly to the value-dependent benchmark with
 // more source-level binder bookkeeping.
 builtin.module {
-  func.func @batched_map_small(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
+  func.func @repeated_polymorphic_map_chain(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %sink = "tlam_dbi.tlambda"() ({
       %id = "tlam_dbi.vlambda"() ({
       ^bb0(%x: !tlam_dbi.bvar<0>):

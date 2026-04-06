@@ -48,7 +48,7 @@ module {
     return %y : f64
   }
 
-  func.func @batched_map_small(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
+  func.func @repeated_polymorphic_map_chain(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %i8_1 = call @map_i8(%i8v) : (i8) -> i8
     %i8_2 = call @map_i8(%i8_1) : (i8) -> i8
     %r_i8 = call @map_i8(%i8_2) : (i8) -> i8

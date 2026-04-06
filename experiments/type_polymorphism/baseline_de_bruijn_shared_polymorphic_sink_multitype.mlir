@@ -7,7 +7,7 @@
 // Expected comparison story: this should lower similarly to the value-dependent benchmark but with
 // more binder bookkeeping in the source representation.
 builtin.module {
-  func.func @compose_fanout(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
+  func.func @shared_polymorphic_sink_multitype(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %sink = "tlam_dbi.tlambda"() ({
       %id = "tlam_dbi.vlambda"() ({
       ^bb0(%x: !tlam_dbi.bvar<0>):

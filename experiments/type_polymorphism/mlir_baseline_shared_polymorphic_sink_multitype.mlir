@@ -65,7 +65,7 @@ module {
     return %r : f64
   }
 
-  func.func @compose_fanout(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
+  func.func @shared_polymorphic_sink_multitype(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %r_i8 = call @compose_i8(%i8v) : (i8) -> i8
     %r_i16 = call @compose_i16(%i16v) : (i16) -> i16
     %r_i32 = call @compose_i32(%i32v) : (i32) -> i32

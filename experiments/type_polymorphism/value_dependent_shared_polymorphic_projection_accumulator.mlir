@@ -5,7 +5,7 @@
 // Expected comparison story: MLIR duplicates sink and scorer wrappers per type, while the ScaIR
 // encodings share one polymorphic shell and differ mainly in source-level bookkeeping.
 builtin.module {
-  func.func @higher_order_accumulator(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
+  func.func @shared_polymorphic_projection_accumulator(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %sink = "tlam.tlambda"() ({
     ^bb0(%T: !tlam.type):
       %id = "tlam.vlambda"() ({

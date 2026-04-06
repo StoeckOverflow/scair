@@ -57,7 +57,7 @@ module {
     return %y : i64
   }
 
-  func.func @higher_order_accumulator(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
+  func.func @shared_polymorphic_projection_accumulator(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %r_i8 = call @accum_i8(%i8v) : (i8) -> i64
     %r_i16 = call @accum_i16(%i16v) : (i16) -> i64
     %r_i32 = call @accum_i32(%i32v) : (i32) -> i64

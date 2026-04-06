@@ -5,7 +5,7 @@
 // Expected comparison story: MLIR duplicates sink/map wrappers per type, while ScaIR shares one
 // polymorphic shell and still carries the same typed step chain.
 builtin.module {
-  func.func @batched_map_small(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
+  func.func @repeated_polymorphic_map_chain(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %sink = "tlam.tlambda"() ({
     ^bb0(%T: !tlam.type):
       %id = "tlam.vlambda"() ({

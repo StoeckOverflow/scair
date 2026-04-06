@@ -7,7 +7,7 @@
 // Expected comparison story: MLIR duplicates the sink and typed compose wrappers monomorphically,
 // while the two ScaIR encodings share one polymorphic shell and differ mainly in source bookkeeping.
 builtin.module {
-  func.func @compose_fanout(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
+  func.func @shared_polymorphic_sink_multitype(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %sink = "tlam.tlambda"() ({
     ^bb0(%T: !tlam.type):
       %id = "tlam.vlambda"() ({

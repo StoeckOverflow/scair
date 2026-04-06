@@ -11,6 +11,14 @@
 #define BENCH_LABEL "unknown"
 #endif
 
+#ifndef VARIANT_LABEL
+#define VARIANT_LABEL "unknown"
+#endif
+
+#ifndef EXPECTED_RESULT
+#error "EXPECTED_RESULT must be defined"
+#endif
+
 extern int64_t BENCH_FN(
     int8_t i8v,
     int16_t i16v,
@@ -42,6 +50,12 @@ int main(int argc, char **argv) {
   if (argc > 7) f64v = strtod(argv[7], NULL);
 
   int64_t result = BENCH_FN(i8v, i16v, i32v, i64v, f32v, f64v);
+  int64_t expected = (int64_t)(EXPECTED_RESULT);
+  if (result != expected) {
+    fprintf(stderr, "unexpected result: got %lld expected %lld\n",
+            (long long)result, (long long)expected);
+    return 3;
+  }
 
   volatile int64_t sink = 0;
   struct timespec start;
@@ -54,7 +68,9 @@ int main(int argc, char **argv) {
 
   double total_ns = elapsed_ns(start, end);
   printf("benchmark=%s\n", BENCH_LABEL);
+  printf("variant=%s\n", VARIANT_LABEL);
   printf("result=%lld\n", (long long)result);
+  printf("expected_result=%lld\n", (long long)expected);
   printf("sink=%lld\n", (long long)sink);
   printf("iterations=%d\n", iterations);
   printf("total_ns=%.0f\n", total_ns);
