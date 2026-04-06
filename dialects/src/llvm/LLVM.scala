@@ -7,6 +7,7 @@ import scair.dialects.builtin.*
 import scair.ir.*
 import scair.parse.*
 import scair.parse.given
+import scair.utils.*
 
 case class Ptr() extends DerivedAttribute["llvm.ptr"] with TypeAttribute
     derives AttrDefs
@@ -139,6 +140,11 @@ case class Store(
     addr: Operand[Ptr],
 ) extends DerivedOperation["llvm.store"] derives OpDefs
 
+private val gepDynamicIndexSentinel: BigInt = BigInt(Int.MinValue)
+
+private def isDynamicGEPIndex(attr: IntegerAttr): Boolean =
+  attr.value.value == gepDynamicIndexSentinel
+
 case class GetElementPtr(
     base: Operand[Ptr],
     dynamicIndices: Seq[Operand[IntegerType | IndexType]],
@@ -149,26 +155,14 @@ case class GetElementPtr(
 ) extends DerivedOperation["llvm.getelementptr"]
     with NoMemoryEffect derives OpDefs:
 
-  override def customPrint(printer: Printer): Unit =
-    printer.print(name, " ", base, "[")
-    val raw = rawConstantIndices.data.collect { case i: IntegerAttr => i.value.value }
-    var dynIdx = 0
-    printer.printListF(
-      raw,
-      { idx =>
-        if idx == BigInt(-2147483648L) then
-          val dyn = dynamicIndices(dynIdx)
-          dynIdx += 1
-          printer.print(dyn)
-        else printer.print(idx.toString)
-      },
-      sep = ", ",
-    )
-    printer.print("] : (", base.typ)
-    if dynamicIndices.nonEmpty then
-      printer.print(", ")
-      printer.printListF(dynamicIndices.map(_.typ), printer.print, sep = ", ")
-    printer.print(") -> ", res.typ, ", ", elem_type)
+  override def customVerify(): OK[Operation] =
+    val rawIndices = rawConstantIndices.data.collect { case i: IntegerAttr => i }
+    val numDynamicMarkers = rawIndices.count(isDynamicGEPIndex)
+    if numDynamicMarkers != dynamicIndices.size then
+      Err(
+        s"llvm.getelementptr: rawConstantIndices contain $numDynamicMarkers dynamic markers but op has ${dynamicIndices.size} dynamic indices"
+      )
+    else OK(this)
 
 case class ExtractValue(
     container: Operand[Attribute],
