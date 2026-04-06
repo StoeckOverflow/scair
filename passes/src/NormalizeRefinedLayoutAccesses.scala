@@ -87,7 +87,54 @@ private def linearizedIndexOps(
       }
   (prefix.result(), linear)
 
+private def composeSubviewIndices(
+    subview: d_memref.Subview,
+    indices: Seq[Operand[IndexType]],
+): (Vector[Operation], Seq[Operand[IndexType]]) =
+  val prefix = Vector.newBuilder[Operation]
+  val composed = indices.zip(subview.offsets.zip(subview.strides)).map { case (idx, (off, stride)) =>
+    val scaled =
+      stride.owner match
+        case Some(arith.Constant(IntegerAttr(IntData(1), _: IndexType), _)) =>
+          idx.asInstanceOf[Value[Attribute]]
+        case _ =>
+          val mul = mulIndex(idx.asInstanceOf[Value[Attribute]], stride.asInstanceOf[Value[Attribute]])
+          prefix += mul
+          mul.result
+    val shifted =
+      off.owner match
+        case Some(arith.Constant(IntegerAttr(IntData(0), _: IndexType), _)) =>
+          scaled
+        case _ =>
+          val add = addIndex(scaled, off.asInstanceOf[Value[Attribute]])
+          prefix += add
+          add.result
+    asIndex(shifted)
+  }
+  (prefix.result(), composed)
+
 private val NormalizeLoad = pattern {
+  case op: d_memref.Load =>
+    op.memref.owner match
+      case Some(sv: d_memref.Subview) =>
+        val (prefix, composed) = composeSubviewIndices(sv, op.indices)
+        val normalized = d_memref.Load(sv.src, composed, Result(op.res.typ))
+        (prefix :+ normalized, Seq(normalized.res))
+      case _ =>
+        PatternAction.Abort
+}
+
+private val NormalizeSubviewStore = pattern {
+  case op: d_memref.Store =>
+    op.memref.owner match
+      case Some(sv: d_memref.Subview) =>
+        val (prefix, composed) = composeSubviewIndices(sv, op.indices)
+        prefix :+ d_memref.Store(op.value, sv.src, composed)
+      case _ =>
+        PatternAction.Abort
+}
+
+private val NormalizeStridedLoad = pattern {
   case op: d_memref.Load if op.memref.typ.strides.nonEmpty =>
     underlyingFlatBuffer(op.memref).map { flat =>
       val (prefix, linear) = linearizedIndexOps(op.memref.typ, op.indices)
@@ -96,7 +143,7 @@ private val NormalizeLoad = pattern {
     }.getOrElse(PatternAction.Abort)
 }
 
-private val NormalizeStore = pattern {
+private val NormalizeStridedStore = pattern {
   case op: d_memref.Store if op.memref.typ.strides.nonEmpty =>
     underlyingFlatBuffer(op.memref).map { flat =>
       val (prefix, linear) = linearizedIndexOps(op.memref.typ, op.indices)
@@ -109,4 +156,8 @@ private val NormalizeStore = pattern {
 final class NormalizeRefinedLayoutAccesses(ctx: MLContext) extends WalkerPass(ctx):
   override val name: String = "normalize-refined-layout-accesses"
   override val walker: PatternRewriteWalker =
-    PatternRewriteWalker(GreedyRewritePatternApplier(Seq(NormalizeLoad, NormalizeStore)))
+    PatternRewriteWalker(
+      GreedyRewritePatternApplier(
+        Seq(NormalizeLoad, NormalizeSubviewStore, NormalizeStridedLoad, NormalizeStridedStore)
+      )
+    )

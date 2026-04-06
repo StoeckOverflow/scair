@@ -167,6 +167,9 @@ private final class Builder(val funcOp: func.Func):
   private def lowerReinterpret(op: d_memref.ReinterpretCast, block: Block): Value[Attribute] =
     remap(op.src)
 
+  private def lowerSubview(op: d_memref.Subview, block: Block): Value[Attribute] =
+    remap(op.src)
+
   private def lowerLoadFromLinearized(
       base: Value[Attribute],
       elemTy: Attribute,
@@ -323,6 +326,8 @@ private final class Builder(val funcOp: func.Func):
         case op: d_memref.Alloc      => state.valueMap(op.res) = lowerAlloc(op, newBlock)
         case op: d_memref.ReinterpretCast =>
           state.valueMap(op.res) = lowerReinterpret(op, newBlock)
+        case op: d_memref.Subview =>
+          state.valueMap(op.res) = lowerSubview(op, newBlock)
         case op: d_memref.ExtractStridedMetadata =>
           state.valueMap.addAll(op.results.zip(lowerExtractStridedMetadata(op, newBlock)))
         case op: d_memref.Load =>
@@ -357,7 +362,7 @@ private final class Builder(val funcOp: func.Func):
 
 private val LowerFunc = pattern {
   case op: func.Func if op.body.blocks.exists(_.operations.exists {
-        case _: d_memref.Alloc | _: d_memref.ReinterpretCast | _: d_memref.ExtractStridedMetadata |
+        case _: d_memref.Alloc | _: d_memref.ReinterpretCast | _: d_memref.Subview | _: d_memref.ExtractStridedMetadata |
             _: d_memref.Load | _: d_memref.Store | _: d_memref.Cast |
             _: d_memref.Dealloc | _: func.Return =>
           true

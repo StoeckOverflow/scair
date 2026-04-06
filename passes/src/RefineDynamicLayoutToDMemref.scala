@@ -9,6 +9,7 @@ import scair.dialects.d_affine
 import scair.dialects.d_memref
 import scair.dialects.func
 import scair.dialects.memref
+import scair.dialects.scf
 import scair.ir.*
 import scair.transformations.*
 import scair.transformations.patterns.*
@@ -221,6 +222,27 @@ private def lowerRegion(
     )
   )
 
+private def lowerRegionWithArgTypes(
+    region: Region,
+    argTypes: Seq[TypeAttribute],
+    outerMapper: mutable.Map[Value[Attribute], Value[Attribute]],
+): Region =
+  val oldBlock = region.blocks.head
+  Region(
+    Block(argTypes, newArgs =>
+      val localMapper = mutable.Map.from(outerMapper)
+      localMapper.addAll(oldBlock.arguments.zip(newArgs))
+      lowerOps(oldBlock.operations, localMapper)
+    )
+  )
+
+private def scfYieldTypes(region: Region): Seq[TypeAttribute] =
+  region.blocks.head.operations.lastOption match
+    case Some(y: scf.YieldOp) =>
+      y.resultss.map(_.typ.asInstanceOf[TypeAttribute]).toSeq
+    case _ =>
+      Seq.empty
+
 private def lowerOps(
     ops: Iterable[Operation],
     valueMapper: mutable.Map[Value[Attribute], Value[Attribute]],
@@ -276,6 +298,10 @@ private def lowerOps(
           case _ =>
             Seq(op.deepCopy(using mutable.Map.empty, valueMapper))
       case op: affine.For =>
+        val loweredInits =
+          op.inits.map(v => remapValue(v, valueMapper).asInstanceOf[Operand[Attribute]])
+        val bodyArgTypes =
+          Seq(IndexType().asInstanceOf[TypeAttribute]) ++ loweredInits.map(_.typ.asInstanceOf[TypeAttribute])
         Seq(
           d_affine.For(
             op.lowerBoundOperands.map(v =>
@@ -284,12 +310,23 @@ private def lowerOps(
             op.upperBoundOperands.map(v =>
               remapValue(v, valueMapper).asInstanceOf[Operand[IndexType]]
             ),
-            op.inits.map(v => remapValue(v, valueMapper).asInstanceOf[Operand[Attribute]]),
-            op.res.map(r => Result(r.typ)),
+            loweredInits,
+            loweredInits.map(v => Result(v.typ.asInstanceOf[TypeAttribute])),
             op.lowerBoundMap,
             op.upperBoundMap,
             op.step,
-            lowerRegion(op.body, valueMapper),
+            lowerRegionWithArgTypes(op.body, bodyArgTypes, valueMapper),
+          )
+        )
+      case op: scf.IfOp =>
+        val thenRegion = lowerRegion(op.thenRegion, valueMapper)
+        val elseRegion = lowerRegion(op.elseRegion, valueMapper)
+        Seq(
+          scf.IfOp(
+            remapValue(op.condition, valueMapper).asInstanceOf[Operand[IntegerType]],
+            thenRegion,
+            elseRegion,
+            scfYieldTypes(thenRegion).map(Result(_)),
           )
         )
       case op: affine.Yield =>
@@ -352,6 +389,21 @@ private def lowerFunction(funcOp: func.Func): func.Func =
       lowered.attributes += ("scair.original_function_type" -> funcOp.function_type)
     lowered
 
+private def scfIfNeedsRefinement(op: scf.IfOp): Boolean =
+  op.results.exists(_.typ.isInstanceOf[RankedMemrefType]) ||
+    op.thenRegion.blocks.exists(_.operations.exists {
+      case _: memref.Load | _: memref.Store | _: memref.ReinterpretCast |
+          _: affine.For | _: affine.Load | _: affine.Store | _: affine.Yield =>
+        true
+      case _ => false
+    }) ||
+    op.elseRegion.blocks.exists(_.operations.exists {
+      case _: memref.Load | _: memref.Store | _: memref.ReinterpretCast |
+          _: affine.For | _: affine.Load | _: affine.Store | _: affine.Yield =>
+        true
+      case _ => false
+    })
+
 private val LowerFunc = pattern {
   case op: func.Func
       if op.body.blocks.nonEmpty &&
@@ -361,6 +413,8 @@ private val LowerFunc = pattern {
                 _: memref.ReinterpretCast | _: affine.For | _: affine.Load | _: affine.Store |
                 _: affine.Yield =>
               true
+            case ifOp: scf.IfOp =>
+              scfIfNeedsRefinement(ifOp)
             case _ => false
           })) =>
     lowerFunction(op)

@@ -4,6 +4,7 @@ import scair.MLContext
 import scair.dialects.affine.*
 import scair.dialects.builtin.*
 import scair.dialects.func
+import scair.dialects.scf
 import scair.ir.*
 import scair.passes.control_flow_helpers.*
 import scair.passes.lowering_helpers.FunctionLoweringState
@@ -54,10 +55,39 @@ private final class Builder(val funcOp: func.Func):
     op match
       case nested: For =>
         lowerLoop(nested)
+      case ifOp: scf.IfOp =>
+        lowerIf(ifOp)
       case other =>
         val copied = deepCopyOp(other)
         emit(copied)
         state.valueMap.addAll(op.results.zip(copied.results))
+
+  private def lowerIf(op: scf.IfOp): Unit =
+    if op.thenRegion.blocks.size != 1 || op.elseRegion.blocks.size != 1 then
+      throw new Exception("lower-baseline-control-flow-to-llvm only supports single-block scf.if")
+    val thenBlock = Block(Seq.empty, Seq.empty)
+    val elseBlock = Block(Seq.empty, Seq.empty)
+    val merge = Block(op.results.map(_.typ), Seq.empty)
+    cfg.appendBlock(thenBlock)
+    cfg.appendBlock(elseBlock)
+    cfg.appendBlock(merge)
+    cfg.emitCondBr(current, remap(op.condition), Seq.empty, Seq.empty, thenBlock, elseBlock)
+
+    def lowerRegion(src: Block, dest: Block): Unit =
+      current = dest
+      var yielded: Seq[Value[Attribute]] = Seq.empty
+      src.operations.foreach {
+        case y: scf.YieldOp =>
+          yielded = y.resultss.map(remap)
+        case other =>
+          lowerSimpleOp(other)
+      }
+      cfg.emitBr(current, yielded, merge)
+
+    lowerRegion(op.thenRegion.blocks.head, thenBlock)
+    lowerRegion(op.elseRegion.blocks.head, elseBlock)
+    current = merge
+    state.valueMap.addAll(op.results.zip(merge.arguments))
 
   private def hasNestedLoopShape(op: For): Boolean =
     if op.inits.size != 1 || op.res.size != 1 || op.body.blocks.size != 1 then false
@@ -220,6 +250,43 @@ private final class Builder(val funcOp: func.Func):
         acc
       }
 
+  private def lowerMultiResultFor(op: For): Option[Seq[Value[Attribute]]] =
+    if op.body.blocks.size != 1 || op.inits.isEmpty || op.inits.size != op.res.size then None
+    else
+      lowerBound(op.lowerBoundOperands, op.lowerBoundMap).map { lb =>
+        val initVals = op.inits.map(remap)
+        val bodyBlock = op.body.blocks.head
+        val header = Block(Seq(llvmIndexType) ++ initVals.map(_.typ), Seq.empty)
+        cfg.appendBlock(header)
+        val body = Block(Seq.empty, Seq.empty)
+        cfg.appendBlock(body)
+        val exit = Block(op.res.map(_.typ), Seq.empty)
+        cfg.appendBlock(exit)
+        cfg.emitBr(current, Seq(lb) ++ initVals, header)
+        val iv = header.arguments.head
+        val carried = header.arguments.tail.toSeq
+        val ub = lowerBoundWith(
+          op.upperBoundOperands,
+          op.upperBoundMap,
+          remap,
+          header,
+        ).get
+        val cmp = cfg.emitICmpSlt(header, iv, ub)
+        cfg.emitCondBr(header, cmp, Seq.empty, carried, body, exit)
+        current = body
+        state.valueMap.addAll(bodyBlock.arguments.zip(Seq(iv) ++ carried))
+        var yielded: Seq[Value[Attribute]] = Seq.empty
+        bodyBlock.operations.foreach {
+          case y: Yield => yielded = y.arguments.map(remap)
+          case other    => lowerSimpleOp(other)
+        }
+        val step = cfg.emitIndexConstant(current, op.step.value.value)
+        val nextIv = cfg.emitAdd(current, iv, step)
+        cfg.emitBr(current, Seq(nextIv) ++ yielded, header)
+        current = exit
+        exit.arguments.toSeq
+      }
+
   private def lowerVoidFor(
       op: For,
   ): Boolean =
@@ -277,12 +344,15 @@ private final class Builder(val funcOp: func.Func):
   ): Unit =
     if op.inits.isEmpty && op.res.isEmpty then
       lowerVoidFor(op)
+    else if op.res.size > 1 then
+      lowerMultiResultFor(op).foreach(vals => state.valueMap.addAll(op.results.zip(vals)))
     else
       lowerFor(op).foreach(v => state.valueMap(op.results.head) = v)
 
   def lower(): func.Func =
     funcOp.body.blocks.head.operations.foreach {
       case loop: For => lowerLoop(loop)
+      case ifOp: scf.IfOp => lowerIf(ifOp)
       case other     => lowerSimpleOp(other)
     }
     val lowered = func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(blocks.toSeq))
@@ -290,7 +360,10 @@ private final class Builder(val funcOp: func.Func):
     lowered
 
 private val LowerFunc = pattern {
-  case op: func.Func if op.body.blocks.exists(_.operations.exists(_.isInstanceOf[For])) =>
+  case op: func.Func if op.body.blocks.exists(_.operations.exists {
+        case _: For | _: scf.IfOp => true
+        case _                    => false
+      }) =>
     Builder(op).lower()
 }
 
