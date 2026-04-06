@@ -1,6 +1,7 @@
 package scair.tools.opt
 
 import scair.Printer
+import scair.analysis.IRMetrics
 import scair.exceptions.VerifyException
 import scair.ir.*
 import scair.parse.*
@@ -31,6 +32,7 @@ import scala.io.Source
 
 case class ScairOptArgs(
     val allowUnregistered: Boolean = false,
+    val emitIrMetrics: Boolean = false,
     val input: Option[String] = None,
     val skipVerify: Boolean = false,
     val splitInputFile: Boolean = false,
@@ -95,6 +97,9 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
         opt[Unit]('a', "allow-unregistered-dialect").optional().text(
           "Accept unregistered operations and attributes, bestPRINT effort with generic syntax."
         ).action((_, c) => c.copy(allowUnregistered = true)),
+        opt[Unit]("emit-ir-metrics").optional().text(
+          "Print parser-backed structural IR metrics as key=value lines instead of IR."
+        ).action((_, c) => c.copy(emitIrMetrics = true)),
         opt[Unit]('s', "skip-verify").optional().text("Skip verification")
           .action((_, c) => c.copy(skipVerify = true)),
         opt[Unit]("split-input-file").optional()
@@ -172,12 +177,18 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
                 else throw new VerifyException(errorMsg)
 
           {
-            val printer = new Printer(parsedArgs.printGeneric)
-            processedModule.fold(
-              err => printer.print(err.msg),
-              printer.printTopLevel,
-            )
-            printer.flush()
+            if parsedArgs.emitIrMetrics then
+              processedModule.fold(
+                err => println(err.msg),
+                op => IRMetrics.collect(op).toKeyValueLines.foreach(println),
+              )
+            else
+              val printer = new Printer(parsedArgs.printGeneric)
+              processedModule.fold(
+                err => printer.print(err.msg),
+                printer.printTopLevel,
+              )
+              printer.flush()
           }
         case Err(errorMsg) =>
           if parsedArgs.parsingDiagnostics then println(errorMsg)
