@@ -27,11 +27,11 @@ builtin.module {
 // CSE: builtin.module {
 // CSE:   %0 = "scf.execute_region"() ({
 // CSE:     %1 = "arith.constant"() <{value = 0 : i32}> : () -> i32
-// CSE:     "scf.yield"(%1) : (i32) -> ()
+// CSE:     scf.yield %1 : i32
 // CSE:   }) : () -> i32
 // CSE:   %1 = "scf.execute_region"() ({
 // CSE:     %2 = "arith.constant"() <{value = 1 : i32}> : () -> i32
-// CSE:     "scf.yield"(%2) : (i32) -> ()
+// CSE:     scf.yield %2 : i32
 // CSE:   }) : () -> i32
 // CSE:   "test.use"(%0, %1) : (i32, i32) -> ()
 // CSE: }

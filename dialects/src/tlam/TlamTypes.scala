@@ -2,7 +2,7 @@ package scair.dialects.tlam
 
 import scair.ir.*
 import scair.dialects.builtin.*
-import scair.clair.macros.*
+import scair.clair.*
 import scair.parse.*
 import scair.utils.*
 import fastparse.ParsingRun
@@ -16,14 +16,14 @@ sealed trait TlamType extends TypeAttribute
 // !tlam.type  — the universe of tlam types
 final case class TlamTypeType()
     extends TlamType
-    with DerivedAttribute["tlam.type", TlamTypeType]
-    derives DerivedAttributeCompanion
+    with DerivedAttribute["tlam.type"]
+    derives AttrDefs
 
 // !tlam.bvar<k>  — De Bruijn index (k is data)
 final case class TlamBVarType(k: IntegerAttr)
     extends TlamType
-    with DerivedAttribute["tlam.bvar", TlamBVarType]
-    derives DerivedAttributeCompanion
+    with DerivedAttribute["tlam.bvar"]
+    derives AttrDefs
 
 // !tlam.fun<in -> out> — function type
 final case class TlamFunType(in: TypeAttribute, out: TypeAttribute)

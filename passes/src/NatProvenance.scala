@@ -1,6 +1,5 @@
 package scair.passes
 
-import scair.dialects.affine.*
 import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.dTensor.*

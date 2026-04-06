@@ -1,15 +1,13 @@
 package scair.passes.dtensor_to_dmemref
 
 import scair.MLContext
-import scair.dialects.affine.*
 import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.dTensor.*
 import scair.dialects.d_affine
 import scair.dialects.d_memref
 import scair.ir.*
-import scair.transformations.*
-import scair.transformations.patterns.*
+import scair.transformations.{GreedyRewritePatternApplier, PatternRewriteWalker, WalkerPass, pattern}
 
 object DTensorDMemrefConversion:
   def tensorToMemrefType(t: dTensorTensorType): d_memref.dMemrefMemrefType =

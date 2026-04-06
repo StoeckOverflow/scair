@@ -16,7 +16,7 @@ builtin.module {
 
 // CHECK-LABEL: func.func @refine_baseline(%0: index, %1: index) -> f32 {
 // CHECK-NEXT:    %2 = "arith.constant"() <{value = 256 : index}> : () -> index
-// CHECK-NEXT:    %3 = "arith.muli"(%2, %0) : (index, index) -> index
+// CHECK-NEXT:    %3 = "arith.muli"(%2, %0) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // CHECK-NEXT:    %4 = "dtensor.index_to_nat"(%3) : (index) -> !dtensor.nat
 // CHECK-NEXT:    %5 = d_memref.alloc : () -> !d_memref.memref<[%4], f32>
 // CHECK-NEXT:    %6 = "arith.constant"() <{value = 1024 : index}> : () -> index

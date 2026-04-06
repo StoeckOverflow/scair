@@ -3,8 +3,7 @@ package scair.dialects.func
 import fastparse.*
 import scair.*
 import scair.Printer
-import scair.clair.codegen.*
-import scair.clair.macros.*
+import scair.clair.*
 import scair.dialects.builtin.*
 import scair.ir.*
 import scair.parse.*
@@ -25,7 +24,7 @@ case class Call(
     callee: SymbolRefAttr,
     _operands: Seq[Operand[Attribute]],
     _results: Seq[Result[Attribute]],
-) extends DerivedOperation["func.call", Call] derives DerivedOperationCompanion
+) extends DerivedOperation["func.call"] derives OpDefs
 
 given OperationCustomParser[Func]:
 
@@ -70,12 +69,12 @@ case class Func(
     function_type: FunctionType,
     sym_visibility: Option[StringData],
     body: Region,
-) extends DerivedOperation["func.func", Func]
+) extends DerivedOperation["func.func"]
     with IsolatedFromAbove
     with Symbol
-    with SymbolTable derives DerivedOperationCompanion:
+    with SymbolTable derives OpDefs:
 
-  override def customPrint(printer: Printer)(using indentLevel: Int) =
+  override def customPrint(printer: Printer) =
     val lprinter = printer.copy()
     lprinter.print("func.func ")
     sym_visibility match
@@ -107,34 +106,35 @@ case class Func(
       lprinter.print(" attributes")
       lprinter.printOptionalAttrDict(attributes.toMap)
     // TODO: Should that simply be a region print?
-    if body.blocks.nonEmpty then
-      val entry = body.blocks.head
-      val others = body.blocks.tail
-      lprinter.print(" {\n")
-      entry.operations.foreach(lprinter.print(_)(using indentLevel + 1))
-      others.foreach(lprinter.print)
-      lprinter.print(lprinter.indent * indentLevel + "}")
+    body.blocks match
+      case Seq() => ()
+      case blocks =>
+        val entry = blocks.head
+        val others = blocks.tail
+        lprinter.print(" {\n")
+        lprinter.indented(entry.operations.foreach(lprinter.print(_)))
+        others.foreach(lprinter.print)
+        lprinter.withIndent(lprinter.print("}"))
 
 case class Return(
     _operands: Seq[Operand[Attribute]]
-) extends DerivedOperation["func.return", Return]
+) extends DerivedOperation["func.return"]
     with AssemblyFormat["attr-dict ($_operands^ `:` type($_operands))?"]
     with NoMemoryEffect
-    with IsTerminator derives DerivedOperationCompanion
+    with IsTerminator derives OpDefs
 
 case class Constant(
     value: SymbolRefAttr,
     res: Result[FunctionType],
-) extends DerivedOperation["func.constant", Constant]
+) extends DerivedOperation["func.constant"]
     with AssemblyFormat["attr-dict $value `:` type($res)"]
-    with NoMemoryEffect derives DerivedOperationCompanion
+    with NoMemoryEffect derives OpDefs
 
 case class CallIndirect(
     callee: Operand[FunctionType],
     callee_operands: Seq[Operand[Attribute]],
     _results: Seq[Result[Attribute]],
-) extends DerivedOperation["func.call_indirect", CallIndirect]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["func.call_indirect"] derives OpDefs:
 
   override def verify(): OK[Operation] =
     callee.typ match

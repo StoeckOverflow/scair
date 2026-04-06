@@ -1,6 +1,5 @@
 package scair.interpreter
 
-import scair.dialects.affine.*
 import scair.dialects.builtin.*
 import scair.dialects.d_affine
 

@@ -3,7 +3,7 @@ package scair.dialects.tlam_de_bruijn
 import scair.ir.*
 import scair.utils.*
 import scair.dialects.builtin.*
-import scair.clair.macros.*
+import scair.clair.*
 import scair.parse.*
 import fastparse.*
 
@@ -13,13 +13,13 @@ sealed trait tlamType extends TypeAttribute
 
 final case class tlamTypeType()
     extends tlamType
-    with DerivedAttribute["tlam_dbi.type", tlamTypeType]
-    derives DerivedAttributeCompanion
+    with DerivedAttribute["tlam_dbi.type"]
+    derives AttrDefs
 
 final case class tlamBVarType(k: IntegerAttr)
     extends tlamType
-    with DerivedAttribute["tlam_dbi.bvar", tlamBVarType]
-    derives DerivedAttributeCompanion:
+    with DerivedAttribute["tlam_dbi.bvar"]
+    derives AttrDefs:
 
   override def customVerify(): OK[Unit] =
     if k.value < 0 then Err(s"tlam.bvar index must be >= 0, got ${k.value}")
@@ -44,8 +44,8 @@ given AttributeCompanion[tlamFunType]:
 
 final case class tlamForAllType(body: TypeAttribute)
     extends tlamType
-    with DerivedAttribute["tlam_dbi.forall", tlamForAllType]
-    derives DerivedAttributeCompanion
+    with DerivedAttribute["tlam_dbi.forall"]
+    derives AttrDefs
 
 object tlamTy:
   inline def `type`: tlamType = tlamTypeType()

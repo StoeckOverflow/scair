@@ -10,7 +10,6 @@ import scair.ir.*
 import scair.passes.lowering_helpers.FunctionLoweringState
 import scair.passes.llvm_helpers.*
 import scair.transformations.*
-import scair.transformations.patterns.*
 
 private def overflowNSWNuw: ArrayAttribute[StringData] =
   ArrayAttribute(Seq(StringData("nsw"), StringData("nuw")))

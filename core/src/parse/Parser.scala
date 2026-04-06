@@ -5,7 +5,7 @@ import fastparse.Implicits.Repeater
 import fastparse.Parsed.Failure
 import fastparse.internal.Util
 import scair.MLContext
-import scair.clair.macros.DerivedOperationCompanion
+import scair.clair.OpDefs
 import scair.dialects.builtin.StringData
 import scair.dialects.builtin.ModuleOp
 import scair.ir.*
@@ -408,6 +408,8 @@ final class Parser(
     // TODO: More functional and fastparse-compatible state handling!
     scopes.popAll
     scopes.push(new Scope())
+    attributeAliases.clear()
+    typeAliases.clear()
 
     // Reparse for more context on error.
     val traced = failure.trace()
@@ -501,8 +503,8 @@ def moduleP[$: P](using p: Parser): P[Operation] = P(
     ) ~/ p.exitRegionP ~ End
 ).map((toplevel: Seq[Operation]) =>
   toplevel.toList match
-    case (head: ModuleOp) :: Nil => head
-    case (head: DerivedOperationCompanion[ModuleOp]#UnstructuredOp) :: Nil =>
+    case (head: ModuleOp) :: Nil                        => head
+    case (head: OpDefs[ModuleOp]#UnstructuredOp) :: Nil =>
       head
     case _ =>
       val block = new Block(operations = toplevel)

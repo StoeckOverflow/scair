@@ -1,7 +1,7 @@
 package scair.passes.lower_baseline_control_flow_to_llvm
 
 import scair.MLContext
-import scair.dialects.affine.*
+import scair.dialects.affine.{For, Yield}
 import scair.dialects.builtin.*
 import scair.dialects.func
 import scair.dialects.scf
@@ -9,7 +9,6 @@ import scair.ir.*
 import scair.passes.control_flow_helpers.*
 import scair.passes.lowering_helpers.FunctionLoweringState
 import scair.transformations.*
-import scair.transformations.patterns.*
 
 import scala.collection.mutable
 

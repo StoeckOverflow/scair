@@ -29,7 +29,7 @@ builtin.module {
 
 // CHECK-LABEL: func.func @hoist(%0: index, %1: index) -> f32 {
 // CHECK-NEXT:    %2 = "arith.constant"() <{value = 256 : index}> : () -> index
-// CHECK-NEXT:    %3 = "arith.muli"(%2, %0) : (index, index) -> index
+// CHECK-NEXT:    %3 = "arith.muli"(%2, %0) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // CHECK-NEXT:    %4 = "dtensor.index_to_nat"(%3) : (index) -> !dtensor.nat
 // CHECK-NEXT:    %5 = d_memref.alloc : () -> !d_memref.memref<[%4], f32>
 // CHECK-NEXT:    %6 = "arith.constant"() <{value = 1024 : index}> : () -> index
@@ -40,11 +40,11 @@ builtin.module {
 // CHECK-NEXT:    : !d_memref.memref<[%4], f32> to !d_memref.memref<[%8, %9], f32, offset: %7, strides: [%0, %1]>
 // CHECK-NEXT:    %11 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 // CHECK-NEXT:    %12 = d_affine.for %13 = #map(%7) to #map(%2) step 1 : i32 iter_args(%14 = %11 : f32) {
-// CHECK-NEXT:      %15 = "arith.muli"(%13, %0) : (index, index) -> index
-// CHECK-NEXT:      %16 = "arith.addi"(%7, %15) : (index, index) -> index
+// CHECK-NEXT:      %15 = "arith.muli"(%13, %0) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:      %16 = "arith.addi"(%7, %15) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // CHECK-NEXT:      %17 = d_affine.for %18 = #map(%7) to #map(%6) step 1 : i32 iter_args(%19 = %14 : f32) {
-// CHECK-NEXT:        %20 = "arith.muli"(%18, %1) : (index, index) -> index
-// CHECK-NEXT:        %21 = "arith.addi"(%16, %20) : (index, index) -> index
+// CHECK-NEXT:        %20 = "arith.muli"(%18, %1) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:        %21 = "arith.addi"(%16, %20) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // CHECK-NEXT:        %22 = d_memref.load %5[%21] : !d_memref.memref<[%4], f32> -> f32
 // CHECK-NEXT:        %23 = "arith.addf"(%19, %22) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
 // CHECK-NEXT:        d_affine.yield %23 : (f32)

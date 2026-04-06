@@ -2,14 +2,14 @@ package scair.dialects.llvm
 
 import fastparse.*
 import scair.Printer
-import scair.clair.macros.*
+import scair.clair.*
 import scair.dialects.builtin.*
 import scair.ir.*
 import scair.parse.*
 import scair.parse.given
 
-case class Ptr() extends DerivedAttribute["llvm.ptr", Ptr] with TypeAttribute
-    derives DerivedAttributeCompanion
+case class Ptr() extends DerivedAttribute["llvm.ptr"] with TypeAttribute
+    derives AttrDefs
 
 final case class StructType(
     elems: Seq[TypeAttribute]
@@ -55,59 +55,54 @@ given AttributeCompanion[ArrayType]:
 case class Constant(
     value: Attribute,
     res: Result[Attribute],
-) extends DerivedOperation["llvm.mlir.constant", Constant]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.mlir.constant"]
+    with NoMemoryEffect derives OpDefs
 
 case class Zero(
     res: Result[Attribute]
-) extends DerivedOperation["llvm.mlir.zero", Zero]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.mlir.zero"]
+    with NoMemoryEffect derives OpDefs
 
 case class Poison(
     res: Result[Attribute]
-) extends DerivedOperation["llvm.mlir.poison", Poison]
+) extends DerivedOperation["llvm.mlir.poison"]
     with AssemblyFormat["attr-dict `:` type($res)"]
-    with NoMemoryEffect derives DerivedOperationCompanion
+    with NoMemoryEffect derives OpDefs
 
 case class Add(
     lhs: Operand[IntegerType | IndexType],
     rhs: Operand[IntegerType | IndexType],
     res: Result[IntegerType | IndexType],
     overflowFlags: Option[ArrayAttribute[StringData]] = None,
-) extends DerivedOperation["llvm.add", Add]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.add"] derives OpDefs
 
 case class Mul(
     lhs: Operand[IntegerType | IndexType],
     rhs: Operand[IntegerType | IndexType],
     res: Result[IntegerType | IndexType],
     overflowFlags: Option[ArrayAttribute[StringData]] = None,
-) extends DerivedOperation["llvm.mul", Mul]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.mul"] derives OpDefs
 
 case class FAdd(
     lhs: Operand[FloatType],
     rhs: Operand[FloatType],
     res: Result[FloatType],
-) extends DerivedOperation["llvm.fadd", FAdd]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.fadd"] derives OpDefs
 
 case class FMul(
     lhs: Operand[FloatType],
     rhs: Operand[FloatType],
     res: Result[FloatType],
-) extends DerivedOperation["llvm.fmul", FMul]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.fmul"] derives OpDefs
 
 case class ICmp(
     lhs: Operand[IntegerType | IndexType],
     rhs: Operand[IntegerType | IndexType],
     predicate: StringData,
     res: Result[IntegerType],
-) extends DerivedOperation["llvm.icmp", ICmp]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["llvm.icmp"] derives OpDefs:
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ")
     printer.print("\"", predicate.data, "\" ")
     printer.print(lhs, ", ", rhs, " : ", lhs.typ)
@@ -135,15 +130,14 @@ given OperationCustomParser[ICmp]:
 case class Load(
     addr: Operand[Ptr],
     res: Result[Attribute],
-) extends DerivedOperation["llvm.load", Load]
+) extends DerivedOperation["llvm.load"]
     with AssemblyFormat["$addr attr-dict `:` type($addr) `->` type($res)"]
-    derives DerivedOperationCompanion
+    derives OpDefs
 
 case class Store(
     value: Operand[Attribute],
     addr: Operand[Ptr],
-) extends DerivedOperation["llvm.store", Store]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.store"] derives OpDefs
 
 case class GetElementPtr(
     base: Operand[Ptr],
@@ -152,10 +146,10 @@ case class GetElementPtr(
     rawConstantIndices: DenseArrayAttr,
     elem_type: Attribute,
     gepFlags: Option[ArrayAttribute[StringData]] = None,
-) extends DerivedOperation["llvm.getelementptr", GetElementPtr]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["llvm.getelementptr"]
+    with NoMemoryEffect derives OpDefs:
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", base, "[")
     val raw = rawConstantIndices.data.collect { case i: IntegerAttr => i.value.value }
     var dynIdx = 0
@@ -180,10 +174,9 @@ case class ExtractValue(
     container: Operand[Attribute],
     position: DenseArrayAttr,
     res: Result[Attribute],
-) extends DerivedOperation["llvm.extractvalue", ExtractValue]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["llvm.extractvalue"] derives OpDefs:
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", container, "[")
     printer.printListF(
       position.data.collect { case i: IntegerAttr => i.value.value },
@@ -197,10 +190,9 @@ case class InsertValue(
     container: Operand[Attribute],
     position: DenseArrayAttr,
     res: Result[Attribute],
-) extends DerivedOperation["llvm.insertvalue", InsertValue]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["llvm.insertvalue"] derives OpDefs:
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", value, ", ", container, "[")
     printer.printListF(
       position.data.collect { case i: IntegerAttr => i.value.value },
@@ -212,22 +204,20 @@ case class InsertValue(
 case class PtrToInt(
     in: Operand[Ptr],
     out: Result[IntegerType | IndexType],
-) extends DerivedOperation["llvm.ptrtoint", PtrToInt]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.ptrtoint"] derives OpDefs
 
 case class IntToPtr(
     in: Operand[IntegerType | IndexType],
     out: Result[Ptr],
-) extends DerivedOperation["llvm.inttoptr", IntToPtr]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.inttoptr"] derives OpDefs
 
 case class Call(
     callee: SymbolRefAttr,
     operandss: Seq[Operand[Attribute]],
     resultss: Seq[Result[Attribute]],
-) extends DerivedOperation["llvm.call", Call] derives DerivedOperationCompanion:
+) extends DerivedOperation["llvm.call"] derives OpDefs:
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " @", callee.rootRef.data, "(")
     printer.printList(operandss)
     printer.print(") : (")
@@ -244,8 +234,8 @@ case class Call(
 case class Br(
     args: Seq[Operand[Attribute]],
     dest: Block,
-) extends DerivedOperation["llvm.br", Br]
-    with IsTerminator derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.br"]
+    with IsTerminator derives OpDefs
 
 case class CondBr(
     condition: Operand[IntegerType],
@@ -253,13 +243,13 @@ case class CondBr(
     falseArgs: Seq[Operand[Attribute]],
     trueDest: Block,
     falseDest: Block,
-) extends DerivedOperation["llvm.cond_br", CondBr]
-    with IsTerminator derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.cond_br"]
+    with IsTerminator derives OpDefs
 
 case class Return(
     args: Seq[Operand[Attribute]]
-) extends DerivedOperation["llvm.return", Return]
-    with IsTerminator derives DerivedOperationCompanion
+) extends DerivedOperation["llvm.return"]
+    with IsTerminator derives OpDefs
 
 given OperationCustomParser[Func]:
 
@@ -293,12 +283,12 @@ case class Func(
     function_type: FunctionType,
     sym_visibility: Option[StringData],
     body: Region,
-) extends DerivedOperation["llvm.func", Func]
+) extends DerivedOperation["llvm.func"]
     with IsolatedFromAbove
     with Symbol
-    with SymbolTable derives DerivedOperationCompanion:
+    with SymbolTable derives OpDefs:
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     val lprinter = printer.copy()
     lprinter.print("llvm.func ")
     sym_visibility.foreach { visibility =>
@@ -337,9 +327,9 @@ case class Func(
       val entry = body.blocks.head
       val others = body.blocks.tail
       lprinter.print(" {\n")
-      entry.operations.foreach(lprinter.print(_)(using indentLevel + 1))
+      lprinter.indented(entry.operations.foreach(lprinter.print))
       others.foreach(lprinter.print)
-      lprinter.print(lprinter.indent * indentLevel + "}")
+      lprinter.withIndent(lprinter.print("}"))
 
 val LLVMDialect = summonDialect[
   (Ptr, StructType, ArrayType),

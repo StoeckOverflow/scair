@@ -22,11 +22,11 @@ builtin.module {
 // CHECK-LABEL: func.func @hoist_arith_chain(%0: index, %1: index, %2: index, %3: index) -> index {
 // CHECK-NEXT:    %4 = "arith.constant"() <{value = 0 : index}> : () -> index
 // CHECK-NEXT:    %5 = d_affine.for %6 = #map(%0) to #map(%1) step 1 : i32 iter_args(%7 = %4 : index) {
-// CHECK-NEXT:      %8 = "arith.muli"(%6, %2) : (index, index) -> index
-// CHECK-NEXT:      %9 = "arith.addi"(%8, %3) : (index, index) -> index
+// CHECK-NEXT:      %8 = "arith.muli"(%6, %2) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:      %9 = "arith.addi"(%8, %3) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // CHECK-NEXT:      %10 = d_affine.for %11 = #map(%0) to #map(%1) step 1 : i32 iter_args(%12 = %7 : index) {
-// CHECK-NEXT:        %13 = "arith.addi"(%9, %11) : (index, index) -> index
-// CHECK-NEXT:        %14 = "arith.addi"(%12, %13) : (index, index) -> index
+// CHECK-NEXT:        %13 = "arith.addi"(%9, %11) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:        %14 = "arith.addi"(%12, %13) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // CHECK-NEXT:        d_affine.yield %14 : (index)
 // CHECK-NEXT:      }
 // CHECK-NEXT:      d_affine.yield %10 : (index)

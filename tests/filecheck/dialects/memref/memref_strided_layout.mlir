@@ -20,7 +20,7 @@ builtin.module {
 // CHECK-NEXT:    %2 = "arith.constant"() <{value = 256 : index}> : () -> index
 // CHECK-NEXT:    %3 = "arith.constant"() <{value = 1024 : index}> : () -> index
 // CHECK-NEXT:    %4 = "arith.constant"() <{value = 0 : index}> : () -> index
-// CHECK-NEXT:    %5 = "memref.alloc"(%2) <{alignment = 0, operandSegmentSizes = array<i32: 1, 0>}> : (index) -> memref<?xf32>
+// CHECK-NEXT:    %5 = "memref.alloc"(%2) <{operandSegmentSizes = array<i32: 1, 0>, alignment = 0}> : (index) -> memref<?xf32>
 // CHECK-NOT:     operandSegmentSizes = array<i32: 1, 1, 2, 2>
 // CHECK-NEXT:    %6 = memref.reinterpret_cast %5 to
 // CHECK-NEXT:      offset: [%4],

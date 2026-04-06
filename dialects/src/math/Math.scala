@@ -2,10 +2,10 @@ package scair.dialects.math
 
 import fastparse.*
 import scair.*
-import scair.clair.macros.*
-import scair.clair.macros.DerivedOperation
-import scair.clair.macros.DerivedOperationCompanion
-import scair.clair.macros.summonDialect
+import scair.clair.*
+import scair.clair.DerivedOperation
+import scair.clair.OpDefs
+import scair.clair.summonDialect
 import scair.dialects.arith.FastMathFlags
 import scair.dialects.arith.FastMathFlagsAttr
 import scair.dialects.builtin.*
@@ -47,11 +47,11 @@ given OperationCustomParser[AbsfOp]:
     )
 
 case class AbsfOp(
-    fastmath: FastMathFlagsAttr,
+    fastmath: FastMathFlagsAttr = FastMathFlagsAttr(FastMathFlags.none),
     operand: Operand[FloatType],
     result: Result[FloatType],
-) extends DerivedOperation["math.absf", AbsfOp]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["math.absf"]
+    with NoMemoryEffect derives OpDefs
 
 // ==--------== //
 //   FPowIOp   //
@@ -83,10 +83,10 @@ given OperationCustomParser[FPowIOp]:
 case class FPowIOp(
     lhs: Operand[FloatType],
     rhs: Operand[IntegerType],
-    fastmath: FastMathFlagsAttr,
+    fastmath: FastMathFlagsAttr = FastMathFlagsAttr(FastMathFlags.none),
     result: Result[FloatType],
-) extends DerivedOperation["math.fpowi", FPowIOp]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["math.fpowi"]
+    with NoMemoryEffect derives OpDefs
 
 /////////////
 // DIALECT //

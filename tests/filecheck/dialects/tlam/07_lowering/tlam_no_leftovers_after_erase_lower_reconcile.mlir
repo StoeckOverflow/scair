@@ -64,6 +64,6 @@ builtin.module {
 // LOWER:     %1 = "arith.constant"() <{value = 3}> : () -> i64
 // LOWER:     %2 = "func.call_indirect"(%0, %1) : ((i64) -> i64, i64) -> i64
 // LOWER:     "test.use"(%2) : (i64) -> ()
-// LOWER:     "scf.yield"() : () -> ()
+// LOWER:     scf.yield
 // LOWER:   }) : () -> ()
 // LOWER: }

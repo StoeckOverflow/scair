@@ -2,15 +2,14 @@ package scair.dialects.tlam_de_bruijn
 
 import scair.ir.*
 import scair.utils.*
-import scair.clair.macros.*
-import scair.clair.codegen.*
+import scair.clair.*
 
 /** tlam.vlambda — value-level lambda abstraction. */
 final case class VLambda(
     body: Region,
     res: Result[tlamFunType],
-) extends DerivedOperation["tlam_dbi.vlambda", VLambda]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["tlam_dbi.vlambda"]
+    derives OpDefs:
 
   override def verify(): OK[Operation] =
     val funTy = res.typ
@@ -32,16 +31,16 @@ final case class VLambda(
 
 final case class VReturn(
     value: Value[TypeAttribute]
-) extends DerivedOperation["tlam_dbi.vreturn", VReturn]
+) extends DerivedOperation["tlam_dbi.vreturn"]
     with NoMemoryEffect
-    with IsTerminator derives DerivedOperationCompanion
+    with IsTerminator derives OpDefs
 
 /** tlam.tlambda — type-level lambda abstraction (forall introduction). */
 final case class TLambda(
     body: Region,
     res: Result[tlamForAllType],
-) extends DerivedOperation["tlam_dbi.tlambda", TLambda]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["tlam_dbi.tlambda"]
+    derives OpDefs:
 
   override def verify(): OK[Operation] =
     body.blocks match
@@ -64,18 +63,18 @@ final case class TLambda(
 
 final case class TReturn(
     value: Value[TypeAttribute]
-) extends DerivedOperation["tlam_dbi.treturn", TReturn]
+) extends DerivedOperation["tlam_dbi.treturn"]
     with NoMemoryEffect
-    with IsTerminator derives DerivedOperationCompanion
+    with IsTerminator derives OpDefs
 
 /** tlam.tapply — type application (forall elimination). */
 final case class TApply(
     fun: Value[TypeAttribute],
     tyArg: Attribute,
     res: Result[TypeAttribute],
-) extends DerivedOperation["tlam_dbi.tapply", TApply]
+) extends DerivedOperation["tlam_dbi.tapply"]
     with NoMemoryEffect
-    derives DerivedOperationCompanion:
+    derives OpDefs:
 
   override def verify(): OK[Operation] =
     (fun.typ, tyArg) match
@@ -93,8 +92,8 @@ final case class VApply(
     fun: Value[TypeAttribute],
     arg: Value[TypeAttribute],
     res: Result[TypeAttribute],
-) extends DerivedOperation["tlam_dbi.vapply", VApply]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["tlam_dbi.vapply"]
+    derives OpDefs:
 
   override def verify(): OK[Operation] =
     fun.typ match

@@ -12,7 +12,6 @@ import scair.dialects.memref
 import scair.dialects.scf
 import scair.ir.*
 import scair.transformations.*
-import scair.transformations.patterns.*
 
 import scala.collection.mutable
 
@@ -35,7 +34,7 @@ private def identityMap(map: AffineMapAttr, rank: Int): Boolean =
   map.affineMap.affineExprs.size == rank &&
     map.affineMap.symbols.isEmpty &&
     map.affineMap.affineExprs.zipWithIndex.forall {
-      case (affine.AffineDimExpr(name), i) =>
+      case (AffineDimExpr(name), i) =>
         map.affineMap.dimensions.indexOf(name) == i
       case _ => false
     }

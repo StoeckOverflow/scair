@@ -1,7 +1,7 @@
 package scair.dialects.tlam
 
 import scair.ir.*
-import scair.clair.macros.*
+import scair.clair.*
 
 val TlamDialect = summonDialect[
   // Custom attributes

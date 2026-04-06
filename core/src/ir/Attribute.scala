@@ -81,7 +81,7 @@ class ValueAttribute(
   override val name = "value"
 
   override def printParameters(p: Printer) =
-    p.print("<", v, ">")(using indentLevel = 0) // <%x>
+    p.print("<", v, ">") // <%x>
 
   def getVal(): Value[Attribute] =
     return v
@@ -124,7 +124,7 @@ abstract class DataAttribute[D](
 ) extends Attribute:
 
   override def printParameters(p: Printer) =
-    p.print("<", data.toString, ">")(using indentLevel = 0)
+    p.print("<", data.toString, ">")
 
   override def equals(attr: Any): Boolean =
     attr match

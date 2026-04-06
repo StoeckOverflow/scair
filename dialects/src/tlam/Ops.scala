@@ -2,14 +2,13 @@ package scair.dialects.tlam
 
 import scair.ir.*
 import scair.utils.*
-import scair.clair.macros.*
-import scair.clair.codegen.*
+import scair.clair.*
 
 final case class VLambda(
     body: Region,
     res: Result[TlamFunType],
-) extends DerivedOperation["tlam.vlambda", VLambda]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["tlam.vlambda"]
+    derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     val funTy = res.typ
@@ -31,9 +30,9 @@ final case class VLambda(
 
 final case class VReturn(
     value: Value[TypeAttribute]
-) extends DerivedOperation["tlam.vreturn", VReturn]
+) extends DerivedOperation["tlam.vreturn"]
     with NoMemoryEffect
-    with IsTerminator derives DerivedOperationCompanion:
+    with IsTerminator derives OpDefs:
   override def customVerify(): OK[Operation] =
     def enclosingVLambda(op: Operation): Option[VLambda] =
       var curRegion = op.containerBlock.flatMap(_.containerRegion)
@@ -60,8 +59,8 @@ final case class VReturn(
 final case class TLambda(
     body: Region,
     res: Result[TlamForAllType],
-) extends DerivedOperation["tlam.tlambda", TLambda]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["tlam.tlambda"]
+    derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     def hasEnclosingTLambda(op: Operation): Boolean =
@@ -118,9 +117,9 @@ final case class TLambda(
 
 final case class TReturn(
     value: Value[TypeAttribute]
-) extends DerivedOperation["tlam.treturn", TReturn]
+) extends DerivedOperation["tlam.treturn"]
     with NoMemoryEffect
-    with IsTerminator derives DerivedOperationCompanion:
+    with IsTerminator derives OpDefs:
   override def customVerify(): OK[Operation] =
     def enclosingTLambda(op: Operation): Option[TLambda] =
       var curRegion = op.containerBlock.flatMap(_.containerRegion)
@@ -141,8 +140,8 @@ final case class TApply(
     fun: Value[TlamForAllType],
     tyArg: TypeAttribute,
     res: Result[TypeAttribute],
-) extends DerivedOperation["tlam.tapply", TApply]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["tlam.tapply"]
+    derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     val funAny: Value[Attribute] = fun
@@ -158,8 +157,8 @@ final case class VApply(
     fun: Value[TlamFunType],
     arg: Value[TypeAttribute],
     res: Result[TypeAttribute],
-) extends DerivedOperation["tlam.vapply", VApply]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["tlam.vapply"]
+    derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     val funAny: Value[Attribute] = fun

@@ -1,7 +1,6 @@
 package scair.passes.d_memref_bounds
 
 import scair.MLContext
-import scair.dialects.affine.*
 import scair.dialects.builtin.*
 import scair.dialects.d_affine
 import scair.dialects.d_memref

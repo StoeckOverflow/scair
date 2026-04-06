@@ -7,7 +7,6 @@ import scair.dialects.dTensor
 import scair.dialects.d_memref
 import scair.ir.*
 import scair.transformations.*
-import scair.transformations.patterns.*
 
 private def idxAttr(v: BigInt): IntegerAttr =
   IntegerAttr(IntData(v), IndexType())

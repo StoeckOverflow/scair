@@ -56,6 +56,6 @@ builtin.module {
 // LOWER:     %5 = "func.call_indirect"(%1, %4) : ((i32) -> i32, i32) -> i32
 // LOWER:     %6 = "func.call_indirect"(%0, %4) : ((i32) -> i32, i32) -> i32
 // LOWER:     "test.use2"(%5, %6) : (i32, i32) -> ()
-// LOWER:     "scf.yield"() : () -> ()
+// LOWER:     scf.yield
 // LOWER:   }) : () -> ()
 // LOWER: }

@@ -8,10 +8,10 @@ title: "Defining a Dialect"
 [NoMemoryEffect]: scair.ir.NoMemoryEffect
 [IsTerminator]: scair.ir.IsTerminator
 [IsolatedFromAbove]: scair.ir.IsolatedFromAbove
-[DerivedAttribute]: scair.clair.macros.DerivedAttribute
-[DerivedOperation]: scair.clair.macros.DerivedOperation
-[derives DerivedOperationCompanion]: scair.clair.macros.DerivedOperationCompanion
-[derives DerivedAttributeCompanion]: scair.clair.macros.DerivedAttributeCompanion
+[DerivedAttribute]: scair.clair.DerivedAttribute
+[DerivedOperation]: scair.clair.DerivedOperation
+[derives OpDefs]: scair.clair.DerivedOperationCompanion
+[derives AttrDefs]: scair.clair.AttrDefs
 
 # Defining a Dialect
 This tutorial explains how to define new attributes and operations in ScaIR and how to package these into a dialect.
@@ -48,9 +48,9 @@ In ScaIR, this distinction is expressed explicitly in Scala: type attributes ext
 
 ```scala sc:nocompile
 final case class MyType()
-  extends DerivedAttribute["mydialect.type", MyType]
+  extends DerivedAttribute["mydialect.type"]
   with TypeAttribute
-  derives DerivedAttributeCompanion
+  derives AttrDefs
 ```
 
 Type attributes are printed in the IR type position:
@@ -61,7 +61,7 @@ Type attributes are printed in the IR type position:
 
 [DerivedAttribute] is the typed base for attributes whose IR name and parameters are provided by a derived companion. 
 
-[derives DerivedAttributeCompanion] generates the glue code needed for printing/parsing and parameter handling.
+[derives AttrDefs] generates the glue code needed for printing/parsing and parameter handling.
 
 ### Data Attributes
 
@@ -140,8 +140,8 @@ In most cases, the companion is derived automatically using macros:
 
 ```scala sc:nocompile
 case class Add(...) 
-  extends DerivedOperation["mydialect.add", Add]
-  derives DerivedOperationCompanion
+  extends DerivedOperation["mydialect.add"]
+  derives OpDefs
 ```
 
 This derived companion plays the same role as MLIR’s TableGen-generated boilerplate, but without a separate code-generation step.
@@ -153,8 +153,8 @@ case class Add(
   lhs: Operand[IntegerType],
   rhs: Operand[IntegerType],
   res: Result[IntegerType]
-) extends DerivedOperation["mydialect.add", Add]
-  derives DerivedOperationCompanion
+) extends DerivedOperation["mydialect.add"]
+  derives OpDefs
 ```
 
 This defines an operation printed as:
@@ -172,8 +172,8 @@ case class MyIf(
   cond: Operand[IntegerType],
   thenRegion: Region,
   elseRegion: Region
-) extends DerivedOperation["mydialect.if", MyIf]
-  derives DerivedOperationCompanion
+) extends DerivedOperation["mydialect.if"]
+  derives OpDefs
 ```
 
 Regions are commonly used for control flow and loops.
@@ -193,9 +193,9 @@ Common examples:
 ```scala sc:nocompile
 case class PureOp(
   res: Result[IntegerType]
-) extends DerivedOperation["mydialect.pure", PureOp]
+) extends DerivedOperation["mydialect.pure"]
   with NoMemoryEffect
-  derives DerivedOperationCompanion
+  derives OpDefs
 ```
 
 Example trait Implementation:

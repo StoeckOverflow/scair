@@ -1,7 +1,7 @@
-package scair.clair.codegen
+package scair.clair.macros
 
 import scair.clair.macros.AssemblyFormatDirective
-import scair.core.constraints.ConstraintImpl
+import scair.constraints.ConstraintImpl
 
 import scala.quoted.*
 import scala.reflect.*
@@ -83,6 +83,7 @@ case class OpPropertyDef(
     override val variadicity: Variadicity.Single.type |
       Variadicity.Optional.type = Variadicity.Single,
     val constraint: Option[Expr[ConstraintImpl[?]]] = None,
+    val defaultValue: Option[Expr[Any]],
 ) extends OpInputDef
     with MayVariadicOpInputDef {}
 

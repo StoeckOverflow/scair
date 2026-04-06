@@ -1,21 +1,20 @@
 package scair.dialects.dTensor
 
 import scair.Printer
-import scair.clair.macros.*
+import scair.clair.*
 import scair.dialects.builtin.*
 import scair.ir.*
 import scair.utils.*
 
 final case class NatParam(
     res: Result[dTensorNatType]
-) extends DerivedOperation["dtensor.nat.param", NatParam]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["dtensor.nat.param"] derives OpDefs
 
 final case class NatConst(
     value: IntegerAttr,
     res: Result[dTensorNatType],
-) extends DerivedOperation["dtensor.nat.const", NatConst]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["dtensor.nat.const"]
+    with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if value.value.value >= 0 then OK(this)
@@ -25,38 +24,38 @@ final case class NatAdd(
     lhs: Operand[dTensorNatType],
     rhs: Operand[dTensorNatType],
     res: Result[dTensorNatType],
-) extends DerivedOperation["dtensor.nat.add", NatAdd]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["dtensor.nat.add"]
+    with NoMemoryEffect derives OpDefs
 
 final case class NatMul(
     lhs: Operand[dTensorNatType],
     rhs: Operand[dTensorNatType],
     res: Result[dTensorNatType],
-) extends DerivedOperation["dtensor.nat.mul", NatMul]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["dtensor.nat.mul"]
+    with NoMemoryEffect derives OpDefs
 
 final case class ShapeToIndex(
     nat: Operand[dTensorNatType],
     res: Result[IndexType],
-) extends DerivedOperation["dtensor.shape.to_index", ShapeToIndex]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["dtensor.shape.to_index"]
+    with NoMemoryEffect derives OpDefs
 
 final case class IndexToNat(
     index: Operand[IndexType],
     res: Result[dTensorNatType],
-) extends DerivedOperation["dtensor.index_to_nat", IndexToNat]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["dtensor.index_to_nat"]
+    with NoMemoryEffect derives OpDefs
 
 final case class Empty(
     res: Result[dTensorTensorType]
-) extends DerivedOperation["dtensor.empty", Empty]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["dtensor.empty"]
+    with NoMemoryEffect derives OpDefs
 
 final case class Fill(
     v: Operand[TypeAttribute],
     res: Result[dTensorTensorType],
-) extends DerivedOperation["dtensor.fill", Fill]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["dtensor.fill"]
+    with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if v.typ == res.typ.elem then OK(this)
@@ -69,8 +68,8 @@ final case class Dim(
     t: Operand[dTensorTensorType],
     axis: IntegerAttr,
     res: Result[ValueRefType],
-) extends DerivedOperation["dtensor.dim", Dim]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["dtensor.dim"]
+    with NoMemoryEffect derives OpDefs:
 
   def selectedDimValue: OK[Value[Attribute]] =
     val idx = axis.value.value
@@ -97,8 +96,8 @@ final case class Add(
     lhs: Operand[dTensorTensorType],
     rhs: Operand[dTensorTensorType],
     res: Result[dTensorTensorType],
-) extends DerivedOperation["dtensor.add", Add]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["dtensor.add"]
+    with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     dTensorTypeUtil
@@ -109,8 +108,8 @@ final case class Mul(
     lhs: Operand[dTensorTensorType],
     rhs: Operand[dTensorTensorType],
     res: Result[dTensorTensorType],
-) extends DerivedOperation["dtensor.mul", Mul]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["dtensor.mul"]
+    with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     dTensorTypeUtil
@@ -121,8 +120,8 @@ final case class Matmul(
     lhs: Operand[dTensorTensorType],
     rhs: Operand[dTensorTensorType],
     res: Result[dTensorTensorType],
-) extends DerivedOperation["dtensor.matmul", Matmul]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["dtensor.matmul"]
+    with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     dTensorTypeUtil.checkMatmul(lhs.typ, rhs.typ, res.typ).map(_ => this)
@@ -130,8 +129,8 @@ final case class Matmul(
 final case class Cast(
     src: Operand[dTensorTensorType],
     res: Result[dTensorTensorType],
-) extends DerivedOperation["dtensor.cast", Cast]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["dtensor.cast"]
+    with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if src.typ.elem != res.typ.elem then

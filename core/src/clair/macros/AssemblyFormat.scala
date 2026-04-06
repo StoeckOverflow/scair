@@ -5,7 +5,6 @@ import fastparse.SingleLineWhitespace.given
 import fastparse.internal.MacroInlineImpls.*
 import scair.*
 import scair.Printer
-import scair.clair.codegen.*
 import scair.ir.*
 import scair.parse.*
 
@@ -78,13 +77,6 @@ trait Directive:
       ctx: Expr[P[Any]]
   )(using quotes: Quotes): Expr[P[Any]]
 
-  // Did the directive parse something?
-  def parsed(p: Expr[?])(using Quotes): Expr[Boolean] =
-    import quotes.reflect.*
-    report.errorAndAbort(
-      s"Directive $this is not supposed to be used as an optional group's leading element, or is not implemented yet."
-    )
-
   def isPresent(op: Expr[?])(using Quotes): Expr[Boolean] =
     import quotes.reflect.*
     report.errorAndAbort(
@@ -106,7 +98,7 @@ case class LiteralDirective(
     else if lastWasPunctuation then !">)}],".contains(literal.head)
     else !"<>(){}[],".contains(literal.head)
 
-  def print(op: Expr[?], p: Expr[Printer])(using
+  override def print(op: Expr[?], p: Expr[Printer])(using
       state: PrintingState
   )(using Quotes): Expr[Unit] =
     val toPrint =
@@ -132,14 +124,14 @@ case class LiteralDirective(
   */
 case class AttrDictDirective() extends Directive:
 
-  def print(op: Expr[?], p: Expr[Printer])(using
+  override def print(op: Expr[?], p: Expr[Printer])(using
       state: PrintingState
   )(using Quotes): Expr[Unit] =
     state.lastWasPunctuation = false
     '{
       $p.printOptionalAttrDict(${
         selectMember[DictType[String, Attribute]](op, "attributes")
-      }.toMap)(using 0)
+      }.toMap)
     }
 
   def parse(p: Expr[Parser])(using
@@ -154,7 +146,7 @@ case class VariableDirective(
     construct: OpInputDef
 ) extends Directive:
 
-  def print(op: Expr[?], p: Expr[Printer])(using
+  override def print(op: Expr[?], p: Expr[Printer])(using
       state: PrintingState
   )(using Quotes): Expr[Unit] =
     val space = printSpace(p, state)
@@ -165,15 +157,13 @@ case class VariableDirective(
             '{ $p.print(${ selectMember[Operand[Attribute]](op, n) }) }
           case Variadicity.Variadic =>
             '{
-              $p.printList(${ selectMember[Seq[Operand[Attribute]]](op, n) })(
-                using 0
-              )
+              $p.printList(${ selectMember[Seq[Operand[Attribute]]](op, n) })
             }
           case Variadicity.Optional =>
             '{
               $p.printList(${
                 selectMember[Option[Operand[Attribute]]](op, n)
-              })(using 0)
+              })
             }
       case ResultDef(name = n, variadicity = v) =>
         v match
@@ -181,15 +171,11 @@ case class VariableDirective(
             '{ $p.print(${ selectMember[Result[Attribute]](op, n) }) }
           case Variadicity.Variadic =>
             '{
-              $p.printList(${ selectMember[Seq[Result[Attribute]]](op, n) })(
-                using 0
-              )
+              $p.printList(${ selectMember[Seq[Result[Attribute]]](op, n) })
             }
           case Variadicity.Optional =>
             '{
-              $p.printList(${ selectMember[Option[Result[Attribute]]](op, n) })(
-                using 0
-              )
+              $p.printList(${ selectMember[Option[Result[Attribute]]](op, n) })
             }
       case OpPropertyDef(name = n, variadicity = v) =>
         v match
@@ -202,9 +188,24 @@ case class VariableDirective(
               ${ selectMember[Option[Attribute]](op, n) }.foreach($p.print)
             }
 
+      case RegionDef(name = n, variadicity = v) =>
+        v match
+          case Variadicity.Single =>
+            '{ $p.print(${ selectMember[Region](op, n) }) }
+          case Variadicity.Optional =>
+            '{
+              ${ selectMember[Option[Region]](op, n) }.foreach($p.print)
+            }
+          case Variadicity.Variadic =>
+            '{
+              $p.printList(${ selectMember[Seq[Region]](op, n) })
+            }
+
     Expr.block(List(space), printVar)
 
-  def parse(p: Expr[Parser])(using ctx: Expr[P[Any]])(using quotes: Quotes) =
+  override def parse(p: Expr[Parser])(using
+      ctx: Expr[P[Any]]
+  )(using quotes: Quotes) =
     construct match
       case OperandDef(name = n, variadicity = v) =>
         v match
@@ -226,9 +227,30 @@ case class VariableDirective(
               given Parser = $p
               attributeP.?
             }
+      case RegionDef(name, variadicity) =>
+        variadicity match
+          case Variadicity.Single =>
+            '{
+              given P[?] = $ctx
+              given Parser = $p
+              regionP(Seq())(using $ctx)
+            }
+          case Variadicity.Optional =>
+            '{
+              given P[?] = $ctx
+              given Parser = $p
+              regionP(Seq()).?
+            }
+          case Variadicity.Variadic =>
+            '{
+              given P[?] = $ctx
+              given Parser = $p
+              regionP(Seq())(using $ctx).rep(sep = ",")
+            }
 
-  override def parsed(p: Expr[?])(using Quotes) =
+  override def isPresent(op: Expr[?])(using Quotes) =
     import quotes.reflect.*
+    val p = selectMember[Any](op, construct.name)
     construct match
       case MayVariadicOpInputDef(
             name = n,
@@ -246,17 +268,13 @@ case class VariableDirective(
               .name}`."
         )
 
-  override def isPresent(op: Expr[?])(using Quotes) =
-    construct match
-      case OpInputDef(name = n) => parsed(selectMember[Any](op, n))
-
 /** Directive for types of individual operands or results.
   */
 case class TypeDirective(
     construct: OperandDef | ResultDef
 ) extends Directive:
 
-  def print(op: Expr[?], p: Expr[Printer])(using
+  override def print(op: Expr[?], p: Expr[Printer])(using
       state: PrintingState
   )(using Quotes): Expr[Unit] =
 
@@ -270,9 +288,7 @@ case class TypeDirective(
             variadicity = Variadicity.Variadic,
           ) =>
         '{
-          $p.printList(${ selectMember[Seq[Value[?]]](op, n) }.map(_.typ))(using
-            0
-          )
+          $p.printList(${ selectMember[Seq[Value[?]]](op, n) }.map(_.typ))
         }
       case MayVariadicOpInputDef(
             name = n,
@@ -285,7 +301,9 @@ case class TypeDirective(
 
     Expr.block(List(space), printType)
 
-  def parse(p: Expr[Parser])(using ctx: Expr[P[Any]])(using quotes: Quotes) =
+  override def parse(p: Expr[Parser])(using
+      ctx: Expr[P[Any]]
+  )(using quotes: Quotes) =
     construct match
       case MayVariadicOpInputDef(name = n, variadicity = v) =>
         v match
@@ -300,10 +318,6 @@ case class TypeDirective(
               typeP.?
             }
 
-  // Ew; but works
-  override def parsed(p: Expr[?])(using Quotes): Expr[Boolean] =
-    VariableDirective(construct).parsed(p)
-
   override def isPresent(op: Expr[?])(using Quotes): Expr[Boolean] =
     VariableDirective(construct).isPresent(op)
 
@@ -317,21 +331,17 @@ case class OptionalGroupDirective(
   )(using ctx: Expr[P[Any]])(using quotes: Quotes): Expr[P[Tuple]] =
     '{
       given P[?] = $ctx
-      ${ directives.head.parse(p) }.flatMap(v =>
-        if ${ directives.head.parsed('v) } then
-          ${ AssemblyFormatDirective(directives.tail).parseTuple(p) }
-            .map(v *: _)
-        else
-          Pass(${
-            Expr
-              .ofTupleFromSeq(
-                AssemblyFormatDirective(directives).parsedDirectives.map(empty)
-              )
-          })
-      )
+      (&(${ directives.head.parse(p) }) ~~ ${
+        AssemblyFormatDirective(directives).parseTuple(p)
+      }) | Pass(${
+        Expr
+          .ofTupleFromSeq(
+            AssemblyFormatDirective(directives).parsedDirectives.map(empty)
+          )
+      })
     }
 
-  def print(op: Expr[?], p: Expr[Printer])(using
+  override def print(op: Expr[?], p: Expr[Printer])(using
       state: PrintingState
   )(using Quotes) =
     '{
@@ -530,6 +540,21 @@ case class AssemblyFormatDirective(
       )
     }
 
+    val regionsArg = Expr
+      .ofList(
+        parsedDirectives.zipWithIndex
+          .collect { case (VariableDirective(RegionDef(name = name)), i) =>
+            '{ $parsed(${ Expr(i) }) }.asExprOf[Any]
+          }
+      )
+    val flatRegionsArg = '{
+      $regionsArg.flatMap(op =>
+        op match
+          case op: Region      => Seq(op)
+          case op: Seq[Region] => op
+      )
+    }
+
     val attrDictIndex = parsedDirectives.zipWithIndex.find(_._1 match
       case _: AttrDictDirective => true
       case _                    => false) match
@@ -566,6 +591,7 @@ case class AssemblyFormatDirective(
         resultsTypes = $flatResultTypes,
         attributes = $attrDict,
         properties = $propertiesDict.asInstanceOf[Map[String, Attribute]],
+        regions = $flatRegionsArg,
       )(using $ctx)
     }
 

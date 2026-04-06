@@ -3,8 +3,7 @@ package scair.passes
 import scair.MLContext
 import scair.ir.*
 import scair.transformations.{InsertPoint, RewriteMethods}
-import scair.transformations.*
-import scair.transformations.patterns.*
+import scair.transformations.{GreedyRewritePatternApplier, ModulePass, PatternRewriteWalker, pattern}
 import scair.dialects.func.*
 import scair.dialects.builtin.*
 import scair.dialects.tlam_de_bruijn.*

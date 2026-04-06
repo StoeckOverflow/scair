@@ -1,4 +1,4 @@
-package scair.core.irdl_printer
+package scair.irdl
 
 import fastparse.Parsed
 import scair.MLContext
@@ -115,9 +115,9 @@ object IRDLPrinter:
     p.print("package scair.dialects.")
     p.println(dialectName)
     p.println()
-    p.println("import scair.dialects.builtin._")
-    p.println("import scair.ir._")
-    p.println("import scair.clair.macros._")
+    p.println("import scair.dialects.builtin.*")
+    p.println("import scair.ir.*")
+    p.println("import scair.clair.*")
     p.println()
     dialect.body.blocks.head.operations.foreach {
       case op: Operation   => printOperation(op)
@@ -185,10 +185,8 @@ object IRDLPrinter:
 
     p.print(") extends DerivedOperation[\"")
     p.print(name)
-    p.print("\", ")
-    p.print(className.capitalize)
-    p.println("]")
-    p.println("  derives DerivedOperationCompanion")
+    p.println("\"]")
+    p.println("  derives OpDefs")
     p.println()
 
   def printConstraint(tpe: Value[AttributeType])(using p: PrintWriter): Unit =
@@ -217,10 +215,8 @@ object IRDLPrinter:
 
     p.print(") extends DerivedAttribute[\"")
     p.print(name)
-    p.print("\", ")
-    p.print(className.capitalize)
-    p.println("] with TypeAttribute")
-    p.println("  derives DerivedAttributeCompanion")
+    p.println("\"] with TypeAttribute")
+    p.println("  derives AttrDefs")
     p.println()
 
   def printAttribute(
@@ -246,5 +242,5 @@ object IRDLPrinter:
     p.print("\", ")
     p.print(className.capitalize)
     p.println("]")
-    p.println("  derives DerivedAttributeCompanion")
+    p.println("  derives AttrDefs")
     p.println()

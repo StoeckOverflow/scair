@@ -2,11 +2,10 @@ package scair
 
 import org.scalatest.*
 import org.scalatest.flatspec.*
-import scair.clair.codegen.*
-import scair.clair.macros.*
+import scair.clair.*
 import scair.dialects.builtin.*
 import scair.ir.*
-import scair.core.constraints.{*, given}
+import scair.constraints.{*, given}
 import scair.utils.*
 
 val f32 = Float32Type()
@@ -17,15 +16,13 @@ case class MulFEq(
     lhs: Operand[FloatType !> EqAttr[f32.type]],
     rhs: Operand[FloatType !> EqAttr[f32.type]],
     result: Result[FloatType],
-) extends DerivedOperation["cmath.mul", MulFEq]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["cmath.mul"] derives OpDefs
 
 case class MulFVar(
     lhs: Operand[FloatType !> T],
     rhs: Operand[FloatType !> T],
     result: Result[FloatType],
-) extends DerivedOperation["cmath.mul", MulFVar]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["cmath.mul"] derives OpDefs
 
 class MacroConstraintsTest extends AnyFlatSpec with BeforeAndAfter:
 

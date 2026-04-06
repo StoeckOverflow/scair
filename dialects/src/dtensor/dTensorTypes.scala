@@ -2,7 +2,7 @@ package scair.dialects.dTensor
 
 import fastparse.*
 import scair.Printer
-import scair.clair.macros.*
+import scair.clair.*
 import scair.ir.*
 import scair.parse.*
 import scair.utils.*
@@ -13,8 +13,8 @@ sealed trait dTensorType extends ParametrizedAttribute, TypeAttribute
 
 final case class dTensorNatType()
     extends TypeAttribute
-    with DerivedAttribute["dtensor.nat", dTensorNatType]
-    derives DerivedAttributeCompanion
+    with DerivedAttribute["dtensor.nat"]
+    derives AttrDefs
 
 /** Surface-shape aliases:
   *   - vector is dTensor rank-1
@@ -85,7 +85,7 @@ final case class dTensorTensorType(
   override def printParameters(p: Printer): Unit =
     p.print("<[")
     p.printListF(params, p.print, sep = ", ")
-    p.print("], ", elem, ">")(using indentLevel = 0)
+    p.print("], ", elem, ">")
 
   override def customVerify(): OK[Unit] =
     params.foldLeft[OK[Unit]](OK(()))((acc, p) =>

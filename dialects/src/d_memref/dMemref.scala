@@ -2,7 +2,7 @@ package scair.dialects.d_memref
 
 import fastparse.*
 import scair.Printer
-import scair.clair.macros.*
+import scair.clair.*
 import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.dTensor.*
@@ -226,10 +226,10 @@ private def parseIndexOperands[$: P](names: Seq[String])(using
 
 final case class Alloc(
     res: Result[dMemrefMemrefType]
-) extends DerivedOperation["d_memref.alloc", Alloc]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["d_memref.alloc"]
+    derives OpDefs:
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " : () -> ", res.typ)
 
 given OperationCustomParser[Alloc]:
@@ -240,10 +240,10 @@ given OperationCustomParser[Alloc]:
 
 final case class Dealloc(
     memref: Operand[dMemrefMemrefType]
-) extends DerivedOperation["d_memref.dealloc", Dealloc]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["d_memref.dealloc"]
+    derives OpDefs:
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", memref, " : ", memref.typ)
 
 given OperationCustomParser[Dealloc]:
@@ -256,8 +256,8 @@ final case class Dim(
     memref: Operand[dMemrefMemrefType],
     axis: Operand[IndexType],
     res: Result[IndexType],
-) extends DerivedOperation["d_memref.dim", Dim]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["d_memref.dim"]
+    with NoMemoryEffect derives OpDefs:
 
   private def constantAxisValue: Option[BigInt] =
     axis.owner match
@@ -277,7 +277,7 @@ final case class Dim(
           )
         case _ => OK(this)
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(
       name,
       " ",
@@ -307,8 +307,8 @@ final case class DimExact(
     memref: Operand[dMemrefMemrefType],
     axis: IntegerAttr,
     res: Result[ValueRefType],
-) extends DerivedOperation["d_memref.dim_exact", DimExact]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["d_memref.dim_exact"]
+    with NoMemoryEffect derives OpDefs:
 
   private def selectedDimValue: OK[Value[Attribute]] =
     val idx = axis.value.value
@@ -330,7 +330,7 @@ final case class DimExact(
           )
       )
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(
       name,
       " ",
@@ -358,8 +358,8 @@ final case class Load(
     memref: Operand[dMemrefMemrefType],
     indices: Seq[Operand[IndexType]],
     res: Result[TypeAttribute],
-) extends DerivedOperation["d_memref.load", Load]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["d_memref.load"]
+    derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if indices.size != memref.typ.params.size then
@@ -372,7 +372,7 @@ final case class Load(
       )
     else OK(this)
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", memref, "[")
     printer.printList(indices)
     printer.print("] : ", memref.typ, " -> ", res.typ)
@@ -395,8 +395,8 @@ given OperationCustomParser[Load]:
 final case class ExtractStridedMetadata(
     source: Operand[dMemrefMemrefType],
     _results: Seq[Result[Attribute]],
-) extends DerivedOperation["d_memref.extract_strided_metadata", ExtractStridedMetadata]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["d_memref.extract_strided_metadata"]
+    derives OpDefs
 
 object ExtractStridedMetadata:
   def baseTypeOf(srcType: dMemrefMemrefType): dMemrefMemrefType =
@@ -412,8 +412,8 @@ final case class Store(
     value: Operand[TypeAttribute],
     memref: Operand[dMemrefMemrefType],
     indices: Seq[Operand[IndexType]],
-) extends DerivedOperation["d_memref.store", Store]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["d_memref.store"]
+    derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if indices.size != memref.typ.params.size then
@@ -426,7 +426,7 @@ final case class Store(
       )
     else OK(this)
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", value, ", ", memref, "[")
     printer.printList(indices)
     printer.print("] : ", value.typ, ", ", memref.typ)
@@ -447,8 +447,8 @@ given OperationCustomParser[Store]:
 final case class Cast(
     src: Operand[dMemrefMemrefType],
     res: Result[dMemrefMemrefType],
-) extends DerivedOperation["d_memref.cast", Cast]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["d_memref.cast"]
+    with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if src.typ.elem != res.typ.elem then
@@ -470,7 +470,7 @@ final case class Cast(
     then Err("d_memref.cast: expected identical layout metadata")
     else OK(this)
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", src, " : ", src.typ, " -> ", res.typ)
 
 given OperationCustomParser[Cast]:
@@ -489,8 +489,8 @@ final case class Subview(
     sizes: Seq[Operand[IndexType]],
     strides: Seq[Operand[IndexType]],
     res: Result[dMemrefMemrefType],
-) extends DerivedOperation["d_memref.subview", Subview]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["d_memref.subview"]
+    derives OpDefs:
 
   private def sameDimAsSizeOperand(
       dim: ValueAttribute,
@@ -537,7 +537,7 @@ final case class Subview(
         case None =>
           OK(this)
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", src, "[")
     printer.printList(offsets)
     printer.print("][")
@@ -569,8 +569,8 @@ given OperationCustomParser[Subview]:
 final case class ReinterpretCast(
     src: Operand[dMemrefMemrefType],
     res: Result[dMemrefMemrefType],
-) extends DerivedOperation["d_memref.reinterpret_cast", ReinterpretCast]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["d_memref.reinterpret_cast"]
+    derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if src.typ.elem != res.typ.elem then
@@ -584,9 +584,9 @@ final case class ReinterpretCast(
     else
       OK(this)
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", src, "\n")
-    printer.print(printer.indent * indentLevel, ": ", src.typ, " to ", res.typ)
+    printer.withIndent(printer.print(": ", src.typ, " to ", res.typ))
 
 given OperationCustomParser[ReinterpretCast]:
   def parse[$: P](resNames: Seq[String])(using Parser): P[ReinterpretCast] =

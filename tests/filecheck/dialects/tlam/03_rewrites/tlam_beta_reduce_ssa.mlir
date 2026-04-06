@@ -47,12 +47,12 @@ builtin.module {
 // CHECK:   %0 = "tlam.vlambda"() ({
 // CHECK:   ^bb0(%1: i32):
 // CHECK:     %2 = "arith.constant"() <{value = 1 : i32}> : () -> i32
-// CHECK:     %3 = "arith.addi"(%1, %2) : (i32, i32) -> i32
+// CHECK:     %3 = "arith.addi"(%1, %2) <{overflowFlags = #arith.overflow<none>}> : (i32, i32) -> i32
 // CHECK:     "tlam.vreturn"(%3) : (i32) -> ()
 // CHECK:   }) : () -> !tlam.fun<i32, i32>
 // CHECK:   %1 = "arith.constant"() <{value = 9 : i32}> : () -> i32
 // CHECK:   %2 = "arith.constant"() <{value = 1 : i32}> : () -> i32
-// CHECK:   %3 = "arith.addi"(%1, %2) : (i32, i32) -> i32
+// CHECK:   %3 = "arith.addi"(%1, %2) <{overflowFlags = #arith.overflow<none>}> : (i32, i32) -> i32
 // CHECK:   "test.use"(%3) : (i32) -> ()
 // CHECK: }
 
@@ -167,7 +167,7 @@ builtin.module {
 // CHECK: builtin.module {
 // CHECK:   %0 = "tlam.vlambda"() ({
 // CHECK:   ^bb0(%1: i32):
-// CHECK:     %2 = "arith.addi"(%1, %1) : (i32, i32) -> i32
+// CHECK:     %2 = "arith.addi"(%1, %1) <{overflowFlags = #arith.overflow<none>}> : (i32, i32) -> i32
 // CHECK:     "tlam.vreturn"(%2) : (i32) -> ()
 // CHECK:   }) : () -> !tlam.fun<i32, i32>
 // CHECK:   %1 = "test.effect_i32"() : () -> i32

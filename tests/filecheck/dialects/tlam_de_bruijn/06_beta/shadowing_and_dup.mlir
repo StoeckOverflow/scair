@@ -53,8 +53,8 @@ builtin.module {
 // CHECK:   "test.case.effect_arg_dup_2"() : () -> ()
 // CHECK:   %0 = "tlam_dbi.vlambda"() ({
 // CHECK:   ^bb0(%1: i32):
-// CHECK:     %2 = "arith.addi"(%1, %1) : (i32, i32) -> i32
-// CHECK:     %3 = "arith.addi"(%2, %1) : (i32, i32) -> i32
+// CHECK:     %2 = "arith.addi"(%1, %1) <{overflowFlags = #arith.overflow<none>}> : (i32, i32) -> i32
+// CHECK:     %3 = "arith.addi"(%2, %1) <{overflowFlags = #arith.overflow<none>}> : (i32, i32) -> i32
 // CHECK:     "tlam_dbi.vreturn"(%3) : (i32) -> ()
 // CHECK:   }) : () -> !tlam_dbi.fun<i32, i32>
 // CHECK:   %1 = "test.effect"() : () -> i32

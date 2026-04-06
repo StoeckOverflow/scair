@@ -26,10 +26,10 @@ builtin.module {
 // CHECK-NEXT:    %10 = "arith.constant"() <{value = 0 : index}> : () -> index
 // CHECK-NEXT:    %11 = d_memref.reinterpret_cast %7
 // CHECK-NEXT:    : !d_memref.memref<[%6], f32> to !d_memref.memref<[%4, %5], f32, offset: %10, strides: [%0, %1]>
-// CHECK-NEXT:    %12 = "arith.muli"(%2, %0) : (index, index) -> index
-// CHECK-NEXT:    %13 = "arith.muli"(%3, %1) : (index, index) -> index
-// CHECK-NEXT:    %14 = "arith.addi"(%10, %12) : (index, index) -> index
-// CHECK-NEXT:    %15 = "arith.addi"(%14, %13) : (index, index) -> index
+// CHECK-NEXT:    %12 = "arith.muli"(%2, %0) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:    %13 = "arith.muli"(%3, %1) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:    %14 = "arith.addi"(%10, %12) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:    %15 = "arith.addi"(%14, %13) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // CHECK-NEXT:    %16 = d_memref.load %7[%15] : !d_memref.memref<[%6], f32> -> f32
 // CHECK-NEXT:    func.return %16 : f32
 // CHECK-NEXT:  }

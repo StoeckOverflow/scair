@@ -21,7 +21,7 @@ builtin.module {
 // VERIFY:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
 // VERIFY:   "scf.execute_region"() ({
 // VERIFY:     "test.use"() {dep = !tlam.forall<!value<%1>>} : () -> ()
-// VERIFY:     "scf.yield"() : () -> ()
+// VERIFY:     scf.yield
 // VERIFY:   }) : () -> ()
 // VERIFY: }
 
@@ -30,7 +30,7 @@ builtin.module {
 // PIPE:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
 // PIPE:   "scf.execute_region"() ({
 // PIPE:     "test.use"() {dep = !tlam.forall<!value<%1>>} : () -> ()
-// PIPE:     "scf.yield"() : () -> ()
+// PIPE:     scf.yield
 // PIPE:   }) : () -> ()
 // PIPE: }
 

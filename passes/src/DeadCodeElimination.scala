@@ -4,7 +4,6 @@ import scair.MLContext
 import scair.dialects.dTensor.NatParam
 import scair.ir.*
 import scair.transformations.*
-import scair.transformations.patterns.*
 
 // Minimal MLIR-like DCE: erase pure ops whose results are unused, including
 // type-embedded uses tracked through Value.typeUses.

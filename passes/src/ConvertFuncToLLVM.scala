@@ -4,8 +4,7 @@ import scair.MLContext
 import scair.dialects.func
 import scair.dialects.llvm
 import scair.ir.*
-import scair.transformations.*
-import scair.transformations.patterns.*
+import scair.transformations.{GreedyRewritePatternApplier, PatternRewriteWalker, WalkerPass, pattern}
 
 import scala.collection.mutable
 

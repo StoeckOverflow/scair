@@ -4,8 +4,7 @@ import scair.MLContext
 import scair.dialects.builtin.*
 import scair.dialects.dTensor.*
 import scair.ir.*
-import scair.transformations.*
-import scair.transformations.patterns.*
+import scair.transformations.{GreedyRewritePatternApplier, PatternRewriteWalker, WalkerPass, PatternAction, pattern}
 
 private def constValue(
     v: Value[dTensorNatType]

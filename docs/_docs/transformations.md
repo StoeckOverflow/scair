@@ -3,8 +3,8 @@ title: "Transformations and Pass"
 ---
 
 [NoMemoryEffect]: scair.ir.NoMemoryEffect
-[pattern]: scair.transformations.patterns.pattern
-[Owner]: scair.transformations.patterns.Owner
+[pattern]: scair.transformations.pattern
+[Owner]: scair.transformations.Owner
 [AddI]: scair.dialects.arith.AddI
 [Constant]: scair.dialects.arith.Constant
 [IntegerAttr]: scair.dialects.builtin.IntegerAttr
@@ -79,17 +79,17 @@ import scair.dialects.builtin.*
 case class Constant(
     val value: Attribute,
     val result: Result[Attribute]
-) extends DerivedOperation["arith.constant", Constant]
+) extends DerivedOperation["arith.constant"]
   with NoMemoryEffect
-  derives DerivedOperationCompanion
+  derives OpDefs
 
 case class AddI(
     val lhs: Operand[IntegerType],
     val rhs: Operand[IntegerType],
     val result: Result[IntegerType]
-) extends DerivedOperation["arith.addi", AddI]
+) extends DerivedOperation["arith.addi"]
 	with NoMemoryEffect
-  derives DerivedOperationCompanion
+  derives OpDefs
 ```
 
 
@@ -111,16 +111,15 @@ Now, we can use ScaIR's **[pattern]** API to define a transformation via simple 
 	
 ```scala sc-name:addi-fold
 //{
-import scair.transformations.patterns.*
+import scair.transformations.*
 import scair.dialects.arith.*
 import scair.dialects.builtin.		*
 import scair.ir.*
 //}
 val AddIFold = pattern {
 	case AddI(
-		Owner(Constant(c0: IntegerAttr, _)),
-		Owner(Constant(c1: IntegerAttr, _)),
-		_
+		lhs = Owner(Constant(c0: IntegerAttr, _)),
+		rhs = Owner(Constant(c1: IntegerAttr, _)),
 	) =>
 		Constant(c0 + c1, Result(c0.typ))
 }
@@ -134,7 +133,7 @@ Next, let's define our dead code elimination. And here is where our trait **[NoM
 If an Operation has no effects on memory, then we can safely erase it after making sure that none of its results are used anywhere in the IR: 
 ```scala sc-name:dce
 //{
-import scair.transformations.patterns.*
+import scair.transformations.*
 import scair.ir.*
 //}
 val DeadCodeElimination = pattern {
@@ -184,7 +183,7 @@ However, we can still write a pattern over it ( :D ), like so:
 //{
 import scair.dialects.builtin.*
 import scair.dialects.arith.*
-import scair.transformations.patterns.*
+import scair.transformations.*
 import scair.ir.*
 //}
 val ten = IntegerAttr(IntData(10), IntegerType(IntData(32), Signless)) // 10 : i32

@@ -1,6 +1,5 @@
 package scair.passes.control_flow_helpers
 
-import scair.dialects.affine.*
 import scair.dialects.builtin.*
 import scair.dialects.llvm
 import scair.ir.*

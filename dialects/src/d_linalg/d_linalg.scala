@@ -1,6 +1,6 @@
 package scair.dialects.d_linalg
 
-import scair.clair.macros.*
+import scair.clair.*
 import scair.dialects.dTensor.*
 import scair.dialects.d_memref
 import scair.dialects.d_memref.dMemrefTypeUtil
@@ -68,8 +68,8 @@ final case class Fill(
     value: Operand[TypeAttribute],
     out: Operand[Attribute],
     res: Seq[Result[Attribute]],
-) extends DerivedOperation["d_linalg.fill", Fill]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["d_linalg.fill"]
+    derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if !isSupportedContainerType(out.typ) then
@@ -97,8 +97,8 @@ final case class Matmul(
     rhs: Operand[Attribute],
     out: Operand[Attribute],
     res: Seq[Result[Attribute]],
-) extends DerivedOperation["d_linalg.matmul", Matmul]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["d_linalg.matmul"]
+    derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if !isSupportedContainerType(lhs.typ) || !isSupportedContainerType(rhs.typ) || !isSupportedContainerType(
@@ -129,9 +129,9 @@ final case class Matmul(
 
 final case class Yield(
     args: Seq[Operand[Attribute]]
-) extends DerivedOperation["d_linalg.yield", Yield]
+) extends DerivedOperation["d_linalg.yield"]
     with IsTerminator
-    with NoMemoryEffect derives DerivedOperationCompanion
+    with NoMemoryEffect derives OpDefs
 
 val dLinalgDialect = summonDialect[
   EmptyTuple,

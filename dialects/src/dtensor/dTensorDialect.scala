@@ -1,6 +1,6 @@
 package scair.dialects.dTensor
 
-import scair.clair.macros.*
+import scair.clair.*
 import scair.ir.*
 
 val dTensorDialect = summonDialect[

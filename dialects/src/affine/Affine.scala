@@ -1,7 +1,6 @@
 package scair.dialects.affine
 
-import scair.clair.codegen.*
-import scair.clair.macros.*
+import scair.clair.*
 import scair.dialects.builtin.*
 import scair.ir.*
 
@@ -27,8 +26,8 @@ case class Apply(
     mapOperands: Seq[Operand[IndexType]],
     res: Result[IndexType],
     map: AffineMapAttr,
-) extends DerivedOperation["affine.apply", Apply]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["affine.apply"]
+    with NoMemoryEffect derives OpDefs
 
 /*≡==---=≡≡≡≡=---=≡≡*\
 ||      FOR OP      ||
@@ -43,7 +42,7 @@ case class For(
     upperBoundMap: AffineMapAttr,
     step: IntegerAttr,
     body: Region,
-) extends DerivedOperation["affine.for", For] derives DerivedOperationCompanion
+) extends DerivedOperation["affine.for"] derives OpDefs
 
 /*≡==---==≡≡≡≡≡==---=≡≡*\
 ||     PARALLEL OP     ||
@@ -59,8 +58,7 @@ case class Parallel(
     upperBoundsGroups: DenseIntOrFPElementsAttr,
     res: Seq[Result[Attribute]],
     body: Region,
-) extends DerivedOperation["affine.parallel", Parallel]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["affine.parallel"] derives OpDefs
 
 /*≡==--=≡≡≡=--=≡≡*\
 ||     IF OP     ||
@@ -72,7 +70,7 @@ case class If(
     condition: AffineSetAttr,
     thenRegion: Region,
     elseRegion: Region,
-) extends DerivedOperation["affine.if", If] derives DerivedOperationCompanion
+) extends DerivedOperation["affine.if"] derives OpDefs
 
 /*≡==--=≡≡≡≡=--=≡≡*\
 ||    STORE OP    ||
@@ -83,8 +81,7 @@ case class Store(
     memref: Operand[MemrefType],
     indices: Seq[Operand[IndexType]],
     map: AffineMapAttr,
-) extends DerivedOperation["affine.store", Store]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["affine.store"] derives OpDefs
 
 /*≡==---=≡≡≡=---=≡≡*\
 ||     LOAD OP     ||
@@ -95,8 +92,7 @@ case class Load(
     indices: Seq[Operand[IndexType]],
     result: Result[Attribute],
     map: AffineMapAttr,
-) extends DerivedOperation["affine.load", Load]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["affine.load"] derives OpDefs
 
 /*≡==--=≡≡≡≡=--=≡≡*\
 ||     MIN OP     ||
@@ -106,8 +102,8 @@ case class Min(
     arguments: Seq[Operand[IndexType]],
     result: Result[IndexType],
     map: AffineMapAttr,
-) extends DerivedOperation["affine.min", Min]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["affine.min"]
+    with NoMemoryEffect derives OpDefs
 
 /*≡==--=≡≡≡≡=--=≡≡*\
 ||    YIELD OP    ||
@@ -115,9 +111,10 @@ case class Min(
 
 case class Yield(
     arguments: Seq[Operand[Attribute]]
-) extends DerivedOperation["affine.yield", Yield]
+) extends DerivedOperation["affine.yield"]
     with IsTerminator
-    with NoMemoryEffect derives DerivedOperationCompanion
+    with AssemblyFormat["attr-dict ($arguments^ `:` type($arguments))?"]
+    with NoMemoryEffect derives OpDefs
 
 val AffineDialect = summonDialect[
   EmptyTuple,

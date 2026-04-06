@@ -3,10 +3,9 @@ package scair.clair.macros
 import fastparse.*
 import scair.*
 import scair.Printer
-import scair.clair.codegen.*
-import scair.clair.mirrored.*
+import scair.clair.*
 import scair.dialects.builtin.*
-import scair.enums.macros.*
+import scair.enums.*
 import scair.ir.*
 import scair.parse.*
 import scair.transformations.CanonicalizationPatterns
@@ -210,16 +209,13 @@ def customPrintMacro(
     opDef: OperationDef,
     adtOpExpr: Expr[?],
     p: Expr[Printer],
-    indentLevel: Expr[Int],
 )(using Quotes): Expr[Unit] =
   opDef.assemblyFormat match
     case Some(format) =>
       format.print(adtOpExpr, p)
     case None =>
       '{
-        $p.printGenericMLIROperation(${ adtOpExpr }.asInstanceOf[Operation])(
-          using $indentLevel
-        )
+        $p.printGenericMLIROperation(${ adtOpExpr }.asInstanceOf[Operation])
       }
 
 def parseMacro[O <: Operation: Type](
@@ -251,13 +247,13 @@ def verifyMacro(
     .collect(_ match
       case OperandDef(name, _, _, Some(constraint)) =>
         val mem = selectMember[Operand[Attribute]](adtOpExpr, name)
-        '{ (ctx: scair.core.constraints.ConstraintContext) =>
+        '{ (ctx: scair.constraints.ConstraintContext) =>
           $constraint.verify($mem.typ)(using ctx)
         })
 
   '{
-    given ctx: scair.core.constraints.ConstraintContext =
-      scair.core.constraints.ConstraintContext()
+    given ctx: scair.constraints.ConstraintContext =
+      scair.constraints.ConstraintContext()
     ${
       val chain = a.foldLeft[Expr[OK[Unit]]](
         '{ OK() }
@@ -277,17 +273,23 @@ def verifyMacro(
 def generateCheckedPropertyArgument[A <: Attribute: Type](
     list: Expr[Map[String, Attribute]],
     propName: String,
+    defaultValue: Option[Expr[Any]],
 )(using Quotes): Expr[A] =
   val typeName = Type.of[A].toString()
-  '{
-    val value: Option[Attribute] = $list.get(${ Expr(propName) })
-    value match
-      case None =>
+  val ifAbsent = defaultValue match
+    case Some(default) => default.asExprOf[A]
+    case None          =>
+      '{
         throw new IllegalArgumentException(
           s"Missing required property \"${${ Expr(propName) }}\" of type ${${
               Expr(typeName)
             }}"
         )
+      }
+  '{
+    val value: Option[Attribute] = $list.get(${ Expr(propName) })
+    value match
+      case None          => $ifAbsent
       case Some(prop: A) => prop
       case Some(_)       =>
         throw new IllegalArgumentException(
@@ -332,7 +334,7 @@ type DefinedInput[T <: OpInputDef] = DefinedInputOf[T, Attribute]
   * given a construct definition type.
   */
 def getConstructSeq[Def <: OpInputDef: Type as d](
-    op: Expr[DerivedOperationCompanion[?]#UnstructuredOp]
+    op: Expr[OpDefs[?]#UnstructuredOp]
 )(using Quotes) =
   (d match
     case '[ResultDef]     => '{ ${ op }.results }
@@ -356,11 +358,11 @@ def getConstructName[Def <: OpInputDef: Type as d](using Quotes) =
   */
 def getConstructConstraint(_def: OpInputDef)(using Quotes) =
   _def match
-    case OperandDef(name, tpe, variadicity, _) => tpe
-    case ResultDef(name, tpe, variadicity, _)  => tpe
-    case RegionDef(name, variadicity)          => Type.of[Attribute]
-    case SuccessorDef(name, variadicity)       => Type.of[Attribute]
-    case OpPropertyDef(name, tpe, _, _)        => tpe
+    case OperandDef(tpe = tpe)    => tpe
+    case ResultDef(tpe = tpe)     => tpe
+    case _: RegionDef             => Type.of[Attribute]
+    case _: SuccessorDef          => Type.of[Attribute]
+    case OpPropertyDef(tpe = tpe) => tpe
 
 /** Helper to get the variadicity of a construct definition's construct.
   */
@@ -691,45 +693,47 @@ def tryConstruct[T: Type](
         successors,
         properties,
       ) zip opDef.successors).map((e, d) => NamedArg(d.name, e.asTerm)) ++
-      opDef.properties.map { case OpPropertyDef(name, tpe, variadicity, _) =>
-        val namedArg = tpe match
-          case '[type t <: scala.reflect.Enum; `t`] =>
-            val property = variadicity match
-              case Variadicity.Optional =>
-                enumFromPropertyOption[t](
-                  properties,
-                  name,
-                )
-              case Variadicity.Single =>
-                enumFromProperty[t](
-                  properties,
-                  name,
-                )
-              case Variadicity.Variadic =>
-                report
-                  .errorAndAbort(
-                    s"Properties cannot be variadic in an ADT."
+      opDef.properties.map {
+        case OpPropertyDef(name, tpe, variadicity, _, defaultValue) =>
+          val namedArg = tpe match
+            case '[type t <: scala.reflect.Enum; `t`] =>
+              val property = variadicity match
+                case Variadicity.Optional =>
+                  enumFromPropertyOption[t](
+                    properties,
+                    name,
                   )
-            NamedArg(name, property.asTerm)
-          case '[type t <: Attribute; `t`] =>
-            val property = variadicity match
-              case Variadicity.Optional =>
-                generateOptionalCheckedPropertyArgument[t](
-                  properties,
-                  name,
-                )
-              case Variadicity.Single =>
-                generateCheckedPropertyArgument[t](
-                  properties,
-                  name,
-                )
-              case Variadicity.Variadic =>
-                report
-                  .errorAndAbort(
-                    s"Properties cannot be variadic in an ADT."
+                case Variadicity.Single =>
+                  enumFromProperty[t](
+                    properties,
+                    name,
                   )
-            NamedArg(name, property.asTerm)
-        namedArg
+                case Variadicity.Variadic =>
+                  report
+                    .errorAndAbort(
+                      s"Properties cannot be variadic in an ADT."
+                    )
+              NamedArg(name, property.asTerm)
+            case '[type t <: Attribute; `t`] =>
+              val property = variadicity match
+                case Variadicity.Optional =>
+                  generateOptionalCheckedPropertyArgument[t](
+                    properties,
+                    name,
+                  )
+                case Variadicity.Single =>
+                  generateCheckedPropertyArgument[t](
+                    properties,
+                    name,
+                    defaultValue,
+                  )
+                case Variadicity.Variadic =>
+                  report
+                    .errorAndAbort(
+                      s"Properties cannot be variadic in an ADT."
+                    )
+              NamedArg(name, property.asTerm)
+          namedArg
       }
   // Return a call to the primary constructor of the ADT.
   Apply(
@@ -754,7 +758,7 @@ def tryConstruct[T: Type](
 
 def fromUnstructuredOperationMacro[T <: Operation: Type](
     opDef: OperationDef,
-    genExpr: Expr[DerivedOperationCompanion[T]#UnstructuredOp],
+    genExpr: Expr[OpDefs[T]#UnstructuredOp],
 )(using Quotes): Expr[T] =
 
   // Create named arguments for all of the ADT's constructor arguments.
@@ -838,14 +842,14 @@ def parametersMacro(
 )(using Quotes): Expr[Seq[Attribute]] =
   ADTFlatAttrInputMacro(attrDef.attributes, adtAttrExpr)
 
-def derivedAttributeCompanion[T <: Attribute: Type](using
+def deriveAttrDefs[T <: Attribute: Type](using
     Quotes
-): Expr[DerivedAttributeCompanion[T]] =
+): Expr[AttrDefs[T]] =
 
   val attrDef = getAttrDefImpl[T]
 
   '{
-    new DerivedAttributeCompanion[T]:
+    new AttrDefs[T]:
       override def name: String = ${ Expr(attrDef.name) }
       override def parse[$: P as ctx](using p: Parser): P[T] = ${
         getAttrCustomParse[T]('{ p }, '{ ctx })
@@ -863,9 +867,9 @@ def derivedAttributeCompanion[T <: Attribute: Type](using
       }
   }
 
-def deriveOperationCompanion[T <: Operation: Type](using
+def deriveOpDefs[T <: Operation: Type](using
     Quotes
-): Expr[DerivedOperationCompanion[T]] =
+): Expr[OpDefs[T]] =
   val opDef = getDefImpl[T]
 
   val summonedPatterns = Expr.summon[CanonicalizationPatterns[T]] match
@@ -875,7 +879,7 @@ def deriveOperationCompanion[T <: Operation: Type](using
 
   '{
 
-    new DerivedOperationCompanion[T]:
+    new OpDefs[T]:
 
       override def canonicalizationPatterns: Seq[RewritePattern] =
         $summonedPatterns
@@ -893,8 +897,8 @@ def deriveOperationCompanion[T <: Operation: Type](using
 
       def name: String = ${ Expr(opDef.name) }
 
-      def customPrint(adtOp: T, p: Printer)(using indentLevel: Int): Unit =
-        ${ customPrintMacro(opDef, '{ adtOp }, '{ p }, '{ indentLevel }) }
+      def customPrint(adtOp: T, p: Printer): Unit =
+        ${ customPrintMacro(opDef, '{ adtOp }, '{ p }) }
 
       def constraintVerify(adtOp: T): OK[Operation] =
         ${
@@ -956,7 +960,7 @@ def deriveOperationCompanion[T <: Operation: Type](using
         ${
           fromUnstructuredOperationMacro[T](opDef, '{ unstrucOp })
         } match
-          case adt: DerivedOperation[?, T] =>
+          case adt: DerivedOperation[?] =>
             adt.attributes.addAll(unstrucOp.attributes)
             adt
           case _ =>

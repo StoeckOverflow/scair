@@ -1,13 +1,12 @@
 package scair.dialects.memref
 
+import scair.clair.*
 import fastparse.*
 import scair.Printer
-import scair.clair.codegen.*
-import scair.clair.macros.*
 import scair.dialects.builtin.*
 import scair.ir.*
-import scair.parse.*
-import scair.parse.given
+import scair.parse.{Parser, operandNameP, operandP, resultP, typeOfP}
+import scair.parse.whitespace
 
 private def parseIndexOperands[$: P](names: Seq[String])(using
     p: Parser
@@ -29,36 +28,32 @@ case class Alloc(
     dynamicSizes: Seq[Operand[IndexType]],
     symbolOperands: Seq[Operand[IndexType]],
     memref: Result[MemrefType],
-    alignment: IntegerAttr,
-) extends DerivedOperation["memref.alloc", Alloc]
-    derives DerivedOperationCompanion
+    alignment: Option[IntegerAttr] = None,
+) extends DerivedOperation["memref.alloc"] derives OpDefs
 
 case class Dealloc(
     memref: Operand[MemrefType]
-) extends DerivedOperation["memref.dealloc", Dealloc]
-    with AssemblyFormat["$memref attr-dict `:` type($memref)"]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["memref.dealloc"]
+    with AssemblyFormat["$memref attr-dict `:` type($memref)"] derives OpDefs
 
 case class Dim(
     memref: Operand[MemrefType],
     index: Operand[IndexType],
     result: Result[IndexType],
-) extends DerivedOperation["memref.dim", Dim]
-    with NoMemoryEffect derives DerivedOperationCompanion
+) extends DerivedOperation["memref.dim"]
+    with NoMemoryEffect derives OpDefs
 
 case class Load(
     memref: Operand[MemrefType],
     indices: Seq[Operand[IndexType]],
     result: Result[Attribute],
-) extends DerivedOperation["memref.load", Load]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["memref.load"] derives OpDefs
 
 case class Store(
     value: Operand[Attribute],
     memref: Operand[MemrefType],
     indices: Seq[Operand[IndexType]],
-) extends DerivedOperation["memref.store", Store]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["memref.store"] derives OpDefs
 
 case class ReinterpretCast(
     src: Operand[MemrefType],
@@ -66,19 +61,18 @@ case class ReinterpretCast(
     sizes: Seq[Operand[IndexType]],
     strides: Seq[Operand[IndexType]],
     res: Result[MemrefType],
-) extends DerivedOperation["memref.reinterpret_cast", ReinterpretCast]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["memref.reinterpret_cast"] derives OpDefs:
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", src, " to\n")
-    printer.print(printer.indent * (indentLevel + 1), "offset: [", offset, "],\n")
-    printer.print(printer.indent * (indentLevel + 1), "sizes: [")
+    printer.indented(printer.print("offset: [", offset, "],\n"))
+    printer.indented(printer.print("sizes: ["))
     printer.printList(sizes)
     printer.print("],\n")
-    printer.print(printer.indent * (indentLevel + 1), "strides: [")
+    printer.indented(printer.print("strides: ["))
     printer.printList(strides)
     printer.print("]\n")
-    printer.print(printer.indent * indentLevel, ": ", src.typ, " to ", res.typ)
+    printer.withIndent(printer.print(": ", src.typ, " to ", res.typ))
 
 given OperationCustomParser[ReinterpretCast]:
   def parse[$: P](resNames: Seq[String])(using Parser): P[ReinterpretCast] =
@@ -104,8 +98,7 @@ given OperationCustomParser[ReinterpretCast]:
 case class ExtractStridedMetadata(
     source: Operand[MemrefType],
     _results: Seq[Result[Attribute]],
-) extends DerivedOperation["memref.extract_strided_metadata", ExtractStridedMetadata]
-    derives DerivedOperationCompanion
+) extends DerivedOperation["memref.extract_strided_metadata"] derives OpDefs
 
 object ExtractStridedMetadata:
   def baseTypeOf(srcType: MemrefType): RankedMemrefType =
@@ -125,7 +118,7 @@ object ExtractStridedMetadata:
     ExtractStridedMetadata(source, resultTypesOf(source.typ).map(Result(_)))
 
 val MemrefDialect =
-  summonDialect[
+  scair.clair.summonDialect[
     EmptyTuple,
     (
         Alloc,

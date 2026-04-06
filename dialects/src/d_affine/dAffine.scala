@@ -2,7 +2,7 @@ package scair.dialects.d_affine
 
 import fastparse.*
 import scair.Printer
-import scair.clair.macros.*
+import scair.clair.*
 import scair.dialects.builtin.*
 import scair.dialects.d_memref
 import scair.ir.*
@@ -14,8 +14,8 @@ final case class Apply(
     symbolOperands: Seq[Operand[IndexType]],
     map: AffineMapAttr,
     res: Result[IndexType],
-) extends DerivedOperation["d_affine.apply", Apply]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["d_affine.apply"]
+    with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if res.typ != IndexType() then
@@ -34,7 +34,7 @@ final case class Apply(
       )
     else OK(this)
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", map, " (")
     printer.printList(dimOperands)
     printer.print(")[")
@@ -98,8 +98,8 @@ final case class For(
     upperBoundMap: AffineMapAttr,
     step: IntegerAttr,
     body: Region,
-) extends DerivedOperation["d_affine.for", For]
-    with NoTerminator derives DerivedOperationCompanion:
+) extends DerivedOperation["d_affine.for"]
+    with NoTerminator derives OpDefs:
 
   private def expectedArity(map: AffineMapAttr): Int =
     map.affineMap.dimensions.size + map.affineMap.symbols.size
@@ -203,7 +203,7 @@ final case class For(
       verifyTerminatorContract().map(_ => this)
     )
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     val block = body.blocks.head
     val iv = block.arguments.head
     printer.print(name, " ", iv, " = ", lowerBoundMap, "(")
@@ -220,8 +220,8 @@ final case class For(
       )
       printer.print(")")
     printer.print(" {\n")
-    for op <- block.operations do printer.print(op)(using indentLevel + 1)
-    printer.print(printer.indent * indentLevel, "}")
+    printer.indented(block.operations.foreach(printer.print))
+    printer.withIndent(printer.print("}"))
 
 given OperationCustomParser[For]:
   def parse[$: P](resNames: Seq[String])(using p: Parser): P[For] =
@@ -288,9 +288,9 @@ given OperationCustomParser[For]:
 final case class Yield(
     args: Seq[Operand[Attribute]]
 )
-    extends DerivedOperation["d_affine.yield", Yield]
+    extends DerivedOperation["d_affine.yield"]
     with IsTerminator
-    with NoMemoryEffect derives DerivedOperationCompanion:
+    with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     containerBlock.flatMap(_.containerRegion).flatMap(_.containerOperation) match
@@ -315,7 +315,7 @@ final case class Yield(
       case None         =>
         Err("d_affine.yield: expected to be nested in d_affine.for body")
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     if args.isEmpty then
       printer.print(name)
     else
@@ -351,8 +351,8 @@ final case class Min(
     symbolOperands: Seq[Operand[IndexType]],
     map: AffineMapAttr,
     res: Result[IndexType],
-) extends DerivedOperation["d_affine.min", Min]
-    with NoMemoryEffect derives DerivedOperationCompanion:
+) extends DerivedOperation["d_affine.min"]
+    with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if res.typ != IndexType() then
@@ -371,7 +371,7 @@ final case class Min(
       )
     else OK(this)
 
-  override def customPrint(printer: Printer)(using indentLevel: Int): Unit =
+  override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", map, " (")
     printer.printList(dimOperands)
     printer.print(")[")
@@ -430,8 +430,8 @@ final case class Load(
     mapOperands: Seq[Operand[IndexType]],
     map: AffineMapAttr,
     result: Result[TypeAttribute],
-) extends DerivedOperation["d_affine.load", Load]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["d_affine.load"]
+    derives OpDefs:
 
   private def expectedMapArity: Int =
     map.affineMap.dimensions.size + map.affineMap.symbols.size
@@ -456,8 +456,8 @@ final case class Store(
     memref: Operand[d_memref.dMemrefMemrefType],
     mapOperands: Seq[Operand[IndexType]],
     map: AffineMapAttr,
-) extends DerivedOperation["d_affine.store", Store]
-    derives DerivedOperationCompanion:
+) extends DerivedOperation["d_affine.store"]
+    derives OpDefs:
 
   private def expectedMapArity: Int =
     map.affineMap.dimensions.size + map.affineMap.symbols.size
@@ -483,8 +483,8 @@ final case class If(
     thenRegion: Region,
     elseRegion: Region,
     res: Seq[Result[Attribute]],
-) extends DerivedOperation["d_affine.if", If]
-    with NoTerminator derives DerivedOperationCompanion
+) extends DerivedOperation["d_affine.if"]
+    with NoTerminator derives OpDefs
 
 final case class Parallel(
     mapOperands: Seq[Operand[IndexType]],
@@ -496,8 +496,8 @@ final case class Parallel(
     upperBoundsGroups: DenseIntOrFPElementsAttr,
     res: Seq[Result[Attribute]],
     body: Region,
-) extends DerivedOperation["d_affine.parallel", Parallel]
-    with NoTerminator derives DerivedOperationCompanion
+) extends DerivedOperation["d_affine.parallel"]
+    with NoTerminator derives OpDefs
 
 val dAffineDialect = summonDialect[
   EmptyTuple,
