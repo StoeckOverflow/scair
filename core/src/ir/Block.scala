@@ -1,7 +1,6 @@
 package scair.ir
 
 import scair.utils.*
-
 import scala.collection.mutable
 
 //
@@ -44,6 +43,18 @@ object Block:
   ): Block =
     new Block(argumentsTypes, operationsExpr)
 
+  def fromArguments(
+      arguments: Iterable[Value[Attribute]],
+      operations: Iterable[Operation] | Operation = Seq(),
+  ): Block =
+    new Block((arguments, operations))
+
+  def fromArguments(
+      arguments: Iterable[Value[Attribute]],
+      operationsExpr: Iterable[Value[Attribute]] => Iterable[Operation] | Operation,
+  ): Block =
+    new Block((arguments, operationsExpr(arguments)))
+
 /** A basic block.
   *
   * @param arguments
@@ -61,12 +72,31 @@ case class Block private (
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]] = mutable.Map
         .empty,
   ): Block =
-    Block(
+    val newBlock = Block(
       argumentsTypes = arguments.map(_.typ),
       (args) =>
         valueMapper addAll (arguments zip args)
         operations.map(_.deepCopy),
     )
+    val depsBefore = collection.mutable.ArrayBuffer.empty[
+      (ValueAttribute, Value[Attribute])
+    ]
+    newBlock.arguments.foreach { arg =>
+      AttributeWalker.foreachValueAttribute(arg.typ) { va =>
+        depsBefore += ((va, va.getVal()))
+      }
+    }
+    depsBefore.foreach { (va, v) =>
+      v.typeUses -= TypeUse(newBlock, va)
+    }
+    newBlock.arguments
+      .foreach(arg => AttributeWalker.remapTypeUsesInPlace(arg.typ))
+    newBlock.arguments.foreach { arg =>
+      AttributeWalker.foreachValueAttribute(arg.typ) { va =>
+        va.getVal().typeUses += TypeUse(newBlock, va)
+      }
+    }
+    newBlock
 
   final override def parent: Option[Region] = containerRegion
 
@@ -79,6 +109,15 @@ case class Block private (
       )
     else a.owner = Some(this)
   )
+
+  private def registerArgumentTypeUses(): Unit =
+    arguments.foreach { arg =>
+      AttributeWalker.foreachValueAttribute(arg.typ) { va =>
+        va.getVal().typeUses += TypeUse(this, va)
+      }
+    }
+
+  registerArgumentTypeUses()
 
   /** Constructs a Block instance with the given argument types and operations.
     *

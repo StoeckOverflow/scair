@@ -40,6 +40,22 @@ final class DominanceInfoSpec extends AnyFlatSpec:
     def singleBlockModule(ops: Operation*): ModuleOp =
       ModuleOp(Region(Seq(Block(operations = ops.toSeq))))
 
+    final case class TestTVar(ref: ValueAttribute)
+        extends TypeAttribute
+        with ParametrizedAttribute:
+      override val name: String = "test.TestTVar"
+
+      override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(ref)
+      def v: Value[Attribute] = ref.getVal()
+
+    def typeUseOp(
+        v: Value[Attribute],
+        name: String = "test.type_use",
+    ): Operation =
+      UnregisteredOperation(name)(
+        results = Seq(Result(TestTVar(ValueAttribute(v))))
+      )
+
     /** Helper to get the single SSA result of a def op. */
     extension (o: Operation)
 
@@ -371,3 +387,72 @@ final class DominanceInfoSpec extends AnyFlatSpec:
     val dom = DominanceInfo(m)
     dom.valueDominates(arg0, b1User) shouldBe false
   }
+
+  // --------------------------------------------------------------------------
+  // Type Uses
+  // --------------------------------------------------------------------------
+
+  "DominanceInfo (SSA value embedded in types)" should
+    "accept def-before-type-use in the same block" in {
+      val d = defOp()
+      val uTy = typeUseOp(d.onlyResult)
+
+      val m = singleBlockModule(d, uTy)
+      m.verify() match
+        case e: Err => fail(e.msg)
+        case _      => succeed
+
+      val dom = DominanceInfo(m)
+      dom.valueDominates(d.onlyResult, uTy) shouldBe true
+    }
+
+  it should "reject type-use-before-def in the same block" in {
+    val d = defOp()
+    val uTy = typeUseOp(d.onlyResult)
+
+    val m = singleBlockModule(uTy, d)
+    m.verify() match
+      case e: Err => fail(e.msg)
+      case _      => succeed
+
+    val dom = DominanceInfo(m)
+    dom.valueDominates(d.onlyResult, uTy) shouldBe false
+  }
+
+  it should
+    "respect hierarchical lifting: outer def dominates type-use inside nested region" in {
+      val d = defOp()
+
+      val inner = typeUseOp(d.onlyResult, "test.inner_type_use")
+      val innerRegion = Region(Seq(Block(operations = Seq(inner))))
+
+      val hasRegion =
+        UnregisteredOperation("test.has_region")(regions = Seq(innerRegion))
+
+      val m = singleBlockModule(d, hasRegion)
+      m.verify() match
+        case e: Err => fail(e.msg)
+        case _      => succeed
+
+      val dom = DominanceInfo(m)
+      dom.valueDominates(d.onlyResult, inner) shouldBe true
+    }
+
+  it should
+    "reject hierarchical lifting when def is after the region-owning op" in {
+      val d = defOp()
+
+      val inner = typeUseOp(d.onlyResult, "test.inner_type_use")
+      val innerRegion = Region(Seq(Block(operations = Seq(inner))))
+
+      val hasRegion =
+        UnregisteredOperation("test.has_region")(regions = Seq(innerRegion))
+
+      val m = singleBlockModule(hasRegion, d)
+      m.verify() match
+        case e: Err => fail(e.msg)
+        case _      => succeed
+
+      val dom = DominanceInfo(m)
+      dom.valueDominates(d.onlyResult, inner) shouldBe false
+    }
