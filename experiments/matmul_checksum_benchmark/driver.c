@@ -1,6 +1,15 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+
+#ifndef BENCH_LABEL
+#define BENCH_LABEL "matmul_checksum"
+#endif
+
+#ifndef VARIANT_LABEL
+#define VARIANT_LABEL "unknown"
+#endif
 
 typedef struct {
   float *allocated;
@@ -30,6 +39,11 @@ extern void _mlir_ciface_checksum_dynamic(
     MemRef2D_f32 *C,
     MemRef1D_f32 *out);
 
+static double elapsed_ns(struct timespec start, struct timespec end) {
+  return (double)(end.tv_sec - start.tv_sec) * 1000000000.0 +
+         (double)(end.tv_nsec - start.tv_nsec);
+}
+
 static MemRef2D_f32 make2D(float *ptr, int64_t rows, int64_t cols) {
   MemRef2D_f32 m;
   m.allocated = ptr;
@@ -53,14 +67,20 @@ static MemRef1D_f32 make1D(float *ptr, int64_t n) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 4) {
-    fprintf(stderr, "usage: %s n m k\n", argv[0]);
+  int64_t iterations = 10;
+  if (argc < 4 || argc > 5) {
+    fprintf(stderr, "usage: %s n m k [iterations]\n", argv[0]);
     return 1;
   }
 
   const int64_t n = strtoll(argv[1], NULL, 10);
   const int64_t m = strtoll(argv[2], NULL, 10);
   const int64_t k = strtoll(argv[3], NULL, 10);
+  if (argc > 4) iterations = strtoll(argv[4], NULL, 10);
+  if (iterations <= 0) {
+    fprintf(stderr, "iterations must be positive\n");
+    return 1;
+  }
 
   float *A = (float *)malloc((size_t)(n * k) * sizeof(float));
   float *B = (float *)malloc((size_t)(k * m) * sizeof(float));
@@ -78,18 +98,40 @@ int main(int argc, char **argv) {
 
   for (int64_t i = 0; i < n * k; ++i) A[i] = 1.0f;
   for (int64_t i = 0; i < k * m; ++i) B[i] = 1.0f;
-  for (int64_t i = 0; i < n * m; ++i) C[i] = 0.0f;
-  out[0] = 0.0f;
 
   MemRef2D_f32 Aref = make2D(A, n, k);
   MemRef2D_f32 Bref = make2D(B, k, m);
   MemRef2D_f32 Cref = make2D(C, n, m);
   MemRef1D_f32 Oref = make1D(out, 1);
 
-  _mlir_ciface_matmul_dynamic(n, m, k, &Aref, &Bref, &Cref);
-  _mlir_ciface_checksum_dynamic(n, m, &Cref, &Oref);
+  struct timespec start;
+  struct timespec end;
+  clock_gettime(CLOCK_MONOTONIC, &start);
+  for (int64_t iter = 0; iter < iterations; ++iter) {
+    for (int64_t i = 0; i < n * m; ++i) C[i] = 0.0f;
+    out[0] = 0.0f;
+    _mlir_ciface_matmul_dynamic(n, m, k, &Aref, &Bref, &Cref);
+    _mlir_ciface_checksum_dynamic(n, m, &Cref, &Oref);
+  }
+  clock_gettime(CLOCK_MONOTONIC, &end);
 
-  printf("checksum = %.1f\n", out[0]);
+  float expected = (float)(n * m * k);
+  if (out[0] != expected) {
+    fprintf(stderr, "unexpected checksum: got %.1f expected %.1f\n", out[0], expected);
+    free(A);
+    free(B);
+    free(C);
+    free(out);
+    return 3;
+  }
+
+  printf("benchmark=%s\n", BENCH_LABEL);
+  printf("variant=%s\n", VARIANT_LABEL);
+  printf("result=%.1f\n", out[0]);
+  printf("expected_result=%.1f\n", expected);
+  printf("iterations=%lld\n", (long long)iterations);
+  printf("total_ns=%.0f\n", elapsed_ns(start, end));
+  printf("ns_per_iter=%.2f\n", elapsed_ns(start, end) / (double)iterations);
 
   free(A);
   free(B);
