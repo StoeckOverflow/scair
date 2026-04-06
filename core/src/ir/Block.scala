@@ -1,6 +1,7 @@
 package scair.ir
 
 import scair.utils.*
+
 import scala.collection.mutable
 
 //
@@ -51,7 +52,8 @@ object Block:
 
   def fromArguments(
       arguments: Iterable[Value[Attribute]],
-      operationsExpr: Iterable[Value[Attribute]] => Iterable[Operation] | Operation,
+      operationsExpr: Iterable[Value[Attribute]] => Iterable[Operation] |
+        Operation,
   ): Block =
     new Block((arguments, operationsExpr(arguments)))
 
@@ -78,17 +80,15 @@ case class Block private (
         valueMapper addAll (arguments zip args)
         operations.map(_.deepCopy),
     )
-    val depsBefore = collection.mutable.ArrayBuffer.empty[
-      (ValueAttribute, Value[Attribute])
-    ]
+    val depsBefore = collection.mutable.ArrayBuffer
+      .empty[
+        (ValueAttribute, Value[Attribute])
+      ]
     newBlock.arguments.foreach { arg =>
-      AttributeWalker.foreachValueAttribute(arg.typ) { va =>
-        depsBefore += ((va, va.getVal()))
-      }
+      AttributeWalker
+        .foreachValueAttribute(arg.typ)(va => depsBefore += ((va, va.getVal())))
     }
-    depsBefore.foreach { (va, v) =>
-      v.typeUses -= TypeUse(newBlock, va)
-    }
+    depsBefore.foreach((va, v) => v.typeUses -= TypeUse(newBlock, va))
     newBlock.arguments
       .foreach(arg => AttributeWalker.remapTypeUsesInPlace(arg.typ))
     newBlock.arguments.foreach { arg =>

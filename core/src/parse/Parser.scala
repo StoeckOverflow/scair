@@ -6,8 +6,8 @@ import fastparse.Parsed.Failure
 import fastparse.internal.Util
 import scair.MLContext
 import scair.clair.OpDefs
-import scair.dialects.builtin.StringData
 import scair.dialects.builtin.ModuleOp
+import scair.dialects.builtin.StringData
 import scair.ir.*
 
 import scala.annotation.tailrec

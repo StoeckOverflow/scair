@@ -24,6 +24,7 @@ final class TypeUse(
     val owner: Operation | Block,
     val attribute: ValueAttribute,
 ):
+
   override def equals(other: Any): Boolean =
     other match
       case tu: TypeUse =>
@@ -34,6 +35,7 @@ final class TypeUse(
     31 * System.identityHashCode(owner) + System.identityHashCode(attribute)
 
 object TypeUse:
+
   def apply(owner: Operation | Block, attribute: ValueAttribute): TypeUse =
     new TypeUse(owner, attribute)
 

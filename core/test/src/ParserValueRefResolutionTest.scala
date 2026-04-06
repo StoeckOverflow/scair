@@ -12,23 +12,24 @@ class ParserValueRefResolutionTest extends AnyFlatSpec:
 
   private def parser = new Parser(MLContext(), allowUnregisteredDialect = true)
 
-  "Parser value refs" should "preserve forward !value<%x> as unresolved placeholders" in {
-    val input =
-      """%u = "test.mk"() : () -> !value<%x>
+  "Parser value refs" should
+    "preserve forward !value<%x> as unresolved placeholders" in {
+      val input =
+        """%u = "test.mk"() : () -> !value<%x>
         |%x = "test.make"() : () -> i32""".stripMargin
 
-    parser.parse(input) match
-      case Parsed.Success(m: ModuleOp, _) =>
-        val ops = m.body.blocks.head.operations
-        val useOp = ops.head
-        val defOp = ops(1)
-        val dep = useOp.results.head.typ.asInstanceOf[ValueRefType]
+      parser.parse(input) match
+        case Parsed.Success(m: ModuleOp, _) =>
+          val ops = m.body.blocks.head.operations
+          val useOp = ops.head
+          val defOp = ops(1)
+          val dep = useOp.results.head.typ.asInstanceOf[ValueRefType]
 
-        dep.value.typ shouldEqual StringData("unresolved:%x")
-        defOp.results.head.typeUses.size shouldEqual 0
-      case other =>
-        fail(s"expected successful parse, got: $other")
-  }
+          dep.value.typ shouldEqual StringData("unresolved:%x")
+          defOp.results.head.typeUses.size shouldEqual 0
+        case other =>
+          fail(s"expected successful parse, got: $other")
+    }
 
   it should "reject unresolved !value references at scope end" in {
     val input =
