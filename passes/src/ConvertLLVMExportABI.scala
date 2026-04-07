@@ -253,10 +253,17 @@ final class ConvertLLVMExportABI(ctx: MLContext) extends ModulePass(ctx):
     op match
       case module: ModuleOp =>
         val newTop = Block(Seq.empty, Seq.empty)
+        val requiredRuntimeDecls = mutable.LinkedHashSet.empty[String]
+        val existingTopLevelSyms = mutable.LinkedHashSet.empty[String]
         module.body.blocks.foreach { block =>
           block.operations.foreach {
             case funcOp: llvm.Func =>
               val legalized = FunctionLegalizer(funcOp).lower()
+              existingTopLevelSyms += legalized.sym_name.data
+              legalized.attributes.get(runtimeDeclsAttrName).foreach { attr =>
+                requiredRuntimeDecls ++= runtimeDeclsFromAttr(attr)
+                legalized.attributes.remove(runtimeDeclsAttrName)
+              }
               if isBareInterface(legalized) then
                 legalized.attributes.remove(bareInterfaceAttr)
               if isDescriptorPointerInterface(legalized) && legalized.body.blocks.nonEmpty then
@@ -270,6 +277,12 @@ final class ConvertLLVMExportABI(ctx: MLContext) extends ModulePass(ctx):
             case other =>
               newTop.addOp(other.deepCopy.asInstanceOf[Operation])
           }
+        }
+        requiredRuntimeDecls.toSeq.reverse.foreach { name =>
+          if !existingTopLevelSyms.contains(name) then
+            newTop.operations.headOption match
+              case Some(first) => newTop.insertOpBefore(first, llvmRuntimeDecl(name))
+              case None        => newTop.addOp(llvmRuntimeDecl(name))
         }
         ModuleOp(Region(newTop))
       case other =>

@@ -21,6 +21,7 @@ private final class Builder(val funcOp: func.Func):
   private val state = FunctionLoweringState(funcOp)
   private var cachedIndexConstants: Option[CachedIndexConstants] = None
   private var refinedIndexMaterializer: Option[RefinedIndexMaterializer] = None
+  private val requiredRuntimeDecls = scala.collection.mutable.LinkedHashSet.empty[String]
 
   private def remap(v: Value[Attribute]): Value[Attribute] =
     state.remap(v)
@@ -143,6 +144,7 @@ private final class Builder(val funcOp: func.Func):
     }
 
   private def lowerAllocLike(ty: d_memref.dMemrefMemrefType, block: Block): Value[Attribute] =
+    requiredRuntimeDecls += mallocRuntimeName
     val dims = layoutDims(ty, block)
     val numElems =
       if dims.isEmpty then constIndex(1, block)
@@ -227,6 +229,7 @@ private final class Builder(val funcOp: func.Func):
     Seq(remap(op.source), offset) ++ dims ++ strides
 
   private def lowerDealloc(ptr: Value[Attribute], block: Block): Unit =
+    requiredRuntimeDecls += freeRuntimeName
     emit(
       block,
       llvm.Call(SymbolRefAttr(StringData("free")), Seq(asPtr(ptr).asInstanceOf[Operand[Attribute]]), Seq.empty),
@@ -351,6 +354,8 @@ private final class Builder(val funcOp: func.Func):
     }
     val lowered = func.Func(funcOp.sym_name, loweredFunctionType, funcOp.sym_visibility, Region(newBlocks))
     lowered.attributes.addAll(funcOp.attributes)
+    if requiredRuntimeDecls.nonEmpty then
+      lowered.attributes += (runtimeDeclsAttrName -> runtimeDeclsAttr(requiredRuntimeDecls.toSeq))
     if !lowered.attributes.contains("scair.original_function_type") &&
         (lowered.attributes.contains("llvm.emit_c_interface") ||
           lowered.attributes.contains("scair.emit_bare_interface") ||

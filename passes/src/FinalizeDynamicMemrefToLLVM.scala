@@ -21,6 +21,7 @@ private def gepInboundsNuw: ArrayAttribute[StringData] =
 private final class Builder(val funcOp: func.Func):
   private val state = FunctionLoweringState(funcOp)
   private var cachedIndexConstants: Option[CachedIndexConstants] = None
+  private val requiredRuntimeDecls = scala.collection.mutable.LinkedHashSet.empty[String]
 
   private def remap(v: Value[Attribute]): Value[Attribute] =
     state.remap(v)
@@ -79,6 +80,7 @@ private final class Builder(val funcOp: func.Func):
       dynamicSizes: Seq[Value[Attribute]],
       block: Block,
   ): Value[Attribute] =
+    requiredRuntimeDecls += mallocRuntimeName
     val dims = materializeRankedDims(ty, dynamicSizes.map(remap), block)
     val offset = constIndex(0, block)
     val strides = buildDefaultStrides(dims, block, constCache)
@@ -274,6 +276,7 @@ private final class Builder(val funcOp: func.Func):
     Seq(base, offset) ++ sizes ++ strides
 
   private def lowerDealloc(desc: Value[Attribute], block: Block): Unit =
+    requiredRuntimeDecls += freeRuntimeName
     val rank = RankedMemrefDescriptorHelper.rankOfDescriptorType(desc.typ).getOrElse(0)
     val ptr = descriptor(desc, rank, block).allocatedPtr()
     emit(
@@ -333,6 +336,8 @@ private final class Builder(val funcOp: func.Func):
     }
     val lowered = func.Func(funcOp.sym_name, loweredFunctionType, funcOp.sym_visibility, Region(clonedBlocks))
     lowered.attributes.addAll(funcOp.attributes)
+    if requiredRuntimeDecls.nonEmpty then
+      lowered.attributes += (runtimeDeclsAttrName -> runtimeDeclsAttr(requiredRuntimeDecls.toSeq))
     if !lowered.attributes.contains("scair.original_function_type") &&
         (lowered.attributes.contains("llvm.emit_c_interface") ||
           lowered.attributes.contains("scair.emit_bare_interface") ||

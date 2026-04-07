@@ -11,6 +11,9 @@ private def i32Attr(v: Int): IntegerAttr =
   IntegerAttr(IntData(v), I32)
 
 val llvmIndexType: IntegerType = I64
+val runtimeDeclsAttrName: String = "scair.llvm_runtime_decls"
+val mallocRuntimeName: String = "malloc"
+val freeRuntimeName: String = "free"
 
 def densePath(indices: Int*): DenseArrayAttr =
   DenseArrayAttr(I32, indices.map(i => i32Attr(i)))
@@ -20,6 +23,34 @@ def dynamicIndexSentinel: DenseArrayAttr =
 
 def llvmIndexAttr(v: BigInt): IntegerAttr =
   IntegerAttr(IntData(v), llvmIndexType)
+
+def runtimeDeclsAttr(names: Seq[String]): ArrayAttribute[StringData] =
+  ArrayAttribute(names.distinct.map(StringData(_)))
+
+def runtimeDeclsFromAttr(attr: Attribute): Seq[String] =
+  attr match
+    case arr: ArrayAttribute[?] =>
+      arr.attrValues.collect { case StringData(name) => name }
+    case _ => Seq.empty
+
+def llvmRuntimeDecl(name: String): llvm.Func =
+  name match
+    case `mallocRuntimeName` =>
+      llvm.Func(
+        StringData(mallocRuntimeName),
+        FunctionType(Seq(llvmIndexType), Seq(llvm.Ptr())),
+        None,
+        Region(),
+      )
+    case `freeRuntimeName` =>
+      llvm.Func(
+        StringData(freeRuntimeName),
+        FunctionType(Seq(llvm.Ptr()), Seq.empty),
+        None,
+        Region(),
+      )
+    case other =>
+      throw new Exception(s"unsupported LLVM runtime declaration: $other")
 
 def asLLVMIndex(v: Value[Attribute]): Operand[IntegerType | IndexType] =
   v.asInstanceOf[Operand[IntegerType | IndexType]]
