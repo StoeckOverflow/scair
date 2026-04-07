@@ -12,7 +12,7 @@
 #endif
 
 extern void semi_affine_fill_and_sum(
-    int64_t stride0, int64_t stride1, int64_t flat_s0, float *flat, int64_t out_s0,
+    int64_t stride0, int64_t stride1, int64_t flat_nat, int64_t out_nat, float *flat,
     float *out);
 
 int main(int argc, char **argv) {
@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
   for (int64_t iter = 0; iter < iterations; ++iter) {
     for (int64_t i = 0; i < total; ++i) flat[i] = 0.0f;
     out[0] = 0.0f;
-    semi_affine_fill_and_sum(stride0, stride1, total, flat, 1, out);
+    semi_affine_fill_and_sum(stride0, stride1, total, 1, flat, out);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
 

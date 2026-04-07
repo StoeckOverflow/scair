@@ -19,8 +19,13 @@ typedef struct {
   int64_t strides[1];
 } MemRef1D_f32;
 
+#ifdef MLIR_C_INTERFACE
+extern void _mlir_ciface_control_flow_selected_subview_reduction(
+    _Bool sel, MemRef1D_f32 *flat, MemRef1D_f32 *out);
+#else
 extern void control_flow_selected_subview_reduction(
     _Bool sel, MemRef1D_f32 *flat, MemRef1D_f32 *out);
+#endif
 
 static MemRef1D_f32 make1D(float *ptr, int64_t n) {
   MemRef1D_f32 m;
@@ -69,7 +74,11 @@ int main(int argc, char **argv) {
   clock_gettime(CLOCK_MONOTONIC, &start);
   for (int64_t iter = 0; iter < iterations; ++iter) {
     out[0] = 0.0f;
+#ifdef MLIR_C_INTERFACE
+    _mlir_ciface_control_flow_selected_subview_reduction(sel == 0, &flat_ref, &out_ref);
+#else
     control_flow_selected_subview_reduction(sel == 0, &flat_ref, &out_ref);
+#endif
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
 

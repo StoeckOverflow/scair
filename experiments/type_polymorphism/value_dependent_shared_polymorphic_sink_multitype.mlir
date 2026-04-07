@@ -1,11 +1,3 @@
-// Benchmark purpose: design benchmark for compose-like fanout with one reusable polymorphic shell.
-// Polymorphic combinator shape: conceptually forall T. (T -> T) -> (T -> T) -> T -> T; executable
-// realization here keeps the reusable polymorphic sink `forall T. T -> T` live and then threads each
-// runtime value through two nontrivial typed worker steps. This stays executable in the current subset
-// while still exposing the design cost of monomorphic duplication.
-// Scaling knobs: fixed type fanout over i8, i16, i32, i64, f32, f64; two worker steps per type.
-// Expected comparison story: MLIR duplicates the sink and typed compose wrappers monomorphically,
-// while the two ScaIR encodings share one polymorphic shell and differ mainly in source bookkeeping.
 builtin.module {
   func.func @shared_polymorphic_sink_multitype(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %sink = "tlam.tlambda"() ({

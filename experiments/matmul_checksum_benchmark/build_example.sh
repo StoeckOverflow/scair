@@ -62,22 +62,38 @@ require_file "$DRIVER_SRC"
 echo "==> Using LLVM tools from: $BIN_DIR"
 echo "==> Output directory: $OUT_DIR"
 
+build_mlir_kernel() {
+  local src="$1"
+  local obj_out="$2"
+  local lowered_mlir_out="$3"
+  local llvm_ir_out="$4"
+
+  "$MLIR_OPT" "$src" \
+    --lower-affine \
+    --convert-scf-to-cf \
+    --expand-strided-metadata \
+    --finalize-memref-to-llvm \
+    --convert-arith-to-llvm \
+    --convert-index-to-llvm \
+    --convert-cf-to-llvm \
+    --convert-func-to-llvm \
+    --reconcile-unrealized-casts \
+  > "$lowered_mlir_out"
+
+  "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"
+
+  "$CC" -O2 -x ir "$llvm_ir_out" -c -o "$obj_out"
+}
+
 # ------------------------------------------------------------
 # 1. Build untiled matmul object
 # ------------------------------------------------------------
 echo "==> Building untiled matmul object"
-"$MLIR_OPT" "$MATMUL_SRC" \
-  --lower-affine \
-  --convert-scf-to-cf \
-  --expand-strided-metadata \
-  --finalize-memref-to-llvm \
-  --convert-arith-to-llvm \
-  --convert-index-to-llvm \
-  --convert-cf-to-llvm \
-  --convert-func-to-llvm \
-  --reconcile-unrealized-casts \
-| "$MLIR_TRANSLATE" --mlir-to-llvmir \
-| "$CC" -O2 -x ir - -c -o "$OUT_DIR/matmul_baseline.o"
+build_mlir_kernel \
+  "$MATMUL_SRC" \
+  "$OUT_DIR/matmul_baseline.o" \
+  "$OUT_DIR/matmul_baseline.llvm.mlir" \
+  "$OUT_DIR/matmul_baseline.ll"
 
 # ------------------------------------------------------------
 # 2. Tile matmul and build tiled object
@@ -93,35 +109,21 @@ echo "==> Generating tiled matmul IR"
   -o "$OUT_DIR/matmul_tiled.mlir"
 
 echo "==> Building tiled matmul object"
-"$MLIR_OPT" "$OUT_DIR/matmul_tiled.mlir" \
-  --lower-affine \
-  --convert-scf-to-cf \
-  --expand-strided-metadata \
-  --finalize-memref-to-llvm \
-  --convert-arith-to-llvm \
-  --convert-index-to-llvm \
-  --convert-cf-to-llvm \
-  --convert-func-to-llvm \
-  --reconcile-unrealized-casts \
-| "$MLIR_TRANSLATE" --mlir-to-llvmir \
-| "$CC" -O2 -x ir - -c -o "$OUT_DIR/matmul_tiled.o"
+build_mlir_kernel \
+  "$OUT_DIR/matmul_tiled.mlir" \
+  "$OUT_DIR/matmul_tiled.o" \
+  "$OUT_DIR/matmul_tiled.llvm.mlir" \
+  "$OUT_DIR/matmul_tiled.ll"
 
 # ------------------------------------------------------------
 # 3. Build checksum object
 # ------------------------------------------------------------
 echo "==> Building checksum object"
-"$MLIR_OPT" "$CHECKSUM_SRC" \
-  --lower-affine \
-  --convert-scf-to-cf \
-  --expand-strided-metadata \
-  --finalize-memref-to-llvm \
-  --convert-arith-to-llvm \
-  --convert-index-to-llvm \
-  --convert-cf-to-llvm \
-  --convert-func-to-llvm \
-  --reconcile-unrealized-casts \
-| "$MLIR_TRANSLATE" --mlir-to-llvmir \
-| "$CC" -O2 -x ir - -c -o "$OUT_DIR/checksum.o"
+build_mlir_kernel \
+  "$CHECKSUM_SRC" \
+  "$OUT_DIR/checksum.o" \
+  "$OUT_DIR/checksum.llvm.mlir" \
+  "$OUT_DIR/checksum.ll"
 
 # ------------------------------------------------------------
 # 4. Link final executables
@@ -143,6 +145,13 @@ echo "Build complete."
 echo "Produced:"
 echo "  $OUT_DIR/matmul_baseline_exec"
 echo "  $OUT_DIR/matmul_tiled_exec"
+echo "  $OUT_DIR/matmul_baseline.llvm.mlir"
+echo "  $OUT_DIR/matmul_baseline.ll"
+echo "  $OUT_DIR/matmul_tiled.mlir"
+echo "  $OUT_DIR/matmul_tiled.llvm.mlir"
+echo "  $OUT_DIR/matmul_tiled.ll"
+echo "  $OUT_DIR/checksum.llvm.mlir"
+echo "  $OUT_DIR/checksum.ll"
 echo
 echo "Example runs:"
 echo "  $OUT_DIR/matmul_baseline_exec 32 32 32"

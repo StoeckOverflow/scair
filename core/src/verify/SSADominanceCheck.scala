@@ -16,8 +16,23 @@ object SSADominanceCheck extends VerifierCheck:
 
     def fail(msg: String): OK[Unit] = Err(msg)
 
+    def isEntryBlockArgOfUserRegion(
+        v: Value[Attribute],
+        user: Operation,
+    ): Boolean =
+      v.owner match
+        case Some(block: Block) =>
+          block.containerRegion match
+            case Some(region) =>
+              region.containerOperation.contains(user) &&
+              region.blocks.headOption.contains(block) &&
+              block.arguments.contains(v)
+            case None => false
+        case _ => false
+
     def checkValue(v: Value[Attribute], user: Operation): OK[Unit] =
-      if dom.valueDominates(v, user) then OK(())
+      if dom.valueDominates(v, user) || isEntryBlockArgOfUserRegion(v, user)
+      then OK(())
       else fail(s"value $v does not dominate its use in op `${user.name}`")
 
     def walkAttr(a: Attribute, user: Operation): OK[Unit] =

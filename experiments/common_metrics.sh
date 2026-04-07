@@ -28,6 +28,9 @@
 #   op.memref.alloc=...
 COMMON_METRICS_HEADER="experiment_family,benchmark,variant,representation_group,build_status,run_status,source_bytes,source_loc,source_ops,source_ops_structural,source_func_defs,source_block_args,source_alloc_ops,source_reinterpret_cast_ops,source_subview_ops,source_extract_strided_metadata_ops,source_memref_load_ops,source_memref_store_ops,source_dmemref_load_ops,source_dmemref_store_ops,lowered_func_defs,lowered_ops,lowered_ops_structural,llvm_ir_lines,llvm_call_count,compile_ms,result,expected_result,runtime_ns_per_iter,notes,source_helper_defs,bvar_refs,value_ssa_refs,opt_llvm_lines,opt_llvm_call_count"
 
+BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-1}"
+BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-7}"
+
 require_file() {
   local path="$1"
   if [[ ! -f "$path" ]]; then
@@ -372,7 +375,7 @@ metric_field() {
     echo "NA"
     return
   fi
-  awk -F= -v target="$key" '$1 == target { print $2 }' "$path"
+  awk -F= -v target="$key" '$1 == target { value=$2 } END { if (value != "") print value }' "$path"
 }
 
 sum_numeric_or_na() {
@@ -410,13 +413,139 @@ write_summary_header() {
   cat > "$path" <<EOF
 # $title
 
-| Benchmark | Variant | Rep | Build | Run | Structural ops | Func defs | Block args | LLVM lines | Compile ms | Result | Expected | ns/iter | Notes |
-| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | --- |
+| Benchmark | Variant | Rep | Build | Run | Structural ops | Func defs | Block args | LLVM lines | Compile ms | Result | Expected | ns/iter |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: |
 EOF
 }
 
 append_summary_row() {
   local path="$1"
   shift
-  printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' "$@" >> "$path"
+  printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' "$@" >> "$path"
+}
+
+numeric_series_stat() {
+  local mode="$1"
+  local path="$2"
+  if [[ ! -f "$path" ]]; then
+    echo "NA"
+    return
+  fi
+
+  awk -v mode="$mode" '
+    BEGIN { count = 0 }
+    /^[[:space:]]*$/ { next }
+    {
+      vals[count] = $1 + 0
+      count++
+    }
+    END {
+      if (count == 0) {
+        print "NA"
+        exit
+      }
+      for (i = 0; i < count; ++i) {
+        for (j = i + 1; j < count; ++j) {
+          if (vals[j] < vals[i]) {
+            tmp = vals[i]
+            vals[i] = vals[j]
+            vals[j] = tmp
+          }
+        }
+      }
+      if (mode == "min") {
+        printf "%.2f\n", vals[0]
+      } else if (mode == "max") {
+        printf "%.2f\n", vals[count - 1]
+      } else {
+        mid = int(count / 2)
+        if ((count % 2) == 1) {
+          median = vals[mid]
+        } else {
+          median = (vals[mid - 1] + vals[mid]) / 2.0
+        }
+        printf "%.2f\n", median
+      }
+    }
+  ' "$path"
+}
+
+run_benchmark_repeated() {
+  local output_txt="$1"
+  shift
+
+  local warmups="${BENCH_WARMUP_REPS:-1}"
+  local reps="${BENCH_TIMING_REPS:-7}"
+  local tmp_dir
+  local rep_out
+  local ns_values
+  local last_out
+  local rep
+  local ns
+  local result
+  local expected
+  local benchmark
+  local variant
+  local iterations
+  local median_ns
+  local min_ns
+  local max_ns
+
+  tmp_dir="$(mktemp -d)"
+  ns_values="$tmp_dir/ns_values.txt"
+  : > "$ns_values"
+
+  for ((rep = 0; rep < warmups; ++rep)); do
+    "$@" > /dev/null
+  done
+
+  for ((rep = 1; rep <= reps; ++rep)); do
+    rep_out="$tmp_dir/rep_${rep}.txt"
+    "$@" > "$rep_out"
+    ns="$(metric_field ns_per_iter "$rep_out")"
+    if [[ -z "$ns" || "$ns" == "NA" ]]; then
+      echo "error: benchmark output missing ns_per_iter from: $*" >&2
+      rm -rf "$tmp_dir"
+      exit 1
+    fi
+    printf '%s\n' "$ns" >> "$ns_values"
+    last_out="$rep_out"
+  done
+
+  benchmark="$(metric_field benchmark "$last_out")"
+  variant="$(metric_field variant "$last_out")"
+  iterations="$(metric_field iterations "$last_out")"
+  result="$(metric_field result "$last_out")"
+  expected="$(metric_field expected_result "$last_out")"
+  median_ns="$(numeric_series_stat median "$ns_values")"
+  min_ns="$(numeric_series_stat min "$ns_values")"
+  max_ns="$(numeric_series_stat max "$ns_values")"
+
+  cat "$last_out" > "$output_txt"
+  {
+    echo "run_status=ok"
+    echo "benchmark_repetitions=$reps"
+    echo "benchmark_warmups=$warmups"
+    if [[ -n "$benchmark" ]]; then
+      echo "benchmark=$benchmark"
+    fi
+    if [[ -n "$variant" ]]; then
+      echo "variant=$variant"
+    fi
+    if [[ -n "$result" ]]; then
+      echo "result=$result"
+    fi
+    if [[ -n "$expected" ]]; then
+      echo "expected_result=$expected"
+    fi
+    if [[ -n "$iterations" ]]; then
+      echo "iterations=$iterations"
+    fi
+    echo "timing_min_ns_per_iter=$min_ns"
+    echo "timing_max_ns_per_iter=$max_ns"
+    echo "runtime_ns_per_iter=$median_ns"
+    echo "ns_per_iter=$median_ns"
+  } >> "$output_txt"
+
+  rm -rf "$tmp_dir"
 }

@@ -12,15 +12,15 @@
 #endif
 
 extern void matmul_dynamic(
-    int64_t n, int64_t m, int64_t k,
-    int64_t A_s0, int64_t A_s1, float *A,
-    int64_t B_s0, int64_t B_s1, float *B,
-    int64_t C_s0, int64_t C_s1, float *C);
+    int64_t n_nat, int64_t m_nat, int64_t k_nat,
+    float *A,
+    float *B,
+    float *C);
 
 extern void checksum_dynamic(
-    int64_t n, int64_t m,
-    int64_t C_s0, int64_t C_s1, float *C,
-    int64_t out_s0, float *out);
+    int64_t n_nat, int64_t m_nat, int64_t out_nat,
+    float *C,
+    float *out);
 
 static double elapsed_ns(struct timespec start, struct timespec end) {
   return (double)(end.tv_sec - start.tv_sec) * 1000000000.0 +
@@ -66,8 +66,8 @@ int main(int argc, char **argv) {
   for (int64_t iter = 0; iter < iterations; ++iter) {
     for (int64_t i = 0; i < n * m; ++i) C[i] = 0.0f;
     out[0] = 0.0f;
-    matmul_dynamic(n, m, k, k, 1, A, m, 1, B, m, 1, C);
-    checksum_dynamic(n, m, m, 1, C, 1, out);
+    matmul_dynamic(n, m, k, A, B, C);
+    checksum_dynamic(n, m, 1, C, out);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
 

@@ -1,8 +1,11 @@
 package scair.dialects.affine
 
+import fastparse.*
+import scair.Printer
 import scair.clair.*
 import scair.dialects.builtin.*
 import scair.ir.*
+import scair.parse.*
 
 // ░█████╗░ ███████╗ ███████╗ ██╗ ███╗░░██╗ ███████╗
 // ██╔══██╗ ██╔════╝ ██╔════╝ ██║ ████╗░██║ ██╔════╝
@@ -42,7 +45,89 @@ case class For(
     upperBoundMap: AffineMapAttr,
     step: IntegerAttr,
     body: Region,
-) extends DerivedOperation["affine.for"] derives OpDefs
+) extends DerivedOperation["affine.for"] derives OpDefs:
+
+  override def customPrint(printer: Printer): Unit =
+    val block = body.blocks.head
+    val iv = block.arguments.head
+    printer.print(name, " ", iv, " = ", lowerBoundMap, "(")
+    printer.printList(lowerBoundOperands)
+    printer.print(") to ", upperBoundMap, "(")
+    printer.printList(upperBoundOperands)
+    printer.print(") step ", step)
+    if inits.nonEmpty then
+      printer.print(" iter_args(")
+      val iterArgs = block.arguments.tail
+      printer.printListF(iterArgs.zip(inits), pair =>
+        val (iterArg, init) = pair
+        printer.print(iterArg, " = ", init, " : ", init.typ)
+      )
+      printer.print(")")
+    printer.print(" {\n")
+    printer.indented(block.operations.foreach(printer.print))
+    printer.withIndent(printer.print("}"))
+
+given OperationCustomParser[For]:
+  def parse[$: P](resNames: Seq[String])(using p: Parser): P[For] =
+    P(
+      operandNameP ~ "=" ~ attrOfP[AffineMapAttr] ~ "(" ~ operandNameP.rep(
+        sep = ","
+      ) ~ ")" ~ "to" ~ attrOfP[AffineMapAttr] ~ "(" ~ operandNameP.rep(
+        sep = ","
+      ) ~ ")" ~ "step" ~ attrOfP[IntegerAttr] ~ ("iter_args" ~ "(" ~
+        (operandNameP ~ "=" ~ operandNameP ~ ":" ~ typeP).rep(
+          sep = ","
+        ) ~ ")").?
+    ).flatMap((ivName, lbMap, lbNames, ubMap, ubNames, step, iterArgsOpt) =>
+      lbNames
+        .foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
+          acc.flatMap(seq => operandP(n, IndexType()).map(seq :+ _))
+        )
+        .flatMap(lbOps =>
+          ubNames
+            .foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
+              acc.flatMap(seq => operandP(n, IndexType()).map(seq :+ _))
+            )
+            .flatMap(ubOps =>
+              val iterArgs = iterArgsOpt.getOrElse(Seq.empty)
+              val iterArgNamesAndTys =
+                iterArgs.map((iterName, _, ty) => (iterName, ty))
+              if resNames.size != iterArgs.size then
+                Fail(
+                  s"affine.for: expected ${iterArgs.size} result names to match iter_args arity, got ${resNames.size}"
+                )
+              else
+                iterArgs.foldLeft(Pass(Seq.empty[Operand[Attribute]])) {
+                  case (acc, (_, initName, ty)) =>
+                    acc.flatMap(seq =>
+                      operandP(initName, ty.asInstanceOf[TypeAttribute]).map(seq :+ _)
+                    )
+                }.flatMap(inits =>
+                  resNames
+                    .zip(iterArgs.map(_._3))
+                    .foldLeft(Pass(Seq.empty[Result[Attribute]])) {
+                      case (acc, (resName, ty)) =>
+                        acc.flatMap(seq =>
+                          resultP(resName, ty.asInstanceOf[TypeAttribute]).map(seq :+ _)
+                        )
+                    }.flatMap(results =>
+                      regionP(Seq(ivName -> IndexType()) ++ iterArgNamesAndTys).map(body =>
+                        For(
+                          lbOps,
+                          ubOps,
+                          inits,
+                          results,
+                          lbMap,
+                          ubMap,
+                          step,
+                          body,
+                        )
+                      )
+                    )
+                )
+            )
+        )
+    )
 
 /*≡==---==≡≡≡≡≡==---=≡≡*\
 ||     PARALLEL OP     ||

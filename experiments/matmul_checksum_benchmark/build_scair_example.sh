@@ -4,7 +4,7 @@ set -euo pipefail
 LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-$HOME/dev/llvm-source/build}"
 BIN_DIR="$LLVM_BUILD_DIR/bin"
 CC="${CC:-$BIN_DIR/clang}"
-ITERATIONS="${ITERATIONS:-10}"
+ITERATIONS="${ITERATIONS:-1000}"
 GEMM_N="${GEMM_N:-32}"
 GEMM_M="${GEMM_M:-32}"
 GEMM_K="${GEMM_K:-32}"
@@ -21,12 +21,12 @@ MATMUL_MLIR_SRC="${MATMUL_MLIR_SRC:-$EXAMPLE_DIR/matmul_kernel.mlir}"
 CHECKSUM_MLIR_SRC="${CHECKSUM_MLIR_SRC:-$EXAMPLE_DIR/checksum_kernel.mlir}"
 MLIR_DRIVER_SRC="${MLIR_DRIVER_SRC:-$EXAMPLE_DIR/driver.c}"
 
-MATMUL_BASELINE_SRC="${MATMUL_BASELINE_SRC:-$EXAMPLE_DIR/matmul_kernel_scair_baseline_bare.mlir}"
-CHECKSUM_BASELINE_SRC="${CHECKSUM_BASELINE_SRC:-$EXAMPLE_DIR/checksum_kernel_scair_baseline_bare.mlir}"
+MATMUL_BASELINE_SRC="${MATMUL_BASELINE_SRC:-$EXAMPLE_DIR/matmul_kernel_scair_baseline.mlir}"
+CHECKSUM_BASELINE_SRC="${CHECKSUM_BASELINE_SRC:-$EXAMPLE_DIR/checksum_kernel_scair_baseline.mlir}"
 BASELINE_DRIVER_SRC="${BASELINE_DRIVER_SRC:-$EXAMPLE_DIR/driver_baseline_bare.c}"
 
-MATMUL_VALUE_DEP_SRC="${MATMUL_VALUE_DEP_SRC:-$EXAMPLE_DIR/matmul_kernel_scair_bare.mlir}"
-CHECKSUM_VALUE_DEP_SRC="${CHECKSUM_VALUE_DEP_SRC:-$EXAMPLE_DIR/checksum_kernel_scair_bare.mlir}"
+MATMUL_VALUE_DEP_SRC="${MATMUL_VALUE_DEP_SRC:-$EXAMPLE_DIR/matmul_kernel_scair_value_dependent.mlir}"
+CHECKSUM_VALUE_DEP_SRC="${CHECKSUM_VALUE_DEP_SRC:-$EXAMPLE_DIR/checksum_kernel_scair_value_dependent.mlir}"
 VALUE_DEP_DRIVER_SRC="${VALUE_DEP_DRIVER_SRC:-$EXAMPLE_DIR/driver_bare.c}"
 
 OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/build_scair}"
@@ -53,11 +53,11 @@ build_scair_kernel() {
   local obj_out="$3"
   local llvm_ir_out="$4"
   local lowered_mlir_out="${llvm_ir_out%.ll}.llvm.mlir"
-  local patched_mlir_out="${llvm_ir_out%.ll}.patched.llvm.mlir"
 
-  "$SCAIR_OPT" "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" > "$lowered_mlir_out"
-  cp "$lowered_mlir_out" "$patched_mlir_out"
-  "$MLIR_TRANSLATE" --mlir-to-llvmir "$patched_mlir_out" > "$llvm_ir_out"
+  "$SCAIR_OPT" "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" \
+    | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' \
+    > "$lowered_mlir_out"
+  "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"
   "$CC" -O2 -x ir "$llvm_ir_out" -c -o "$obj_out"
 }
 
@@ -85,8 +85,8 @@ build_mlir_kernel() {
 run_with_metrics() {
   local exe="$1"
   local output_txt="$2"
-  "$exe" "$GEMM_N" "$GEMM_M" "$GEMM_K" "$ITERATIONS" > "$output_txt"
-  echo "run_status=ok" >> "$output_txt"
+  run_benchmark_repeated "$output_txt" \
+    "$exe" "$GEMM_N" "$GEMM_M" "$GEMM_K" "$ITERATIONS"
 }
 
 sum_two() {
@@ -150,7 +150,7 @@ append_pair_row() {
     "$summary_md" \
     "matmul_checksum" \
     "$variant" \
-    "$representation" \
+    "" \
     "ok" \
     "$(metric_field run_status "$output_txt")" \
     "$(sum_two "$(count_ops_structural "$src_a")" "$(count_ops_structural "$src_b")")" \
@@ -160,12 +160,11 @@ append_pair_row() {
     "$compile_ms" \
     "$(metric_field result "$output_txt")" \
     "$(metric_field expected_result "$output_txt")" \
-    "$(metric_field ns_per_iter "$output_txt")" \
-    "$notes"
+    "$(metric_field ns_per_iter "$output_txt")"
 }
 
 echo "==> Building upstream MLIR baseline kernels"
-mlir_start=$(now_ns)
+mlir_baseline_start=$(now_ns)
 build_mlir_kernel "$MATMUL_MLIR_SRC" "$OUT_DIR/matmul_mlir_baseline.o" "$OUT_DIR/matmul_mlir_baseline.llvm.mlir" "$OUT_DIR/matmul_mlir_baseline.ll"
 build_mlir_kernel "$CHECKSUM_MLIR_SRC" "$OUT_DIR/checksum_mlir_baseline.o" "$OUT_DIR/checksum_mlir_baseline.llvm.mlir" "$OUT_DIR/checksum_mlir_baseline.ll"
 "$CC" -O2 \
@@ -175,9 +174,9 @@ build_mlir_kernel "$CHECKSUM_MLIR_SRC" "$OUT_DIR/checksum_mlir_baseline.o" "$OUT
   "$OUT_DIR/matmul_mlir_baseline.o" \
   "$OUT_DIR/checksum_mlir_baseline.o" \
   -o "$OUT_DIR/matmul_mlir_baseline_exec"
-mlir_end=$(now_ns)
+mlir_baseline_end=$(now_ns)
 run_with_metrics "$OUT_DIR/matmul_mlir_baseline_exec" "$OUT_DIR/matmul_mlir_baseline_output.txt"
-MLIR_COMPILE_MS="$(format_ms "$mlir_start" "$mlir_end")"
+MLIR_BASELINE_COMPILE_MS="$(format_ms "$mlir_baseline_start" "$mlir_baseline_end")"
 
 echo "==> Building ScaIR baseline kernel-only split kernels"
 baseline_start=$(now_ns)
@@ -196,8 +195,8 @@ BASELINE_COMPILE_MS="$(format_ms "$baseline_start" "$baseline_end")"
 
 echo "==> Building ScaIR value-dependent split kernels"
 value_start=$(now_ns)
-build_scair_kernel "lower-dynamic-memref-to-llvm" "$MATMUL_VALUE_DEP_SRC" "$OUT_DIR/matmul_value_dependent_scair.o" "$OUT_DIR/matmul_value_dependent_scair.ll"
-build_scair_kernel "lower-dynamic-memref-to-llvm" "$CHECKSUM_VALUE_DEP_SRC" "$OUT_DIR/checksum_value_dependent_scair.o" "$OUT_DIR/checksum_value_dependent_scair.ll"
+build_scair_kernel "lower-dmemref-to-llvm" "$MATMUL_VALUE_DEP_SRC" "$OUT_DIR/matmul_value_dependent_scair.o" "$OUT_DIR/matmul_value_dependent_scair.ll"
+build_scair_kernel "lower-dmemref-to-llvm" "$CHECKSUM_VALUE_DEP_SRC" "$OUT_DIR/checksum_value_dependent_scair.o" "$OUT_DIR/checksum_value_dependent_scair.ll"
 "$CC" -O2 \
   -DBENCH_LABEL="\"matmul_checksum\"" \
   -DVARIANT_LABEL="\"value_dependent\"" \
@@ -221,12 +220,12 @@ append_pair_row \
   "$OUT_DIR/matmul_mlir_baseline.llvm.mlir" "$OUT_DIR/checksum_mlir_baseline.llvm.mlir" \
   "$OUT_DIR/matmul_mlir_baseline.ll" "$OUT_DIR/checksum_mlir_baseline.ll" \
   "$OUT_DIR/matmul_mlir_baseline_output.txt" \
-  "$MLIR_COMPILE_MS" \
-  "upstream MLIR executable baseline"
+  "$MLIR_BASELINE_COMPILE_MS" \
+  "upstream MLIR fixed lowering pipeline"
 
 append_pair_row \
   "$SUMMARY_CSV" "$SUMMARY_MD" \
-  "baseline" "scair_baseline" \
+  "scair_baseline" "scair_baseline" \
   "$MATMUL_BASELINE_SRC" "$CHECKSUM_BASELINE_SRC" \
   "$OUT_DIR/matmul_baseline_kernel_only_scair.llvm.mlir" "$OUT_DIR/checksum_baseline_kernel_only_scair.llvm.mlir" \
   "$OUT_DIR/matmul_baseline_kernel_only_scair.ll" "$OUT_DIR/checksum_baseline_kernel_only_scair.ll" \

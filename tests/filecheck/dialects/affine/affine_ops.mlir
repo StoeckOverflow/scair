@@ -30,6 +30,10 @@
   affine.yield
 }) : () -> ()
 
+%sum = affine.for %i = affine_map<() -> (0)>() to affine_map<(d0) -> (d0)>(%N) step 1 : index iter_args(%acc = %zero : index) {
+  affine.yield %acc : index
+}
+
 // CHECK:       #map = affine_map<()[] -> (0)>
 // CHECK-NEXT:  #map1 = affine_map<()[] -> (256)>
 // CHECK-NEXT:  #map2 = affine_map<()[s0] -> (s0)>
@@ -61,4 +65,7 @@
 // CHECK-NEXT:    }, {
 // CHECK-NEXT:      affine.yield
 // CHECK-NEXT:    }) : () -> ()
+// CHECK-NEXT:    %7 = affine.for %8 = #map() to #map2(%0) step 1 : index iter_args(%9 = %3 : index) {
+// CHECK-NEXT:      affine.yield %9 : index
+// CHECK-NEXT:    }
 // CHECK-NEXT:  }

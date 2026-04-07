@@ -23,9 +23,6 @@ typedef struct {
   int64_t strides[1];
 } MemRef1D_i64;
 
-#ifdef BASELINE_MEMREF_ABI
-extern void BENCH_FN(_Bool sel, int64_t n, MemRef1D_i64 *out);
-
 static MemRef1D_i64 make1D(int64_t *ptr, int64_t n) {
   MemRef1D_i64 m;
   m.allocated = ptr;
@@ -35,8 +32,14 @@ static MemRef1D_i64 make1D(int64_t *ptr, int64_t n) {
   m.strides[0] = 1;
   return m;
 }
+
+#if defined(MLIR_C_INTERFACE)
+extern void _mlir_ciface_control_flow_selected_allocation_reduction(
+    _Bool sel, int64_t n, MemRef1D_i64 *out);
+#elif defined(BASELINE_MEMREF_ABI)
+extern void BENCH_FN(_Bool sel, int64_t n, MemRef1D_i64 *out);
 #else
-extern void BENCH_FN(_Bool sel, int64_t n, int64_t out_s0, int64_t *out);
+extern void BENCH_FN(_Bool sel, int64_t n_nat, int64_t out_nat, int64_t *out);
 #endif
 
 static uint64_t now_ns(void) {
@@ -55,6 +58,9 @@ static void run_once(int64_t selector, int64_t n, int64_t *out) {
 #ifdef BASELINE_MEMREF_ABI
   MemRef1D_i64 out_ref = make1D(out, 1);
   BENCH_FN(selector == 0, n, &out_ref);
+#elif defined(MLIR_C_INTERFACE)
+  MemRef1D_i64 out_ref = make1D(out, 1);
+  _mlir_ciface_control_flow_selected_allocation_reduction(selector == 0, n, &out_ref);
 #else
   BENCH_FN(selector == 0, n, 1, out);
 #endif

@@ -13,15 +13,17 @@ builtin.module {
     // Phase-3/4 executable realization:
     // materialize two metadata-bearing views, choose one as a memref value via
     // scf.if, then carry that selected view through the reduction loop.
-    %view0 = "memref.reinterpret_cast"(%flat, %c0, %c8, %c1)
-      <{operandSegmentSizes = array<i32: 1, 1, 1, 1>}>
-      : (memref<?xf32>, index, index, index)
-        -> memref<8xf32, strided<[?], offset: ?>>
+    %view0 = memref.reinterpret_cast %flat to
+      offset: [%c0],
+      sizes: [%c8],
+      strides: [%c1]
+    : memref<?xf32> to memref<8xf32, strided<[?], offset: ?>>
 
-    %view1 = "memref.reinterpret_cast"(%flat, %c0, %c8, %c2)
-      <{operandSegmentSizes = array<i32: 1, 1, 1, 1>}>
-      : (memref<?xf32>, index, index, index)
-        -> memref<8xf32, strided<[?], offset: ?>>
+    %view1 = memref.reinterpret_cast %flat to
+      offset: [%c0],
+      sizes: [%c8],
+      strides: [%c2]
+    : memref<?xf32> to memref<8xf32, strided<[?], offset: ?>>
 
     %view = "scf.if"(%sel) ({
       "scf.yield"(%view0) : (memref<8xf32, strided<[?], offset: ?>>) -> ()

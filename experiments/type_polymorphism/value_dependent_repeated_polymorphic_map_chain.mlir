@@ -1,9 +1,3 @@
-// Benchmark purpose: design benchmark for repeated small-batch map-like polymorphic reuse.
-// Polymorphic combinator shape: conceptually forall T. (T -> T) -> T -> T; executable realization
-// here uses repeated applications of a first-order polymorphic sink `forall T. T -> T` between typed steps.
-// Scaling knobs: fixed type fanout over i8, i16, i32, i64, f32, f64; fixed batch depth of three uses per type.
-// Expected comparison story: MLIR duplicates sink/map wrappers per type, while ScaIR shares one
-// polymorphic shell and still carries the same typed step chain.
 builtin.module {
   func.func @repeated_polymorphic_map_chain(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %sink = "tlam.tlambda"() ({

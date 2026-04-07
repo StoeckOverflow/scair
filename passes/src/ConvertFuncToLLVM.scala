@@ -51,6 +51,9 @@ private final class Builder(val funcOp: func.Func):
       Region(newBlocks),
     )
     lowered.attributes.addAll(funcOp.attributes)
+    lowered.attributes.values.foreach(attr =>
+      AttributeWalker.remapTypeUsesInPlace(attr)(using valueMap)
+    )
     lowered
 
 private val LowerFunc = pattern {

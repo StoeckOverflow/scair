@@ -1,9 +1,3 @@
-// Benchmark purpose: design benchmark for accumulator-style polymorphism with typed scorers.
-// Polymorphic combinator shape: conceptually forall T. (T -> i64) -> T -> i64; executable
-// realization here uses a first-order polymorphic sink `forall T. T -> T` before typed scoring.
-// Scaling knobs: fixed type fanout over i8, i16, i32, i64, f32, f64; one scorer use per type.
-// Expected comparison story: MLIR duplicates sink and scorer wrappers per type, while the ScaIR
-// encodings share one polymorphic shell and differ mainly in source-level bookkeeping.
 builtin.module {
   func.func @shared_polymorphic_projection_accumulator(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %sink = "tlam.tlambda"() ({
@@ -31,17 +25,24 @@ builtin.module {
     %f64_c05 = "arith.constant"() <{value = 0.5 : f64}> : () -> f64
     %f64_c11 = "arith.constant"() <{value = 11.0 : f64}> : () -> f64
 
-    %sx_i8 = "arith.extsi"(%i8v) : (i8) -> i64
-    %sx_i16 = "arith.extsi"(%i16v) : (i16) -> i64
-    %sx_i32 = "arith.extsi"(%i32v) : (i32) -> i64
+    %s_i8 = "tlam.vapply"(%sink_i8, %i8v) : (!tlam.fun<i8, i8>, i8) -> i8
+    %s_i16 = "tlam.vapply"(%sink_i16, %i16v) : (!tlam.fun<i16, i16>, i16) -> i16
+    %s_i32 = "tlam.vapply"(%sink_i32, %i32v) : (!tlam.fun<i32, i32>, i32) -> i32
+    %s_i64 = "tlam.vapply"(%sink_i64, %i64v) : (!tlam.fun<i64, i64>, i64) -> i64
+    %s_f32 = "tlam.vapply"(%sink_f32, %f32v) : (!tlam.fun<f32, f32>, f32) -> f32
+    %s_f64 = "tlam.vapply"(%sink_f64, %f64v) : (!tlam.fun<f64, f64>, f64) -> f64
+
+    %sx_i8 = "arith.extsi"(%s_i8) : (i8) -> i64
+    %sx_i16 = "arith.extsi"(%s_i16) : (i16) -> i64
+    %sx_i32 = "arith.extsi"(%s_i32) : (i32) -> i64
     %r_i8 = "arith.addi"(%sx_i8, %i64_c7) : (i64, i64) -> i64
     %r_i16 = "arith.muli"(%sx_i16, %i64_c2) : (i64, i64) -> i64
     %r_i32 = "arith.subi"(%sx_i32, %i64_c9) : (i64, i64) -> i64
-    %r_i64 = "arith.addi"(%i64v, %i64_c5) : (i64, i64) -> i64
-    %m_f32 = "arith.mulf"(%f32v, %f32_c2) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
+    %r_i64 = "arith.addi"(%s_i64, %i64_c5) : (i64, i64) -> i64
+    %m_f32 = "arith.mulf"(%s_f32, %f32_c2) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
     %a_f32 = "arith.addf"(%m_f32, %f32_c1) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
     %r_f32 = "arith.fptosi"(%a_f32) : (f32) -> i64
-    %m_f64 = "arith.mulf"(%f64v, %f64_c05) <{fastmath = #arith.fastmath<none>}> : (f64, f64) -> f64
+    %m_f64 = "arith.mulf"(%s_f64, %f64_c05) <{fastmath = #arith.fastmath<none>}> : (f64, f64) -> f64
     %a_f64 = "arith.addf"(%m_f64, %f64_c11) <{fastmath = #arith.fastmath<none>}> : (f64, f64) -> f64
     %r_f64 = "arith.fptosi"(%a_f64) : (f64) -> i64
 

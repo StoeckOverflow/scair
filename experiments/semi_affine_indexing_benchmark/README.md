@@ -7,20 +7,27 @@ kernels lower and execute.
 
 ## What this family measures
 
-The main executable benchmark compares two ScaIR encodings of the same
-semi-affine fill-and-sum kernel:
+The main executable benchmark compares three encodings of a semi-affine
+fill-and-sum kernel:
 
+- an upstream MLIR baseline route
 - a baseline route lowered with the baseline dynamic-memref path
 - a value-dependent route lowered with the refined path
 
-Both variants operate over a semi-affine reinterpretation of storage and then
-produce the same checksum-style scalar result.
+All variants produce the same checksum-style scalar result. The baseline routes
+reinterpret the benchmark storage carrier directly. The current refined route
+preserves the semi-affine layout facts in `d_memref` types, but because the
+repo does not yet expose a verifier-backed bridge from an incoming baseline
+`memref` argument to `d_memref`, it materializes refined internal storage
+instead of retyping the public `%flat` argument in place.
 
 The expected thesis argument for this folder is:
 
 - both variants should compute the same observable result
 - the value-dependent route should expose layout state more directly in the
   source and/or lowered representation
+- the current value-dependent route is still authoritative about internal
+  layout typing, but not about reusing the external flat memref carrier
 - any runtime difference is secondary to the structural comparison in this
   family
 
@@ -28,13 +35,14 @@ The expected thesis argument for this folder is:
 
 The primary executable sources are:
 
+- `semi_affine_kernel_mlir_baseline.mlir`
 - `semi_affine_kernel_scair_baseline_bare.mlir`
 - `semi_affine_kernel_scair_bare.mlir`
 
 These are built by `build_scair_example.sh` into the benchmark row reported as:
 
 - benchmark: `semi_affine_fill_and_sum`
-- variants: `baseline`, `value_dependent`
+- variants: `mlir_baseline`, `baseline`, `value_dependent`
 
 ## Parser example
 

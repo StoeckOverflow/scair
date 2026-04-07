@@ -1,9 +1,3 @@
-// Benchmark purpose: de Bruijn baseline for repeated small-batch map-like polymorphic reuse.
-// Polymorphic combinator shape: conceptually forall T. (T -> T) -> T -> T; executable realization
-// here uses repeated applications of a first-order polymorphic sink `forall T. T -> T` between typed steps.
-// Scaling knobs: fixed type fanout over i8, i16, i32, i64, f32, f64; fixed batch depth of three uses per type.
-// Expected comparison story: this should lower similarly to the value-dependent benchmark with
-// more source-level binder bookkeeping.
 builtin.module {
   func.func @repeated_polymorphic_map_chain(%i8v: i8, %i16v: i16, %i32v: i32, %i64v: i64, %f32v: f32, %f64v: f64) -> i64 {
     %sink = "tlam_dbi.tlambda"() ({
@@ -28,27 +22,33 @@ builtin.module {
     %f32_c125 = "arith.constant"() <{value = 1.25 : f32}> : () -> f32
     %f64_c075 = "arith.constant"() <{value = 0.75 : f64}> : () -> f64
 
-    %m1_i8 = "arith.addi"(%i8v, %i8_c1) : (i8, i8) -> i8
+    %s1_i8 = "tlam_dbi.vapply"(%sink_i8, %i8v) : (!tlam_dbi.fun<i8, i8>, i8) -> i8
+    %m1_i8 = "arith.addi"(%s1_i8, %i8_c1) : (i8, i8) -> i8
     %m2_i8 = "arith.addi"(%m1_i8, %i8_c1) : (i8, i8) -> i8
     %r_i8 = "arith.addi"(%m2_i8, %i8_c1) : (i8, i8) -> i8
 
-    %m1_i16 = "arith.muli"(%i16v, %i16_c2) : (i16, i16) -> i16
+    %s1_i16 = "tlam_dbi.vapply"(%sink_i16, %i16v) : (!tlam_dbi.fun<i16, i16>, i16) -> i16
+    %m1_i16 = "arith.muli"(%s1_i16, %i16_c2) : (i16, i16) -> i16
     %m2_i16 = "arith.muli"(%m1_i16, %i16_c2) : (i16, i16) -> i16
     %r_i16 = "arith.muli"(%m2_i16, %i16_c2) : (i16, i16) -> i16
 
-    %m1_i32 = "arith.subi"(%i32v, %i32_c3) : (i32, i32) -> i32
+    %s1_i32 = "tlam_dbi.vapply"(%sink_i32, %i32v) : (!tlam_dbi.fun<i32, i32>, i32) -> i32
+    %m1_i32 = "arith.subi"(%s1_i32, %i32_c3) : (i32, i32) -> i32
     %m2_i32 = "arith.subi"(%m1_i32, %i32_c3) : (i32, i32) -> i32
     %r_i32 = "arith.subi"(%m2_i32, %i32_c3) : (i32, i32) -> i32
 
-    %m1_i64 = "arith.addi"(%i64v, %i64_c4) : (i64, i64) -> i64
+    %s1_i64 = "tlam_dbi.vapply"(%sink_i64, %i64v) : (!tlam_dbi.fun<i64, i64>, i64) -> i64
+    %m1_i64 = "arith.addi"(%s1_i64, %i64_c4) : (i64, i64) -> i64
     %m2_i64 = "arith.addi"(%m1_i64, %i64_c4) : (i64, i64) -> i64
     %r_i64 = "arith.addi"(%m2_i64, %i64_c4) : (i64, i64) -> i64
 
-    %m1_f32 = "arith.mulf"(%f32v, %f32_c125) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
+    %s1_f32 = "tlam_dbi.vapply"(%sink_f32, %f32v) : (!tlam_dbi.fun<f32, f32>, f32) -> f32
+    %m1_f32 = "arith.mulf"(%s1_f32, %f32_c125) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
     %m2_f32 = "arith.mulf"(%m1_f32, %f32_c125) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
     %r_f32 = "arith.mulf"(%m2_f32, %f32_c125) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
 
-    %m1_f64 = "arith.addf"(%f64v, %f64_c075) <{fastmath = #arith.fastmath<none>}> : (f64, f64) -> f64
+    %s1_f64 = "tlam_dbi.vapply"(%sink_f64, %f64v) : (!tlam_dbi.fun<f64, f64>, f64) -> f64
+    %m1_f64 = "arith.addf"(%s1_f64, %f64_c075) <{fastmath = #arith.fastmath<none>}> : (f64, f64) -> f64
     %m2_f64 = "arith.addf"(%m1_f64, %f64_c075) <{fastmath = #arith.fastmath<none>}> : (f64, f64) -> f64
     %r_f64 = "arith.addf"(%m2_f64, %f64_c075) <{fastmath = #arith.fastmath<none>}> : (f64, f64) -> f64
 

@@ -35,14 +35,13 @@ given OperationCustomParser[Func]:
 
   def parse[$: P](
       resNames: Seq[String]
-  )(using Parser): P[Func] =
+  )(using p: Parser): P[Func] =
     ("private".!.? ~ symbolRefAttrP ~
-      (("(" ~ valueIdAndTypeP.rep(sep = ",") ~ ")")
-        .flatMap((args: Seq[(String, Attribute)]) =>
-          Pass(
-            args.map(_._2)
-          ) ~ parseResultTypes ~ ("attributes" ~ attributeDictionaryP)
-            .orElse(Map()) ~ regionP(args)
+      ((p.startRegionP ~ dependentEntryArgsP)
+        .flatMap((args: Seq[BlockArgument[Attribute]]) =>
+          Pass(args.map(_.typ)) ~ parseResultTypes ~
+            ("attributes" ~ attributeDictionaryP).orElse(Map()) ~
+            regionWithEntryArgsP(args) ~ p.endRegionP
         ) |
         (
           parenTypeListP ~ parseResultTypes ~

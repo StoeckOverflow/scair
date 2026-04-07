@@ -1,8 +1,3 @@
-// Benchmark purpose: monomorphic MLIR baseline for accumulator-style design benchmark.
-// Polymorphic combinator shape being simulated: conceptually forall T. (T -> i64) -> T -> i64;
-// executable realization here duplicates a monomorphic sink and scorer path per concrete type.
-// Scaling knobs: fixed type fanout over i8, i16, i32, i64, f32, f64; one scorer use per type.
-// Expected comparison story: this file duplicates sink and scorer wrappers per type.
 module {
   func.func @sink_i8(%x: i8) -> i8 { return %x : i8 }
   func.func @sink_i16(%x: i16) -> i16 { return %x : i16 }

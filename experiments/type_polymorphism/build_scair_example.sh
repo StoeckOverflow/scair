@@ -154,10 +154,9 @@ build_scair_program() {
 
   end_ns=$(now_ns)
   if [[ $status -eq 0 ]]; then
-    "$exe" "$ITERATIONS" > "$output_txt"
+    run_benchmark_repeated "$output_txt" "$exe" "$ITERATIONS"
     {
       echo "build_status=ok"
-      echo "run_status=ok"
       printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
     } >> "$output_txt"
   else
@@ -209,10 +208,9 @@ build_mlir_program() {
     -o "$exe"
 
   end_ns=$(now_ns)
-  "$exe" "$ITERATIONS" > "$output_txt"
+  run_benchmark_repeated "$output_txt" "$exe" "$ITERATIONS"
   {
     echo "build_status=ok"
-    echo "run_status=ok"
     printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
   } >> "$output_txt"
 }
@@ -293,7 +291,7 @@ append_row() {
     "$summary_md" \
     "$bench" \
     "$report_variant" \
-    "$representation" \
+    "" \
     "$(metric_field build_status "$output_txt")" \
     "$(metric_field run_status "$output_txt")" \
     "$(count_ops_structural "$src")" \
@@ -303,8 +301,7 @@ append_row() {
     "$(metric_field compile_ms "$output_txt")" \
     "$(metric_field result "$output_txt")" \
     "$(metric_field expected_result "$output_txt")" \
-    "$(metric_field ns_per_iter "$output_txt")" \
-    "$notes"
+    "$(metric_field ns_per_iter "$output_txt")"
 }
 
 for bench in "${BENCHMARKS[@]}"; do

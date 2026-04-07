@@ -307,6 +307,10 @@ final class Parser(
   private[parse] def exitRegionP[$: P] =
     scopes.pop.allBlocksAndValuesDefinedP
 
+  def startRegionP[$: P] = enterRegionP
+
+  def endRegionP[$: P] = exitRegionP
+
   def parse[T](
       input: ParserInputSource,
       parser: P[?] => P[T] = moduleP(using _, this),
@@ -725,6 +729,32 @@ def regionP[$: P](
       else entry +: blocks
     ) ~/ "}" ~/ p.exitRegionP
 ).map(Region(_))
+
+def dependentEntryArgsP[$: P](using p: Parser): P[Seq[BlockArgument[
+  Attribute
+]]] = P(
+  "(" ~
+    (valueIdP.flatMap(name =>
+      ":" ~ typeP.flatMap(typ => p.scopes.top.defineBlockArgumentP(name, typ))
+    )).rep(sep = ",") ~
+    ")"
+)
+
+def regionWithEntryArgsP[$: P](
+    entryArgs: Seq[BlockArgument[Attribute]]
+)(using Parser): P[Region] = P(
+  "{" ~/
+    (operationP.rep ~ blockP.rep).map((entryOps, otherBlocks) =>
+      val entry = Block.fromArguments(entryArgs, entryOps)
+      val blocks =
+        if entry.operations.isEmpty && entry.arguments.isEmpty then otherBlocks
+        else entry +: otherBlocks
+      val region = Region(blocks)
+      blocks.foreach(_.containerRegion = Some(region))
+      region
+    ) ~/
+    "}"
+)
 
 // [x] - value-id-and-type ::= value-id `:` type
 

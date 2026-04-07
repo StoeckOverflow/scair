@@ -12,9 +12,12 @@ source "$SCAIR_ROOT/experiments/common_metrics.sh"
 
 SCAIR_OPT="${SCAIR_ROOT}/out/tools/opt/launcher.dest/run"
 MLIR_TRANSLATE="$BIN_DIR/mlir-translate"
+MLIR_OPT="$BIN_DIR/mlir-opt"
 
-BASELINE_SRC="${BASELINE_SRC:-$EXAMPLE_DIR/semi_affine_kernel_scair_baseline_bare.mlir}"
-VALUE_DEP_SRC="${VALUE_DEP_SRC:-$EXAMPLE_DIR/semi_affine_kernel_scair_bare.mlir}"
+MLIR_BASELINE_SRC="${MLIR_BASELINE_SRC:-$EXAMPLE_DIR/semi_affine_kernel_mlir_baseline.mlir}"
+MLIR_DRIVER_SRC="${MLIR_DRIVER_SRC:-$EXAMPLE_DIR/driver.c}"
+BASELINE_SRC="${BASELINE_SRC:-$EXAMPLE_DIR/semi_affine_kernel_scair_baseline.mlir}"
+VALUE_DEP_SRC="${VALUE_DEP_SRC:-$EXAMPLE_DIR/semi_affine_kernel_scair_value_dependent.mlir}"
 BASELINE_DRIVER_SRC="${BASELINE_DRIVER_SRC:-$EXAMPLE_DIR/driver_baseline_bare.c}"
 VALUE_DEP_DRIVER_SRC="${VALUE_DEP_DRIVER_SRC:-$EXAMPLE_DIR/driver_bare.c}"
 
@@ -22,8 +25,11 @@ OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/build_scair}"
 mkdir -p "$OUT_DIR"
 
 require_bin "$SCAIR_OPT"
+require_bin "$MLIR_OPT"
 require_bin "$MLIR_TRANSLATE"
 require_bin "$CC"
+require_file "$MLIR_BASELINE_SRC"
+require_file "$MLIR_DRIVER_SRC"
 require_file "$BASELINE_SRC"
 require_file "$VALUE_DEP_SRC"
 require_file "$BASELINE_DRIVER_SRC"
@@ -36,15 +42,47 @@ build_kernel() {
   local llvm_ir_out="$4"
   local metrics_out="$5"
   local lowered_mlir_out="${llvm_ir_out%.ll}.llvm.mlir"
-  local patched_mlir_out="${llvm_ir_out%.ll}.patched.llvm.mlir"
 
   local start_ns
   local end_ns
   start_ns=$(now_ns)
 
-  "$SCAIR_OPT" "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" > "$lowered_mlir_out"
-  cp "$lowered_mlir_out" "$patched_mlir_out"
-  "$MLIR_TRANSLATE" --mlir-to-llvmir "$patched_mlir_out" > "$llvm_ir_out"
+  "$SCAIR_OPT" "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" \
+    | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' \
+    > "$lowered_mlir_out"
+  "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"
+  "$CC" -O2 -x ir "$llvm_ir_out" -c -o "$obj_out"
+
+  end_ns=$(now_ns)
+  {
+    echo "build_status=ok"
+    printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
+  } > "$metrics_out"
+}
+
+build_mlir_kernel() {
+  local src="$1"
+  local obj_out="$2"
+  local llvm_ir_out="$3"
+  local metrics_out="$4"
+  local lowered_mlir_out="${llvm_ir_out%.ll}.llvm.mlir"
+
+  local start_ns
+  local end_ns
+  start_ns=$(now_ns)
+
+  "$MLIR_OPT" "$src" \
+    --lower-affine \
+    --convert-scf-to-cf \
+    --expand-strided-metadata \
+    --finalize-memref-to-llvm \
+    --convert-arith-to-llvm \
+    --convert-index-to-llvm \
+    --convert-cf-to-llvm \
+    --convert-func-to-llvm \
+    --reconcile-unrealized-casts \
+    > "$lowered_mlir_out"
+  "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"
   "$CC" -O2 -x ir "$llvm_ir_out" -c -o "$obj_out"
 
   end_ns=$(now_ns)
@@ -106,7 +144,7 @@ append_row() {
     "$summary_md" \
     "semi_affine_fill_and_sum" \
     "$variant" \
-    "$representation" \
+    "" \
     "$(metric_field build_status "$output_txt")" \
     "$(metric_field run_status "$output_txt")" \
     "$(count_ops_structural "$src")" \
@@ -116,9 +154,26 @@ append_row() {
     "$(metric_field compile_ms "$output_txt")" \
     "$(metric_field result "$output_txt")" \
     "$(metric_field expected_result "$output_txt")" \
-    "$(metric_field ns_per_iter "$output_txt")" \
-    "semi-affine layout benchmark"
+    "$(metric_field ns_per_iter "$output_txt")"
 }
+
+echo "==> Building upstream MLIR semi-affine baseline"
+build_mlir_kernel \
+  "$MLIR_BASELINE_SRC" \
+  "$OUT_DIR/semi_affine_mlir_baseline.o" \
+  "$OUT_DIR/semi_affine_mlir_baseline.ll" \
+  "$OUT_DIR/semi_affine_mlir_baseline_metrics.txt"
+
+echo "==> Linking upstream MLIR semi-affine baseline executable"
+"$CC" -O2 \
+  -DBENCH_LABEL="\"semi_affine_fill_and_sum\"" \
+  -DVARIANT_LABEL="\"mlir_baseline\"" \
+  "$MLIR_DRIVER_SRC" \
+  "$OUT_DIR/semi_affine_mlir_baseline.o" \
+  -o "$OUT_DIR/semi_affine_mlir_baseline_exec"
+run_benchmark_repeated "$OUT_DIR/semi_affine_mlir_baseline_output.txt" \
+  "$OUT_DIR/semi_affine_mlir_baseline_exec" "$ITERATIONS"
+cat "$OUT_DIR/semi_affine_mlir_baseline_metrics.txt" >> "$OUT_DIR/semi_affine_mlir_baseline_output.txt"
 
 echo "==> Building ScaIR semi-affine baseline kernel-only"
 build_kernel \
@@ -135,13 +190,13 @@ echo "==> Linking ScaIR semi-affine baseline kernel-only executable"
   "$BASELINE_DRIVER_SRC" \
   "$OUT_DIR/semi_affine_baseline_kernel_only_scair.o" \
   -o "$OUT_DIR/semi_affine_baseline_kernel_only_scair_exec"
-"$OUT_DIR/semi_affine_baseline_kernel_only_scair_exec" "$ITERATIONS" > "$OUT_DIR/semi_affine_baseline_kernel_only_scair_output.txt"
-echo "run_status=ok" >> "$OUT_DIR/semi_affine_baseline_kernel_only_scair_output.txt"
+run_benchmark_repeated "$OUT_DIR/semi_affine_baseline_kernel_only_scair_output.txt" \
+  "$OUT_DIR/semi_affine_baseline_kernel_only_scair_exec" "$ITERATIONS"
 cat "$OUT_DIR/semi_affine_baseline_kernel_only_scair_metrics.txt" >> "$OUT_DIR/semi_affine_baseline_kernel_only_scair_output.txt"
 
 echo "==> Building ScaIR semi-affine value-dependent kernel-only"
 build_kernel \
-  "lower-dynamic-memref-to-llvm" \
+  "lower-dmemref-to-llvm" \
   "$VALUE_DEP_SRC" \
   "$OUT_DIR/semi_affine_value_dependent_scair.o" \
   "$OUT_DIR/semi_affine_value_dependent_scair.ll" \
@@ -154,8 +209,8 @@ echo "==> Linking ScaIR semi-affine value-dependent executable"
   "$VALUE_DEP_DRIVER_SRC" \
   "$OUT_DIR/semi_affine_value_dependent_scair.o" \
   -o "$OUT_DIR/semi_affine_value_dependent_scair_exec"
-"$OUT_DIR/semi_affine_value_dependent_scair_exec" "$ITERATIONS" > "$OUT_DIR/semi_affine_value_dependent_scair_output.txt"
-echo "run_status=ok" >> "$OUT_DIR/semi_affine_value_dependent_scair_output.txt"
+run_benchmark_repeated "$OUT_DIR/semi_affine_value_dependent_scair_output.txt" \
+  "$OUT_DIR/semi_affine_value_dependent_scair_exec" "$ITERATIONS"
 cat "$OUT_DIR/semi_affine_value_dependent_scair_metrics.txt" >> "$OUT_DIR/semi_affine_value_dependent_scair_output.txt"
 
 SUMMARY_MD="$OUT_DIR/summary.md"
@@ -166,7 +221,16 @@ write_metrics_csv_header "$SUMMARY_CSV"
 append_row \
   "$SUMMARY_CSV" \
   "$SUMMARY_MD" \
-  "baseline" \
+  "mlir_baseline" \
+  "mlir_baseline" \
+  "$MLIR_BASELINE_SRC" \
+  "$OUT_DIR/semi_affine_mlir_baseline.llvm.mlir" \
+  "$OUT_DIR/semi_affine_mlir_baseline.ll" \
+  "$OUT_DIR/semi_affine_mlir_baseline_output.txt"
+append_row \
+  "$SUMMARY_CSV" \
+  "$SUMMARY_MD" \
+  "scair_baseline" \
   "scair_baseline" \
   "$BASELINE_SRC" \
   "$OUT_DIR/semi_affine_baseline_kernel_only_scair.llvm.mlir" \
@@ -185,8 +249,10 @@ append_row \
 echo
 echo "ScaIR semi-affine build complete."
 echo "Produced:"
+echo "  $OUT_DIR/semi_affine_mlir_baseline_exec"
 echo "  $OUT_DIR/semi_affine_baseline_kernel_only_scair_exec"
 echo "  $OUT_DIR/semi_affine_value_dependent_scair_exec"
+echo "  $OUT_DIR/semi_affine_mlir_baseline.ll"
 echo "  $OUT_DIR/semi_affine_baseline_kernel_only_scair.ll"
 echo "  $OUT_DIR/semi_affine_value_dependent_scair.ll"
 echo "  $OUT_DIR/summary.md"

@@ -1,8 +1,3 @@
-// Benchmark purpose: monomorphic MLIR baseline for compose-like fanout.
-// Polymorphic combinator shape being simulated: conceptually forall T. (T -> T) -> (T -> T) -> T -> T;
-// executable realization here duplicates a monomorphic sink and a typed compose wrapper per concrete type.
-// Scaling knobs: fixed type fanout over i8, i16, i32, i64, f32, f64; two worker steps per type.
-// Expected comparison story: this file duplicates sink and compose structure per concrete type.
 module {
   func.func @sink_i8(%x: i8) -> i8 { return %x : i8 }
   func.func @sink_i16(%x: i16) -> i16 { return %x : i16 }

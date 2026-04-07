@@ -42,6 +42,62 @@ private final class Builder(val funcOp: func.Func):
       case _: IndexType                  => llvmIndexType
       case other                         => other
 
+  private def cloneValueAttr(attr: ValueAttribute): ValueAttribute =
+    ValueAttribute(attr.getVal())
+
+  private def cloneLayoutParam(param: d_memref.LayoutParam): d_memref.LayoutParam =
+    param match
+      case v: ValueAttribute => cloneValueAttr(v)
+      case i: IntegerAttr    => i
+
+  private def cloneAttr(attr: Attribute): Attribute =
+    attr match
+      case FunctionType(inputs, outputs) =>
+        FunctionType(
+          inputs.map(i => cloneAttr(i).asInstanceOf[TypeAttribute]),
+          outputs.map(o => cloneAttr(o).asInstanceOf[TypeAttribute]),
+        )
+      case ValueRefType(ref) =>
+        ValueRefType(cloneValueAttr(ref))
+      case v: ValueAttribute =>
+        cloneValueAttr(v)
+      case d_memref.dMemrefMemrefType(params, elem, offset, strides) =>
+        d_memref.dMemrefMemrefType(
+          params.map(cloneValueAttr),
+          cloneAttr(elem).asInstanceOf[TypeAttribute],
+          offset.map(cloneLayoutParam),
+          strides.map(_.map(cloneLayoutParam)),
+        )
+      case d_memref.dMemrefVectorType(param, elem) =>
+        d_memref.dMemrefVectorType(
+          cloneValueAttr(param),
+          cloneAttr(elem).asInstanceOf[TypeAttribute],
+        )
+      case d_memref.dMemrefMatrixType(rows, cols, elem) =>
+        d_memref.dMemrefMatrixType(
+          cloneValueAttr(rows),
+          cloneValueAttr(cols),
+          cloneAttr(elem).asInstanceOf[TypeAttribute],
+        )
+      case dTensor.dTensorTensorType(params, elem) =>
+        dTensor.dTensorTensorType(
+          params.map(cloneValueAttr),
+          cloneAttr(elem).asInstanceOf[TypeAttribute],
+        )
+      case dTensor.dTensorVectorType(param, elem) =>
+        dTensor.dTensorVectorType(
+          cloneValueAttr(param),
+          cloneAttr(elem).asInstanceOf[TypeAttribute],
+        )
+      case dTensor.dTensorMatrixType(rows, cols, elem) =>
+        dTensor.dTensorMatrixType(
+          cloneValueAttr(rows),
+          cloneValueAttr(cols),
+          cloneAttr(elem).asInstanceOf[TypeAttribute],
+        )
+      case other =>
+        other
+
   private def loweredFunctionType: FunctionType =
     val inputTypes =
       if funcOp.body.blocks.nonEmpty then
@@ -322,9 +378,29 @@ private final class Builder(val funcOp: func.Func):
           )
           emit(newBlock, lowered)
           state.valueMap(ptrtoint.out) = lowered.out
-        case _: dTensor.NatConst     => ()
-        case _: dTensor.IndexToNat   => ()
-        case _: dTensor.ShapeToIndex => ()
+        case op: dTensor.NatConst =>
+          val lowered = constIndex(op.value.value.value, newBlock)
+          state.valueMap(op.res) = lowered
+        case op: dTensor.IndexToNat =>
+          state.valueMap(op.res) = materializeNatOrIndex(op.index, newBlock)
+        case op: dTensor.ShapeToIndex =>
+          state.valueMap(op.res) = materializeNatOrIndex(op.nat, newBlock)
+        case op: dTensor.NatAdd =>
+          val lowered = llvm.Add(
+            asLLVMIndex(materializeNatOrIndex(op.lhs, newBlock)),
+            asLLVMIndex(materializeNatOrIndex(op.rhs, newBlock)),
+            Result(llvmIndexType),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(op.res) = lowered.res
+        case op: dTensor.NatMul =>
+          val lowered = llvm.Mul(
+            asLLVMIndex(materializeNatOrIndex(op.lhs, newBlock)),
+            asLLVMIndex(materializeNatOrIndex(op.rhs, newBlock)),
+            Result(llvmIndexType),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(op.res) = lowered.res
         case op: d_memref.Alloc      => state.valueMap(op.res) = lowerAlloc(op, newBlock)
         case op: d_memref.ReinterpretCast =>
           state.valueMap(op.res) = lowerReinterpret(op, newBlock)
@@ -361,7 +437,9 @@ private final class Builder(val funcOp: func.Func):
           lowered.attributes.contains("scair.emit_bare_interface") ||
           lowered.attributes.contains("scair.emit_descriptor_pointer_interface"))
     then
-      lowered.attributes += ("scair.original_function_type" -> funcOp.function_type)
+      val originalType = cloneAttr(funcOp.function_type).asInstanceOf[FunctionType]
+      AttributeWalker.remapTypeUsesInPlace(originalType)(using state.valueMap)
+      lowered.attributes += ("scair.original_function_type" -> originalType)
     lowered
 
 private val LowerFunc = pattern {

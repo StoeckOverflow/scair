@@ -74,8 +74,13 @@ private final class FunctionLegalizer(op: llvm.Func):
       Region(newBlocks),
     )
     lowered.attributes.addAll(op.attributes)
+    lowered.attributes.values.foreach(attr =>
+      AttributeWalker.remapTypeUsesInPlace(attr)(using valueMap)
+    )
     lowered.attributes.get("scair.original_function_type").foreach { orig =>
-      lowered.attributes.update("scair.original_function_type", legalizeAttr(orig))
+      val legalized = legalizeAttr(orig)
+      AttributeWalker.remapTypeUsesInPlace(legalized)(using valueMap)
+      lowered.attributes.update("scair.original_function_type", legalized)
     }
     lowered
 
@@ -266,14 +271,23 @@ final class ConvertLLVMExportABI(ctx: MLContext) extends ModulePass(ctx):
               }
               if isBareInterface(legalized) then
                 legalized.attributes.remove(bareInterfaceAttr)
-              if isDescriptorPointerInterface(legalized) && legalized.body.blocks.nonEmpty then
-                newTop.addOp(DescriptorPointerInterfaceBuilder(legalized).build())
-              else
-                newTop.addOp(legalized)
-              if isEmitCInterface(legalized) && !isDescriptorPointerInterface(
+              val cInterfaceWrapper =
+                if isEmitCInterface(legalized) && !isDescriptorPointerInterface(
+                    legalized
+                  ) && legalized.body.blocks.nonEmpty
+                then Some(buildCInterfaceWrapper(legalized))
+                else None
+              val exported =
+                if isDescriptorPointerInterface(legalized) && legalized.body.blocks.nonEmpty then
+                  DescriptorPointerInterfaceBuilder(legalized).build()
+                else
                   legalized
-                ) && legalized.body.blocks.nonEmpty then
-                newTop.addOp(buildCInterfaceWrapper(legalized))
+              exported.attributes.remove("scair.original_function_type")
+              newTop.addOp(exported)
+              cInterfaceWrapper.foreach { wrapper =>
+                wrapper.attributes.remove("scair.original_function_type")
+                newTop.addOp(wrapper)
+              }
             case other =>
               newTop.addOp(other.deepCopy.asInstanceOf[Operation])
           }

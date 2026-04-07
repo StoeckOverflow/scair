@@ -59,20 +59,43 @@ groups = defaultdict(list)
 for row in rows:
     groups[row["experiment_family"]].append(row)
 
+variant_order = {
+    "mlir_baseline": 0,
+    "scair_baseline": 1,
+    "debruijn": 1,
+    "value_dependent": 2,
+}
+
+def rep_value(row):
+    note = row["notes"]
+    if note.startswith("selector="):
+        return note
+    if row["representation_group"] in {"mlir_baseline", "scair_baseline", "value_dependent"}:
+        return ""
+    return row["representation_group"]
+
 with open(md_path, "w", encoding="utf-8") as out:
     out.write("# Uniform Experiment Metrics Summary\n\n")
     out.write("This summary keeps one core schema across all experiment families.\n\n")
     for family in sorted(groups):
         out.write(f"## {family}\n\n")
-        out.write("| Benchmark | Variant | Rep | Build | Run | Structural ops | Func defs | Block args | LLVM lines | Compile ms | Result | Expected | ns/iter | Notes |\n")
-        out.write("| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | --- |\n")
-        for row in groups[family]:
+        out.write("| Benchmark | Variant | Rep | Build | Run | Structural ops | Func defs | Block args | LLVM lines | Compile ms | Result | Expected | ns/iter |\n")
+        out.write("| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: |\n")
+        sorted_rows = sorted(
+            groups[family],
+            key=lambda row: (
+                row["benchmark"],
+                variant_order.get(row["variant"], 99),
+                rep_value(row),
+            ),
+        )
+        for row in sorted_rows:
             out.write(
-                f"| {row['benchmark']} | {row['variant']} | {row['representation_group']} | "
+                f"| {row['benchmark']} | {row['variant']} | {rep_value(row)} | "
                 f"{row['build_status']} | {row['run_status']} | {row['source_ops_structural']} | "
                 f"{row['source_func_defs']} | {row['source_block_args']} | {row['llvm_ir_lines']} | "
                 f"{row['compile_ms']} | {row['result']} | {row['expected_result']} | "
-                f"{row['runtime_ns_per_iter']} | {row['notes']} |\n"
+                f"{row['runtime_ns_per_iter']} |\n"
             )
         out.write("\n")
 PY
