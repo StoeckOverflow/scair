@@ -31,19 +31,14 @@ builtin.module {
       "scf.yield"(%view1) : (memref<8xf32, strided<[?], offset: ?>>) -> ()
     }) : (i1) -> memref<8xf32, strided<[?], offset: ?>>
 
-    %carry_view, %sum = "affine.for"(%c0, %c8, %view, %f0) <{
-      lowerBoundMap = affine_map<(d0) -> (d0)>,
-      upperBoundMap = affine_map<(d0) -> (d0)>,
-      step = 1 : index,
-      operandSegmentSizes = array<i32: 1, 1, 2>
-    }> ({
-    ^bb0(%i: index, %cur: memref<8xf32, strided<[?], offset: ?>>, %acc: f32):
+    %carry_view, %sum = affine.for %i = 0 to 8
+        iter_args(%cur = %view, %acc = %f0)
+        -> (memref<8xf32, strided<[?], offset: ?>>, f32) {
       %v = "memref.load"(%cur, %i)
         : (memref<8xf32, strided<[?], offset: ?>>, index) -> f32
       %next = "arith.addf"(%acc, %v) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
       "affine.yield"(%cur, %next) : (memref<8xf32, strided<[?], offset: ?>>, f32) -> ()
-    }) : (index, index, memref<8xf32, strided<[?], offset: ?>>, f32)
-      -> (memref<8xf32, strided<[?], offset: ?>>, f32)
+    }
 
     "memref.store"(%sum, %out, %c0) : (f32, memref<1xf32>, index) -> ()
     "func.return"() : () -> ()

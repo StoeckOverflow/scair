@@ -9,10 +9,6 @@ builtin.module {
     %i0 = "arith.constant"() <{value = 0 : i64}> : () -> i64
     %n = "dtensor.shape.to_index"(%n_nat) : (!dtensor.nat) -> index
 
-    // Strongest currently executable refined route:
-    // the benchmark core is expressed directly in d_memref/d_affine, so the
-    // selected allocation lowers to pointer-based carrier state instead of a
-    // descriptor struct.
     %buf = "scf.if"(%sel) ({
       %route0 = "d_memref.alloc"() : () -> !d_memref.memref<[%n_nat], i64>
 
