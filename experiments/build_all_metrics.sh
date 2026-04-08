@@ -16,6 +16,7 @@ SCRIPTS=(
   "$SCAIR_ROOT/experiments/memref_control_flow/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/matmul_checksum_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair_example.sh"
 )
 
 METRIC_FILES=(
@@ -23,6 +24,7 @@ METRIC_FILES=(
   "$SCAIR_ROOT/experiments/memref_control_flow/build_scair/metrics.csv"
   "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/build_scair/metrics.csv"
   "$SCAIR_ROOT/experiments/matmul_checksum_benchmark/build_scair/metrics.csv"
+  "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair/metrics.csv"
 )
 
 for script in "${SCRIPTS[@]}"; do
