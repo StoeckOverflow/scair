@@ -18,7 +18,7 @@ extern void matmul_dynamic(
     float *C);
 
 extern void checksum_dynamic(
-    int64_t n_nat, int64_t m_nat, int64_t out_nat,
+    int64_t n_nat, int64_t m_nat,
     float *C,
     float *out);
 
@@ -67,7 +67,7 @@ int main(int argc, char **argv) {
     for (int64_t i = 0; i < n * m; ++i) C[i] = 0.0f;
     out[0] = 0.0f;
     matmul_dynamic(n, m, k, A, B, C);
-    checksum_dynamic(n, m, 1, C, out);
+    checksum_dynamic(n, m, C, out);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
 

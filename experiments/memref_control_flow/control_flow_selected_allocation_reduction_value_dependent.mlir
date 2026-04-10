@@ -44,12 +44,11 @@ builtin.module {
   func.func @control_flow_selected_allocation_reduction(
     %sel : i1,
     %n_nat : !dtensor.nat,
-    %out_nat : !dtensor.nat,
-    %out : !d_memref.memref<[%out_nat], i64>
+    %out : !d_memref.memref<[1], i64>
   ) attributes {scair.emit_bare_interface = true} {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %sum = "func.call"(%sel, %n_nat) <{callee = @control_flow_selected_allocation_reduction_impl}> : (i1, !dtensor.nat) -> i64
-    d_memref.store %sum, %out[%c0] : i64, !d_memref.memref<[%out_nat], i64>
+    d_memref.store %sum, %out[%c0] : i64, !d_memref.memref<[1], i64>
     "func.return"() : () -> ()
   }
 }

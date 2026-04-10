@@ -17,9 +17,8 @@ DRIVER_TEMPLATE="${EXAMPLE_DIR}/driver_template.c"
 OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/build_scair}"
 
 BENCHMARKS=(
-  "shared_polymorphic_sink_multitype"
-  "shared_polymorphic_projection_accumulator"
-  "repeated_polymorphic_map_chain"
+  "shared_polymorphic_identity_multitype"
+  "shared_polymorphic_kernel_bank_multitype"
 )
 
 mkdir -p "$OUT_DIR"
@@ -84,9 +83,8 @@ report_variant_name() {
 
 expected_result_for_bench() {
   case "$1" in
-    shared_polymorphic_sink_multitype) echo "87" ;;
-    shared_polymorphic_projection_accumulator) echo "50" ;;
-    repeated_polymorphic_map_chain) echo "64" ;;
+    shared_polymorphic_identity_multitype) echo "29" ;;
+    shared_polymorphic_kernel_bank_multitype) echo "3090" ;;
     *)
       echo "error: unknown benchmark: $1" >&2
       exit 1
@@ -274,6 +272,7 @@ append_row() {
     "$(count_func_defs "$lowered_func")" \
     "$(count_ops "$lowered_func")" \
     "$(count_ops_structural "$lowered_func")" \
+    "$(file_metric lines "$lowered_func")" \
     "$(file_metric lines "$llvm_ir")" \
     "$(count_llvm_calls "$llvm_ir")" \
     "$(metric_field compile_ms "$output_txt")" \
@@ -297,6 +296,7 @@ append_row() {
     "$(count_ops_structural "$src")" \
     "$(count_func_defs "$src")" \
     "$(count_block_args "$src")" \
+    "$(file_metric lines "$lowered_func")" \
     "$(file_metric lines "$llvm_ir")" \
     "$(metric_field compile_ms "$output_txt")" \
     "$(metric_field result "$output_txt")" \

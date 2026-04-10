@@ -9,15 +9,12 @@ builtin.module {
     %i2 = "arith.constant"() <{value = 2 : i64}> : () -> i64
     %i0 = "arith.constant"() <{value = 0 : i64}> : () -> i64
 
-    // Exact baseline route: branch-local dynamic allocs are selected as a
-    // memref value, then the chosen memref descriptor is carried through the
-    // reduction loop.
     %buf = "scf.if"(%sel) ({
       %route0 = "memref.alloc"(%n)
         <{alignment = 0 : i64, operandSegmentSizes = array<i32: 1, 0>}>
         : (index) -> memref<?xi64>
 
-      %carry0 = affine.for %i = 0 to %n iter_args(%cur_value = %i1) -> (i64) {
+      %carry0 = affine.for %i = affine_map<() -> (0)>() to affine_map<(d0) -> (d0)>(%n) step 1 : index iter_args(%cur_value = %i1 : i64) {
         "memref.store"(%cur_value, %route0, %i) : (i64, memref<?xi64>, index) -> ()
         %next_value = "arith.addi"(%cur_value, %i1) : (i64, i64) -> i64
         "affine.yield"(%next_value) : (i64) -> ()
@@ -29,7 +26,7 @@ builtin.module {
         <{alignment = 0 : i64, operandSegmentSizes = array<i32: 1, 0>}>
         : (index) -> memref<?xi64>
 
-      %carry1 = affine.for %i = 0 to %n iter_args(%cur_value = %i2) -> (i64) {
+      %carry1 = affine.for %i = affine_map<() -> (0)>() to affine_map<(d0) -> (d0)>(%n) step 1 : index iter_args(%cur_value = %i2 : i64) {
         "memref.store"(%cur_value, %route1, %i) : (i64, memref<?xi64>, index) -> ()
         %next_value = "arith.addi"(%cur_value, %i2) : (i64, i64) -> i64
         "affine.yield"(%next_value) : (i64) -> ()
@@ -38,16 +35,15 @@ builtin.module {
       "scf.yield"(%route1) : (memref<?xi64>) -> ()
     }) : (i1) -> memref<?xi64>
 
-    %carry_buf, %sum = affine.for %i = 0 to %n
-        iter_args(%cur = %buf, %acc = %i0)
-        -> (memref<?xi64>, i64) {
-      %v = "memref.load"(%cur, %i) : (memref<?xi64>, index) -> i64
+    %sum = affine.for %i = affine_map<() -> (0)>() to affine_map<(d0) -> (d0)>(%n) step 1 : index
+        iter_args(%acc = %i0 : i64) {
+      %v = "memref.load"(%buf, %i) : (memref<?xi64>, index) -> i64
       %next = "arith.addi"(%acc, %v) : (i64, i64) -> i64
-      "affine.yield"(%cur, %next) : (memref<?xi64>, i64) -> ()
+      "affine.yield"(%next) : (i64) -> ()
     }
 
     "memref.store"(%sum, %out, %c0) : (i64, memref<1xi64>, index) -> ()
-    "memref.dealloc"(%carry_buf) : (memref<?xi64>) -> ()
+    "memref.dealloc"(%buf) : (memref<?xi64>) -> ()
     "func.return"() : () -> ()
   }
 }

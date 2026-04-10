@@ -39,7 +39,7 @@ extern void _mlir_ciface_control_flow_selected_allocation_reduction(
 #elif defined(BASELINE_MEMREF_ABI)
 extern void BENCH_FN(_Bool sel, int64_t n, MemRef1D_i64 *out);
 #else
-extern void BENCH_FN(_Bool sel, int64_t n_nat, int64_t out_nat, int64_t *out);
+extern void BENCH_FN(_Bool sel, int64_t n_nat, int64_t *out);
 #endif
 
 static uint64_t now_ns(void) {
@@ -62,7 +62,7 @@ static void run_once(int64_t selector, int64_t n, int64_t *out) {
   MemRef1D_i64 out_ref = make1D(out, 1);
   _mlir_ciface_control_flow_selected_allocation_reduction(selector == 0, n, &out_ref);
 #else
-  BENCH_FN(selector == 0, n, 1, out);
+  BENCH_FN(selector == 0, n, out);
 #endif
 }
 

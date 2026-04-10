@@ -10,9 +10,6 @@ builtin.module {
     %c8 = "arith.constant"() <{value = 8 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 
-    // Phase-3/4 executable realization:
-    // materialize two metadata-bearing views, choose one as a memref value via
-    // scf.if, then carry that selected view through the reduction loop.
     %view0 = memref.reinterpret_cast %flat to
       offset: [%c0],
       sizes: [%c8],
@@ -31,9 +28,8 @@ builtin.module {
       "scf.yield"(%view1) : (memref<8xf32, strided<[?], offset: ?>>) -> ()
     }) : (i1) -> memref<8xf32, strided<[?], offset: ?>>
 
-    %carry_view, %sum = affine.for %i = 0 to 8
-        iter_args(%cur = %view, %acc = %f0)
-        -> (memref<8xf32, strided<[?], offset: ?>>, f32) {
+    %carry_view, %sum = affine.for %i = affine_map<() -> (0)>() to affine_map<(d0) -> (d0)>(%c8) step 1 : index
+        iter_args(%cur = %view : memref<8xf32, strided<[?], offset: ?>>, %acc = %f0 : f32) {
       %v = "memref.load"(%cur, %i)
         : (memref<8xf32, strided<[?], offset: ?>>, index) -> f32
       %next = "arith.addf"(%acc, %v) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32

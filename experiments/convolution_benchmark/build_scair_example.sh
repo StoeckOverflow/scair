@@ -69,7 +69,7 @@ build_scair_kernel() {
     | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' \
     > "$lowered_mlir_out"
   "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"
-  "$CC" -O2 -x ir "$llvm_ir_out" -c -o "$obj_out"
+  "$CC" -O3 -x ir "$llvm_ir_out" -c -o "$obj_out"
 }
 
 build_mlir_kernel() {
@@ -90,7 +90,7 @@ build_mlir_kernel() {
     --reconcile-unrealized-casts \
     > "$lowered_mlir_out"
   "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"
-  "$CC" -O2 -x ir "$llvm_ir_out" -c -o "$obj_out"
+  "$CC" -O3 -x ir "$llvm_ir_out" -c -o "$obj_out"
 }
 
 run_with_metrics() {
@@ -144,6 +144,7 @@ append_pair_row() {
     "$(sum_two "$(count_func_defs "$lowered_a")" "$(count_func_defs "$lowered_b")")" \
     "$(sum_two "$(count_ops "$lowered_a")" "$(count_ops "$lowered_b")")" \
     "$(sum_two "$(count_ops_structural "$lowered_a")" "$(count_ops_structural "$lowered_b")")" \
+    "$(sum_two "$(file_metric lines "$lowered_a")" "$(file_metric lines "$lowered_b")")" \
     "$(sum_two "$(file_metric lines "$llvm_a")" "$(file_metric lines "$llvm_b")")" \
     "$(sum_two "$(count_llvm_calls "$llvm_a")" "$(count_llvm_calls "$llvm_b")")" \
     "$compile_ms" \
@@ -167,6 +168,7 @@ append_pair_row() {
     "$(sum_two "$(count_ops_structural "$src_a")" "$(count_ops_structural "$src_b")")" \
     "$(sum_two "$(count_func_defs "$src_a")" "$(count_func_defs "$src_b")")" \
     "$(sum_two "$(count_block_args "$src_a")" "$(count_block_args "$src_b")")" \
+    "$(sum_two "$(file_metric lines "$lowered_a")" "$(file_metric lines "$lowered_b")")" \
     "$(sum_two "$(file_metric lines "$llvm_a")" "$(file_metric lines "$llvm_b")")" \
     "$compile_ms" \
     "$(metric_field result "$output_txt")" \

@@ -2,9 +2,8 @@ builtin.module {
   func.func @checksum_dynamic(
     %n_nat : !dtensor.nat,
     %m_nat : !dtensor.nat,
-    %out_nat : !dtensor.nat,
     %C : !d_memref.memref<[%n_nat, %m_nat], f32>,
-    %out : !d_memref.memref<[%out_nat], f32>
+    %out : !d_memref.memref<[1], f32>
   ) attributes {scair.emit_bare_interface = true} {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
@@ -20,7 +19,7 @@ builtin.module {
       d_affine.yield %inner : (f32)
     }
 
-    d_memref.store %sum, %out[%c0] : f32, !d_memref.memref<[%out_nat], f32>
+    d_memref.store %sum, %out[%c0] : f32, !d_memref.memref<[1], f32>
     "func.return"() : () -> ()
   }
 }

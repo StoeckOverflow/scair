@@ -133,6 +133,7 @@ append_pair_row() {
     "$(sum_two "$(count_func_defs "$lowered_a")" "$(count_func_defs "$lowered_b")")" \
     "$(sum_two "$(count_ops "$lowered_a")" "$(count_ops "$lowered_b")")" \
     "$(sum_two "$(count_ops_structural "$lowered_a")" "$(count_ops_structural "$lowered_b")")" \
+    "$(sum_two "$(file_metric lines "$lowered_a")" "$(file_metric lines "$lowered_b")")" \
     "$(sum_two "$(file_metric lines "$llvm_a")" "$(file_metric lines "$llvm_b")")" \
     "$(sum_two "$(count_llvm_calls "$llvm_a")" "$(count_llvm_calls "$llvm_b")")" \
     "$compile_ms" \
@@ -156,6 +157,7 @@ append_pair_row() {
     "$(sum_two "$(count_ops_structural "$src_a")" "$(count_ops_structural "$src_b")")" \
     "$(sum_two "$(count_func_defs "$src_a")" "$(count_func_defs "$src_b")")" \
     "$(sum_two "$(count_block_args "$src_a")" "$(count_block_args "$src_b")")" \
+    "$(sum_two "$(file_metric lines "$lowered_a")" "$(file_metric lines "$lowered_b")")" \
     "$(sum_two "$(file_metric lines "$llvm_a")" "$(file_metric lines "$llvm_b")")" \
     "$compile_ms" \
     "$(metric_field result "$output_txt")" \

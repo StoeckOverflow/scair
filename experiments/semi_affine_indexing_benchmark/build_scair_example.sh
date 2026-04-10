@@ -20,6 +20,7 @@ BASELINE_SRC="${BASELINE_SRC:-$EXAMPLE_DIR/semi_affine_kernel_scair_baseline.mli
 VALUE_DEP_SRC="${VALUE_DEP_SRC:-$EXAMPLE_DIR/semi_affine_kernel_scair_value_dependent.mlir}"
 BASELINE_DRIVER_SRC="${BASELINE_DRIVER_SRC:-$EXAMPLE_DIR/driver_baseline_bare.c}"
 VALUE_DEP_DRIVER_SRC="${VALUE_DEP_DRIVER_SRC:-$EXAMPLE_DIR/driver_bare.c}"
+VALUE_DEP_LITERAL_DRIVER_SRC="${VALUE_DEP_LITERAL_DRIVER_SRC:-$EXAMPLE_DIR/driver_bare_literal_dims.c}"
 
 OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/build_scair}"
 mkdir -p "$OUT_DIR"
@@ -34,6 +35,17 @@ require_file "$BASELINE_SRC"
 require_file "$VALUE_DEP_SRC"
 require_file "$BASELINE_DRIVER_SRC"
 require_file "$VALUE_DEP_DRIVER_SRC"
+require_file "$VALUE_DEP_LITERAL_DRIVER_SRC"
+
+value_dep_driver_for_src() {
+  local src="$1"
+  case "$(basename "$src")" in
+    version2.mlir) echo "$VALUE_DEP_LITERAL_DRIVER_SRC" ;;
+    *) echo "$VALUE_DEP_DRIVER_SRC" ;;
+  esac
+}
+
+VALUE_DEP_DRIVER_EFFECTIVE="$(value_dep_driver_for_src "$VALUE_DEP_SRC")"
 
 build_kernel() {
   local route="$1"
@@ -127,6 +139,7 @@ append_row() {
     "$(count_func_defs "$lowered_mlir")" \
     "$(count_ops "$lowered_mlir")" \
     "$(count_ops_structural "$lowered_mlir")" \
+    "$(file_metric lines "$lowered_mlir")" \
     "$(file_metric lines "$llvm_ir")" \
     "$(count_llvm_calls "$llvm_ir")" \
     "$(metric_field compile_ms "$output_txt")" \
@@ -150,6 +163,7 @@ append_row() {
     "$(count_ops_structural "$src")" \
     "$(count_func_defs "$src")" \
     "$(count_block_args "$src")" \
+    "$(file_metric lines "$lowered_mlir")" \
     "$(file_metric lines "$llvm_ir")" \
     "$(metric_field compile_ms "$output_txt")" \
     "$(metric_field result "$output_txt")" \
@@ -206,7 +220,7 @@ echo "==> Linking ScaIR semi-affine value-dependent executable"
 "$CC" -O2 \
   -DBENCH_LABEL="\"semi_affine_fill_and_sum\"" \
   -DVARIANT_LABEL="\"value_dependent\"" \
-  "$VALUE_DEP_DRIVER_SRC" \
+  "$VALUE_DEP_DRIVER_EFFECTIVE" \
   "$OUT_DIR/semi_affine_value_dependent_scair.o" \
   -o "$OUT_DIR/semi_affine_value_dependent_scair_exec"
 run_benchmark_repeated "$OUT_DIR/semi_affine_value_dependent_scair_output.txt" \

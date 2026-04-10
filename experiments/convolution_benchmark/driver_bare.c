@@ -15,14 +15,12 @@ extern void conv2d_dynamic(
     int64_t n_nat, int64_t cin_nat, int64_t h_nat, int64_t w_nat,
     int64_t cout_nat, int64_t kh_nat, int64_t kw_nat,
     int64_t oh_nat, int64_t ow_nat,
-    int64_t xflat_nat, int64_t kflat_nat, int64_t yflat_nat,
     float *Xflat,
     float *Kflat,
     float *Yflat);
 
 extern void checksum_dynamic(
     int64_t n_nat, int64_t cout_nat, int64_t oh_nat, int64_t ow_nat,
-    int64_t yflat_nat, int64_t out_nat,
     float *Yflat,
     float *out);
 
@@ -79,8 +77,8 @@ int main(int argc, char **argv) {
   for (int64_t iter = 0; iter < iterations; ++iter) {
     for (int64_t i = 0; i < yflat; ++i) Y[i] = 0.0f;
     out[0] = 0.0f;
-    conv2d_dynamic(n, cin, h, w, cout, kh, kw, oh, ow, xflat, kflat, yflat, X, K, Y);
-    checksum_dynamic(n, cout, oh, ow, yflat, 1, Y, out);
+    conv2d_dynamic(n, cin, h, w, cout, kh, kw, oh, ow, X, K, Y);
+    checksum_dynamic(n, cout, oh, ow, Y, out);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
 

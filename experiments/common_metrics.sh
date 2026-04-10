@@ -10,7 +10,7 @@
 # - memref/control-flow benchmarks: source_alloc_ops, source_reinterpret_cast_ops,
 #   source_subview_ops, source_extract_strided_metadata_ops, memref/d_memref
 #   load/store counts
-# - kernel benchmarks: llvm_ir_lines, llvm_call_count, compile_ms,
+# - kernel benchmarks: lowered_mlir_lines, llvm_ir_lines, llvm_call_count, compile_ms,
 #   runtime_ns_per_iter
 #
 # Metrics that do not apply to a family should emit 0 when the operation kind is
@@ -26,7 +26,7 @@
 #   blocks=...
 #   block_args=...
 #   op.memref.alloc=...
-COMMON_METRICS_HEADER="experiment_family,benchmark,variant,representation_group,build_status,run_status,source_bytes,source_loc,source_ops,source_ops_structural,source_func_defs,source_block_args,source_alloc_ops,source_reinterpret_cast_ops,source_subview_ops,source_extract_strided_metadata_ops,source_memref_load_ops,source_memref_store_ops,source_dmemref_load_ops,source_dmemref_store_ops,lowered_func_defs,lowered_ops,lowered_ops_structural,llvm_ir_lines,llvm_call_count,compile_ms,result,expected_result,runtime_ns_per_iter,notes,source_helper_defs,bvar_refs,value_ssa_refs,opt_llvm_lines,opt_llvm_call_count"
+COMMON_METRICS_HEADER="experiment_family,benchmark,variant,representation_group,build_status,run_status,source_bytes,source_loc,source_ops,source_ops_structural,source_func_defs,source_block_args,source_alloc_ops,source_reinterpret_cast_ops,source_subview_ops,source_extract_strided_metadata_ops,source_memref_load_ops,source_memref_store_ops,source_dmemref_load_ops,source_dmemref_store_ops,lowered_func_defs,lowered_ops,lowered_ops_structural,lowered_mlir_lines,llvm_ir_lines,llvm_call_count,compile_ms,result,expected_result,runtime_ns_per_iter,notes,source_helper_defs,bvar_refs,value_ssa_refs,opt_llvm_lines,opt_llvm_call_count"
 
 BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-1}"
 BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-7}"
@@ -413,15 +413,38 @@ write_summary_header() {
   cat > "$path" <<EOF
 # $title
 
-| Benchmark | Variant | Rep | Build | Run | Structural ops | Func defs | Block args | LLVM lines | Compile ms | Result | Expected | ns/iter |
-| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: |
+| Benchmark | Variant | Rep | Build | Run | Structural ops | Func defs | Block args | MLIR LOC | LLVM LOC | Compile ms | Result | Expected | ns/iter |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: |
 EOF
 }
 
 append_summary_row() {
   local path="$1"
   shift
-  printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' "$@" >> "$path"
+  printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' "$@" >> "$path"
+}
+
+append_summary_metric_notes() {
+  local path="$1"
+  cat >> "$path" <<'EOF'
+
+## Metric Definitions
+
+- `Benchmark`: benchmark or benchmark family member represented by the row.
+- `Variant`: implementation route being compared, for example `mlir_baseline`, `scair_baseline`, `debruijn`, or `value_dependent`.
+- `Rep`: representation-specific note for the row. For selector experiments this records the selector setting, such as `selector=0` or `selector=1`.
+- `Build`: build outcome for the benchmark artifact. `ok` means the benchmark built successfully. `unsupported` means the pipeline failed or the route is not currently supported.
+- `Run`: benchmark execution outcome. `ok` means the executable ran and produced timing/result data. `NA` means no run data was produced.
+- `Structural ops`: total parsed IR operation nodes in the measured source IR. This is a parser-backed structural count, not a line count and not a regex/text estimate.
+- `Func defs`: parsed count of function definition operations in the measured IR, currently `func.func` plus `llvm.func`.
+- `Block args`: parsed count of SSA block arguments across all blocks in the measured IR.
+- `MLIR LOC`: line count of the emitted lowered MLIR artifact on disk, measured with `wc -l`. This is a textual file metric taken after the MLIR file has been generated.
+- `LLVM LOC`: line count of the emitted LLVM IR `.ll` artifact on disk, measured with `wc -l`. This is a textual file metric taken after the LLVM IR file has been generated.
+- `Compile ms`: wall-clock build time for the benchmark pipeline, reported in milliseconds.
+- `Result`: observed benchmark result value produced by the executable.
+- `Expected`: expected benchmark result used as a correctness check.
+- `ns/iter`: median runtime in nanoseconds per iteration across repeated benchmark runs.
+EOF
 }
 
 numeric_series_stat() {

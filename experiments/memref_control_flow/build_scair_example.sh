@@ -52,22 +52,40 @@ build_kernel() {
   local llvm_ir_out="$4"
   local metrics_out="$5"
   local lowered_mlir_out="${llvm_ir_out%.ll}.llvm.mlir"
+  local build_log="${llvm_ir_out%.ll}.build.log"
 
   local start_ns
   local end_ns
+  local status=0
   start_ns=$(now_ns)
 
+  set +e
   "$SCAIR_OPT" "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" \
     | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' \
-    > "$lowered_mlir_out"
-  "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"
-  "$CC" -O2 -x ir "$llvm_ir_out" -c -o "$obj_out"
+    > "$lowered_mlir_out" 2> "$build_log"
+  status=$?
+  if [[ $status -eq 0 ]]; then
+    "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out" 2>> "$build_log"
+    status=$?
+  fi
+  if [[ $status -eq 0 ]]; then
+    "$CC" -O2 -x ir "$llvm_ir_out" -c -o "$obj_out" 2>> "$build_log"
+    status=$?
+  fi
+  set -e
 
   end_ns=$(now_ns)
-  {
-    echo "build_status=ok"
-    printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
-  } > "$metrics_out"
+  if [[ $status -eq 0 ]]; then
+    {
+      echo "build_status=ok"
+      printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
+    } > "$metrics_out"
+  else
+    {
+      echo "build_status=unsupported"
+      printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
+    } > "$metrics_out"
+  fi
 }
 
 build_mlir_kernel() {
@@ -76,11 +94,14 @@ build_mlir_kernel() {
   local llvm_ir_out="$3"
   local metrics_out="$4"
   local lowered_mlir_out="${llvm_ir_out%.ll}.llvm.mlir"
+  local build_log="${llvm_ir_out%.ll}.build.log"
 
   local start_ns
   local end_ns
+  local status=0
   start_ns=$(now_ns)
 
+  set +e
   "$MLIR_OPT" "$src" \
     --lower-affine \
     --convert-scf-to-cf \
@@ -91,15 +112,63 @@ build_mlir_kernel() {
     --convert-cf-to-llvm \
     --convert-func-to-llvm \
     --reconcile-unrealized-casts \
-    > "$lowered_mlir_out"
-  "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"
-  "$CC" -O2 -x ir "$llvm_ir_out" -c -o "$obj_out"
+    > "$lowered_mlir_out" 2> "$build_log"
+  status=$?
+  if [[ $status -eq 0 ]]; then
+    "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out" 2>> "$build_log"
+    status=$?
+  fi
+  if [[ $status -eq 0 ]]; then
+    "$CC" -O2 -x ir "$llvm_ir_out" -c -o "$obj_out" 2>> "$build_log"
+    status=$?
+  fi
+  set -e
 
   end_ns=$(now_ns)
+  if [[ $status -eq 0 ]]; then
+    {
+      echo "build_status=ok"
+      printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
+    } > "$metrics_out"
+  else
+    {
+      echo "build_status=unsupported"
+      printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
+    } > "$metrics_out"
+  fi
+}
+
+build_succeeded() {
+  local metrics_out="$1"
+  [[ "$(metric_field build_status "$metrics_out")" == "ok" ]]
+}
+
+mark_link_failure() {
+  local metrics_out="$1"
+  local compile_ms
+  compile_ms="$(metric_field compile_ms "$metrics_out")"
   {
-    echo "build_status=ok"
-    printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
+    echo "build_status=unsupported"
+    echo "compile_ms=${compile_ms:-NA}"
   } > "$metrics_out"
+}
+
+link_if_built() {
+  local metrics_out="$1"
+  shift
+
+  if ! build_succeeded "$metrics_out"; then
+    return 0
+  fi
+
+  local status=0
+  set +e
+  "$@"
+  status=$?
+  set -e
+  if [[ $status -ne 0 ]]; then
+    mark_link_failure "$metrics_out"
+  fi
 }
 
 append_row() {
@@ -139,6 +208,7 @@ append_row() {
     "$(count_func_defs "$lowered_mlir")" \
     "$(count_ops "$lowered_mlir")" \
     "$(count_ops_structural "$lowered_mlir")" \
+    "$(file_metric lines "$lowered_mlir")" \
     "$(file_metric lines "$llvm_ir")" \
     "$(count_llvm_calls "$llvm_ir")" \
     "$(metric_field compile_ms "$output_txt")" \
@@ -162,6 +232,7 @@ append_row() {
     "$(count_ops_structural "$src")" \
     "$(count_func_defs "$src")" \
     "$(count_block_args "$src")" \
+    "$(file_metric lines "$lowered_mlir")" \
     "$(file_metric lines "$llvm_ir")" \
     "$(metric_field compile_ms "$output_txt")" \
     "$(metric_field result "$output_txt")" \
@@ -177,7 +248,8 @@ build_mlir_kernel \
   "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_metrics.txt"
 
 echo "==> Linking upstream MLIR memref-control-flow control_flow_selected_subview_reduction baseline executable"
-"$CC" -O2 \
+link_if_built "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_metrics.txt" \
+  "$CC" -O2 \
   -DMLIR_C_INTERFACE \
   -DBENCH_LABEL="\"control_flow_selected_subview_reduction\"" \
   -DVARIANT_LABEL="\"mlir_baseline\"" \
@@ -194,7 +266,8 @@ build_kernel \
   "$OUT_DIR/control_flow_selected_subview_reduction_baseline_metrics.txt"
 
 echo "==> Linking ScaIR memref-control-flow control_flow_selected_subview_reduction baseline executable"
-"$CC" -O2 \
+link_if_built "$OUT_DIR/control_flow_selected_subview_reduction_baseline_metrics.txt" \
+  "$CC" -O2 \
   -DBENCH_LABEL="\"control_flow_selected_subview_reduction\"" \
   -DVARIANT_LABEL="\"baseline\"" \
   "$SUBVIEW_BASELINE_DRIVER_SRC" \
@@ -210,7 +283,8 @@ build_kernel \
   "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_metrics.txt"
 
 echo "==> Linking ScaIR memref-control-flow control_flow_selected_subview_reduction value-dependent executable"
-"$CC" -O2 \
+link_if_built "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_metrics.txt" \
+  "$CC" -O2 \
   -DBENCH_LABEL="\"control_flow_selected_subview_reduction\"" \
   -DVARIANT_LABEL="\"value_dependent\"" \
   "$SUBVIEW_VALUE_DEP_DRIVER_SRC" \
@@ -226,7 +300,8 @@ build_kernel \
   "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_metrics.txt"
 
 echo "==> Linking ScaIR memref-control-flow control_flow_selected_allocation_reduction baseline executable"
-"$CC" -O2 \
+link_if_built "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_metrics.txt" \
+  "$CC" -O2 \
   -DBASELINE_MEMREF_ABI \
   -DBENCH_LABEL="\"control_flow_selected_allocation_reduction\"" \
   -DVARIANT_LABEL="\"baseline\"" \
@@ -243,7 +318,8 @@ build_kernel \
   "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_metrics.txt"
 
 echo "==> Linking ScaIR memref-control-flow control_flow_selected_allocation_reduction value-dependent executable"
-"$CC" -O2 \
+link_if_built "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_metrics.txt" \
+  "$CC" -O2 \
   -DBENCH_LABEL="\"control_flow_selected_allocation_reduction\"" \
   -DVARIANT_LABEL="\"value_dependent\"" \
   "$ALLOC_DRIVER_SRC" \
@@ -258,7 +334,8 @@ build_mlir_kernel \
   "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_metrics.txt"
 
 echo "==> Linking upstream MLIR memref-control-flow control_flow_selected_allocation_reduction baseline executable"
-"$CC" -O2 \
+link_if_built "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_metrics.txt" \
+  "$CC" -O2 \
   -DMLIR_C_INTERFACE \
   -DBENCH_LABEL="\"control_flow_selected_allocation_reduction\"" \
   -DVARIANT_LABEL="\"mlir_baseline\"" \
@@ -268,38 +345,41 @@ echo "==> Linking upstream MLIR memref-control-flow control_flow_selected_alloca
 
 run_and_merge() {
   local exe="$1"
-  local output_txt="$2"
-  shift 2
-  run_benchmark_repeated "$output_txt" "$exe" "$@"
+  local metrics_txt="$2"
+  local output_txt="$3"
+  shift 3
+
+  if build_succeeded "$metrics_txt" && [[ -x "$exe" ]]; then
+    run_benchmark_repeated "$output_txt" "$exe" "$@"
+  else
+    {
+      echo "build_status=$(metric_field build_status "$metrics_txt")"
+      echo "run_status=NA"
+      echo "result=NA"
+      echo "expected_result=NA"
+      echo "runtime_ns_per_iter=NA"
+      echo "ns_per_iter=NA"
+    } > "$output_txt"
+  fi
+
+  cat "$metrics_txt" >> "$output_txt"
 }
 
-run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_baseline_exec" "$OUT_DIR/control_flow_selected_subview_reduction_baseline_selector0_output.txt" 0 "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_subview_reduction_baseline_metrics.txt" >> "$OUT_DIR/control_flow_selected_subview_reduction_baseline_selector0_output.txt"
-run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_exec" "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_selector0_output.txt" 0 "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_metrics.txt" >> "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_selector0_output.txt"
-run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_baseline_exec" "$OUT_DIR/control_flow_selected_subview_reduction_baseline_selector1_output.txt" 1 "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_subview_reduction_baseline_metrics.txt" >> "$OUT_DIR/control_flow_selected_subview_reduction_baseline_selector1_output.txt"
-run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_exec" "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_selector1_output.txt" 1 "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_metrics.txt" >> "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_selector1_output.txt"
+run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_baseline_exec" "$OUT_DIR/control_flow_selected_subview_reduction_baseline_metrics.txt" "$OUT_DIR/control_flow_selected_subview_reduction_baseline_selector0_output.txt" 0 "$ITERATIONS"
+run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_exec" "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_metrics.txt" "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_selector0_output.txt" 0 "$ITERATIONS"
+run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_baseline_exec" "$OUT_DIR/control_flow_selected_subview_reduction_baseline_metrics.txt" "$OUT_DIR/control_flow_selected_subview_reduction_baseline_selector1_output.txt" 1 "$ITERATIONS"
+run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_exec" "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_metrics.txt" "$OUT_DIR/control_flow_selected_subview_reduction_mlir_baseline_selector1_output.txt" 1 "$ITERATIONS"
 
-run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_exec" "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_selector0_output.txt" 0 "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_metrics.txt" >> "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_selector0_output.txt"
-run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_exec" "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_selector1_output.txt" 1 "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_metrics.txt" >> "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_selector1_output.txt"
+run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_exec" "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_metrics.txt" "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_selector0_output.txt" 0 "$ITERATIONS"
+run_and_merge "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_exec" "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_metrics.txt" "$OUT_DIR/control_flow_selected_subview_reduction_value_dependent_selector1_output.txt" 1 "$ITERATIONS"
 
-run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_selector0_output.txt" 0 "$RUNTIME_N" "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_metrics.txt" >> "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_selector0_output.txt"
-run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_selector0_output.txt" 0 "$RUNTIME_N" "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_metrics.txt" >> "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_selector0_output.txt"
-run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_selector1_output.txt" 1 "$RUNTIME_N" "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_metrics.txt" >> "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_selector1_output.txt"
-run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_selector1_output.txt" 1 "$RUNTIME_N" "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_metrics.txt" >> "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_selector1_output.txt"
+run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_metrics.txt" "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_selector0_output.txt" 0 "$RUNTIME_N" "$ITERATIONS"
+run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_metrics.txt" "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_selector0_output.txt" 0 "$RUNTIME_N" "$ITERATIONS"
+run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_metrics.txt" "$OUT_DIR/control_flow_selected_allocation_reduction_baseline_selector1_output.txt" 1 "$RUNTIME_N" "$ITERATIONS"
+run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_metrics.txt" "$OUT_DIR/control_flow_selected_allocation_reduction_mlir_baseline_selector1_output.txt" 1 "$RUNTIME_N" "$ITERATIONS"
 
-run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_selector0_output.txt" 0 "$RUNTIME_N" "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_metrics.txt" >> "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_selector0_output.txt"
-run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_selector1_output.txt" 1 "$RUNTIME_N" "$ITERATIONS"
-cat "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_metrics.txt" >> "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_selector1_output.txt"
+run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_metrics.txt" "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_selector0_output.txt" 0 "$RUNTIME_N" "$ITERATIONS"
+run_and_merge "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_exec" "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_metrics.txt" "$OUT_DIR/control_flow_selected_allocation_reduction_value_dependent_selector1_output.txt" 1 "$RUNTIME_N" "$ITERATIONS"
 
 SUMMARY_MD="$OUT_DIR/summary.md"
 SUMMARY_CSV="$OUT_DIR/metrics.csv"
