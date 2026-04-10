@@ -45,6 +45,11 @@ private final class Builder(val funcOp: func.Func):
   private def cloneValueAttr(attr: ValueAttribute): ValueAttribute =
     ValueAttribute(attr.getVal())
 
+  private def cloneDimParam(param: d_memref.DimParam): d_memref.DimParam =
+    param match
+      case v: ValueAttribute => cloneValueAttr(v)
+      case i: IntegerAttr    => i
+
   private def cloneLayoutParam(param: d_memref.LayoutParam): d_memref.LayoutParam =
     param match
       case v: ValueAttribute => cloneValueAttr(v)
@@ -63,20 +68,20 @@ private final class Builder(val funcOp: func.Func):
         cloneValueAttr(v)
       case d_memref.dMemrefMemrefType(params, elem, offset, strides) =>
         d_memref.dMemrefMemrefType(
-          params.map(cloneValueAttr),
+          params.map(cloneDimParam),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
           offset.map(cloneLayoutParam),
           strides.map(_.map(cloneLayoutParam)),
         )
       case d_memref.dMemrefVectorType(param, elem) =>
         d_memref.dMemrefVectorType(
-          cloneValueAttr(param),
+          cloneDimParam(param),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
         )
       case d_memref.dMemrefMatrixType(rows, cols, elem) =>
         d_memref.dMemrefMatrixType(
-          cloneValueAttr(rows),
-          cloneValueAttr(cols),
+          cloneDimParam(rows),
+          cloneDimParam(cols),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
         )
       case dTensor.dTensorTensorType(params, elem) =>
@@ -146,7 +151,11 @@ private final class Builder(val funcOp: func.Func):
     ty.offset.map(materializeLayoutParam(_, block)).getOrElse(constIndex(0, block))
 
   private def layoutDims(ty: d_memref.dMemrefMemrefType, block: Block): Seq[Value[Attribute]] =
-    ty.params.map(d => materializeNatOrIndex(d.getVal(), block))
+    ty.params.map {
+      case d: ValueAttribute => materializeNatOrIndex(d.getVal(), block)
+      case IntegerAttr(IntData(v), _: IndexType | _: IntegerType) =>
+        constIndex(v, block)
+    }
 
   private def layoutStrides(
       ty: d_memref.dMemrefMemrefType,
@@ -334,7 +343,8 @@ private final class Builder(val funcOp: func.Func):
               emit(newBlock, copied)
               state.valueMap(c.res) = copied.res
               c.value match
-                case IntegerAttr(IntData(v), _: IntegerType | _: IndexType) => constCache.seed(copied.res, v)
+                case IntegerAttr(IntData(v), _: IntegerType | _: IndexType) if newBlock eq newBlocks.head =>
+                  constCache.seed(copied.res, v)
                 case _ => ()
         case add: llvm.Add =>
           val lowered = llvm.Add(
@@ -430,15 +440,19 @@ private final class Builder(val funcOp: func.Func):
     }
     val lowered = func.Func(funcOp.sym_name, loweredFunctionType, funcOp.sym_visibility, Region(newBlocks))
     lowered.attributes.addAll(funcOp.attributes)
-    if requiredRuntimeDecls.nonEmpty then
-      lowered.attributes += (runtimeDeclsAttrName -> runtimeDeclsAttr(requiredRuntimeDecls.toSeq))
     if !lowered.attributes.contains("scair.original_function_type") &&
         (lowered.attributes.contains("llvm.emit_c_interface") ||
           lowered.attributes.contains("scair.emit_bare_interface") ||
           lowered.attributes.contains("scair.emit_descriptor_pointer_interface"))
     then
       val originalType = cloneAttr(funcOp.function_type).asInstanceOf[FunctionType]
-      AttributeWalker.remapTypeUsesInPlace(originalType)(using state.valueMap)
+      val argTypeMap = scala.collection.mutable.Map.empty[Value[Attribute], Value[Attribute]]
+      funcOp.body.blocks.headOption.foreach { oldEntry =>
+        oldEntry.arguments.zip(newBlocks.head.arguments).foreach { case (oldArg, newArg) =>
+          argTypeMap(oldArg) = newArg
+        }
+      }
+      AttributeWalker.remapTypeUsesInPlace(originalType)(using argTypeMap)
       lowered.attributes += ("scair.original_function_type" -> originalType)
     lowered
 

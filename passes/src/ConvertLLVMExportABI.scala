@@ -251,6 +251,19 @@ private final class DescriptorPointerInterfaceBuilder(internal: llvm.Func):
     lowered.attributes.remove("llvm.emit_c_interface")
     lowered
 
+private def collectRequiredRuntimeDecls(op: Operation): Seq[String] =
+  val found = mutable.LinkedHashSet.empty[String]
+
+  def visit(op: Operation): Unit =
+    op match
+      case llvm.Call(SymbolRefAttr(StringData(name), _), _, _) =>
+        if name == mallocRuntimeName || name == freeRuntimeName then found += name
+      case _ => ()
+    op.regions.foreach(_.blocks.foreach(_.operations.foreach(visit)))
+
+  visit(op)
+  found.toSeq
+
 final class ConvertLLVMExportABI(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "convert-llvm-export-abi"
 
@@ -265,10 +278,7 @@ final class ConvertLLVMExportABI(ctx: MLContext) extends ModulePass(ctx):
             case funcOp: llvm.Func =>
               val legalized = FunctionLegalizer(funcOp).lower()
               existingTopLevelSyms += legalized.sym_name.data
-              legalized.attributes.get(runtimeDeclsAttrName).foreach { attr =>
-                requiredRuntimeDecls ++= runtimeDeclsFromAttr(attr)
-                legalized.attributes.remove(runtimeDeclsAttrName)
-              }
+              requiredRuntimeDecls ++= collectRequiredRuntimeDecls(legalized)
               if isBareInterface(legalized) then
                 legalized.attributes.remove(bareInterfaceAttr)
               val cInterfaceWrapper =

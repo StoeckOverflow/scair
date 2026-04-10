@@ -308,7 +308,7 @@ private final class Builder(val funcOp: func.Func):
           emit(newBlock, copied)
           state.valueMap(c.res) = copied.res
           c.value match
-            case IntegerAttr(IntData(v), _: IndexType | _: IntegerType) =>
+            case IntegerAttr(IntData(v), _: IndexType | _: IntegerType) if newBlock eq clonedBlocks.head =>
               constCache.seed(copied.res, v)
             case _ => ()
         case op: memref.Alloc =>
@@ -336,8 +336,6 @@ private final class Builder(val funcOp: func.Func):
     }
     val lowered = func.Func(funcOp.sym_name, loweredFunctionType, funcOp.sym_visibility, Region(clonedBlocks))
     lowered.attributes.addAll(funcOp.attributes)
-    if requiredRuntimeDecls.nonEmpty then
-      lowered.attributes += (runtimeDeclsAttrName -> runtimeDeclsAttr(requiredRuntimeDecls.toSeq))
     if !lowered.attributes.contains("scair.original_function_type") &&
         (lowered.attributes.contains("llvm.emit_c_interface") ||
           lowered.attributes.contains("scair.emit_bare_interface") ||

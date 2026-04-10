@@ -1,11 +1,25 @@
 package scair.interpreter
 
 import scair.dialects.d_memref
+import scair.dialects.builtin.IntegerAttr
+import scair.ir.ValueAttribute
 
 private def asInt(x: Any, name: String): Int =
   x match
     case i: Int => i
     case _      => throw new Exception(s"$name must be an Int, got: $x")
+
+private def evalDimParam(
+    dim: d_memref.DimParam,
+    interpreter: Interpreter,
+    ctx: RuntimeCtx,
+    name: String,
+): Int =
+  dim match
+    case v: ValueAttribute =>
+      asInt(interpreter.lookup_op(v.getVal(), ctx), name)
+    case IntegerAttr(value, _) =>
+      value.toInt
 
 object run_d_alloc extends OpImpl[d_memref.Alloc]:
 
@@ -15,9 +29,8 @@ object run_d_alloc extends OpImpl[d_memref.Alloc]:
       ctx: RuntimeCtx,
       args: Seq[Any],
   ): Option[Any] =
-    val shape = op.res.typ.params.map(d =>
-      asInt(interpreter.lookup_op(d.getVal(), ctx), "d_memref.alloc dim")
-    )
+    val shape =
+      op.res.typ.params.map(d => evalDimParam(d, interpreter, ctx, "d_memref.alloc dim"))
     Some(ShapedArray(shape))
 
 object run_d_dealloc extends OpImpl[d_memref.Dealloc]:
@@ -68,8 +81,14 @@ object run_d_dim_exact extends OpImpl[d_memref.DimExact]:
       args: Seq[Any],
   ): Option[Any] =
     val axis = op.axis.value.toInt
-    val dimVal = op.memref.typ.params(axis).getVal()
-    Some(asInt(interpreter.lookup_op(dimVal, ctx), "d_memref.dim_exact result"))
+    Some(
+      evalDimParam(
+        op.memref.typ.params(axis),
+        interpreter,
+        ctx,
+        "d_memref.dim_exact result",
+      )
+    )
 
 object run_d_cast extends OpImpl[d_memref.Cast]:
 

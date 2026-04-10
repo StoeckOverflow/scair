@@ -11,7 +11,7 @@ import scair.parse.*
 import scair.parse.given
 import scair.utils.*
 
-type DimParam = ValueAttribute
+type DimParam = ValueAttribute | IntegerAttr
 type LayoutParam = ValueAttribute | IntegerAttr
 
 sealed trait dMemrefType extends ParametrizedAttribute, TypeAttribute
@@ -20,9 +20,26 @@ object dMemrefTypeUtil:
 
   def renderAttr(a: Attribute): String = dTensorTypeUtil.renderAttr(a)
 
-  def checkParam(param: ValueAttribute): OK[Unit] = dTensorTypeUtil.checkParam(
-    param
-  )
+  def renderDimParam(param: DimParam): String =
+    param match
+      case v: ValueAttribute => renderAttr(v)
+      case i: IntegerAttr    => renderAttr(i)
+
+  def printDimParam(p: Printer, param: DimParam): Unit =
+    param match
+      case v: ValueAttribute => p.print(v)
+      case i: IntegerAttr    => p.print(i)
+
+  def dimParamAttribute(param: DimParam): Attribute =
+    param match
+      case v: ValueAttribute => v
+      case i: IntegerAttr    => i
+
+  def checkParam(param: DimParam): OK[Unit] =
+    param match
+      case v: ValueAttribute => dTensorTypeUtil.checkParam(v)
+      case IntegerAttr(_, _: IndexType)   => OK(())
+      case IntegerAttr(_, _: IntegerType) => OK(())
 
   def elemOK(elem: TypeAttribute): Boolean = dTensorTypeUtil.elemOK(elem)
 
@@ -82,8 +99,23 @@ object dMemrefTypeUtil:
       case mt: dMemrefMemrefType =>
         mt
 
-  def sameDims(lhs: Seq[ValueAttribute], rhs: Seq[ValueAttribute]): Boolean =
-    dTensorTypeUtil.sameDims(lhs, rhs)
+  def sameDim(lhs: DimParam, rhs: DimParam): Boolean =
+    (lhs, rhs) match
+      case (l: ValueAttribute, r: ValueAttribute) =>
+        dTensorTypeUtil.sameDims(Seq(l), Seq(r))
+      case (l: IntegerAttr, r: IntegerAttr) =>
+        l.value == r.value
+      case _ => false
+
+  def sameDims(lhs: Seq[DimParam], rhs: Seq[DimParam]): Boolean =
+    lhs.size == rhs.size && lhs.zip(rhs).forall((l, r) => sameDim(l, r))
+
+private def parseDimParam[$: P](using Parser): P[DimParam] =
+  P(
+    ValueAttributeP.map(v => v: DimParam) |
+      attrOfP[IntegerAttr].map(i => i: DimParam) |
+      decimalLiteralP.map(v => IntegerAttr(IntData(v), IndexType()): DimParam)
+  )
 
 private def parseLayoutParam[$: P](using Parser): P[LayoutParam] =
   P(
@@ -110,7 +142,7 @@ given AttributeCompanion[dMemrefVectorType]:
   override def name: String = "d_memref.vector"
 
   override def parse[$: P](using Parser): P[dMemrefVectorType] =
-    P("<" ~ ValueAttributeP ~ "," ~ typeP ~ ">").map((param, elem) =>
+    P("<" ~ parseDimParam ~ "," ~ typeP ~ ">").map((param, elem) =>
       dMemrefVectorType(param, elem.asInstanceOf[TypeAttribute])
     )
 
@@ -137,13 +169,13 @@ given AttributeCompanion[dMemrefMatrixType]:
   override def name: String = "d_memref.matrix"
 
   override def parse[$: P](using Parser): P[dMemrefMatrixType] =
-    P("<" ~ ValueAttributeP ~ "," ~ ValueAttributeP ~ "," ~ typeP ~ ">")
+    P("<" ~ parseDimParam ~ "," ~ parseDimParam ~ "," ~ typeP ~ ">")
       .map((rows, cols, elem) =>
         dMemrefMatrixType(rows, cols, elem.asInstanceOf[TypeAttribute])
       )
 
 final case class dMemrefMemrefType(
-    params: Seq[ValueAttribute],
+    params: Seq[DimParam],
     elem: TypeAttribute,
     offset: Option[LayoutParam] = None,
     strides: Option[Seq[LayoutParam]] = None,
@@ -158,7 +190,7 @@ final case class dMemrefMemrefType(
   override def printParameters(p: Printer): Unit =
     given indentLevel: Int = 0
     p.print("<[")
-    p.printListF(params, p.print, sep = ", ")
+    p.printListF(params, param => dMemrefTypeUtil.printDimParam(p, param), sep = ", ")
     p.print("], ", elem)
     (offset, strides) match
       case (Some(off), Some(ss)) =>
@@ -202,7 +234,7 @@ given AttributeCompanion[dMemrefMemrefType]:
 
   override def parse[$: P](using Parser): P[dMemrefMemrefType] =
     P(
-      "<" ~ "[" ~ ValueAttributeP.rep(sep = ",") ~ "]" ~ "," ~ typeP ~
+      "<" ~ "[" ~ parseDimParam.rep(sep = ",") ~ "]" ~ "," ~ typeP ~
         ("," ~ "offset:" ~ parseLayoutParam ~ "," ~ "strides:" ~ "[" ~
           parseLayoutParam.rep(sep = ",") ~ "]").? ~ ">"
     ).map((params, elem, layoutOpt) =>
@@ -315,7 +347,13 @@ final case class DimExact(
     val rank = BigInt(memref.typ.params.size)
     if idx < 0 || idx >= rank then
       Err(s"d_memref.dim_exact: axis $idx out of bounds for rank ${memref.typ.params.size}")
-    else OK(memref.typ.params(idx.toInt).getVal())
+    else
+      memref.typ.params(idx.toInt) match
+        case v: ValueAttribute => OK(v.getVal())
+        case _ =>
+          Err(
+            "d_memref.dim_exact: expected selected embedded dim to be SSA-backed, got a literal dimension"
+          )
 
   override def customVerify(): OK[Operation] =
     if axis.typ != I32 then
@@ -493,19 +531,26 @@ final case class Subview(
     derives OpDefs:
 
   private def sameDimAsSizeOperand(
-      dim: ValueAttribute,
+      dim: DimParam,
       size: Operand[IndexType],
   ): Boolean =
-    val dimNat = dTensorTypeUtil.resolveNatValue(dim.getVal())
-    val sizeNat = dTensorTypeUtil.resolveNatFromIndexValue(size)
-    (dimNat, sizeNat) match
-      case (OK(d), OK(s)) => d eq s
-      case _              =>
-        (dim.getVal().owner, size.owner) match
-          case (
-                Some(NatConst(IntegerAttr(IntData(d), _), _)),
-                Some(arith.Constant(IntegerAttr(IntData(s), _: IndexType), _)),
-              ) => d == s
+    dim match
+      case d: ValueAttribute =>
+        val dimNat = dTensorTypeUtil.resolveNatValue(d.getVal())
+        val sizeNat = dTensorTypeUtil.resolveNatFromIndexValue(size)
+        (dimNat, sizeNat) match
+          case (OK(lhs), OK(rhs)) => lhs eq rhs
+          case _                  =>
+            (d.getVal().owner, size.owner) match
+              case (
+                    Some(NatConst(IntegerAttr(IntData(lhs), _), _)),
+                    Some(arith.Constant(IntegerAttr(IntData(rhs), _: IndexType), _)),
+                  ) => lhs == rhs
+              case _ => false
+      case IntegerAttr(IntData(lhs), _: IndexType | _: IntegerType) =>
+        size.owner match
+          case Some(arith.Constant(IntegerAttr(IntData(rhs), _: IndexType), _)) =>
+            lhs == rhs
           case _ => false
 
   private def firstSizeProvenanceMismatch: Option[Int] =

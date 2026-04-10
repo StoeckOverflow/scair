@@ -170,18 +170,27 @@ private def materializeDimOperands(
       }
     case ranked: d_memref.dMemrefMemrefType =>
       ranked.params.map { param =>
-        param.getVal().typ match
-          case _: dTensor.dTensorNatType =>
-            param.getVal().asInstanceOf[Operand[Attribute]]
-          case _: IndexType =>
-            val nat = dTensor.IndexToNat(
-              param.getVal().asInstanceOf[Operand[IndexType]],
+        param match
+          case p: ValueAttribute =>
+            p.getVal().typ match
+              case _: dTensor.dTensorNatType =>
+                p.getVal().asInstanceOf[Operand[Attribute]]
+              case _: IndexType =>
+                val nat = dTensor.IndexToNat(
+                  p.getVal().asInstanceOf[Operand[IndexType]],
+                  Result(dTensor.dTensorNatType()),
+                )
+                emitted += nat
+                nat.res.asInstanceOf[Operand[Attribute]]
+              case ValueRefType(ref) =>
+                ref.getVal().asInstanceOf[Operand[Attribute]]
+          case IntegerAttr(IntData(v), _) =>
+            val nat = dTensor.NatConst(
+              i32Attr(v),
               Result(dTensor.dTensorNatType()),
             )
             emitted += nat
             nat.res.asInstanceOf[Operand[Attribute]]
-          case ValueRefType(ref) =>
-            ref.getVal().asInstanceOf[Operand[Attribute]]
       }
     case _ => Seq.empty
 

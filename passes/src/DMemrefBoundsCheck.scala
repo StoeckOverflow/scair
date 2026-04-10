@@ -4,6 +4,7 @@ import scair.MLContext
 import scair.dialects.builtin.*
 import scair.dialects.d_affine
 import scair.dialects.d_memref
+import scair.dialects.arith
 import scair.exceptions.VerifyException
 import scair.ir.*
 import scair.passes.NatProvenance
@@ -102,20 +103,30 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
         if isZeroOffset && NatProvenance.sameNat(size, dim) then ()
         else ()
 
+  private def dimValue(dim: d_memref.DimParam): Value[Attribute] =
+    dim match
+      case d: ValueAttribute =>
+        d.getVal()
+      case IntegerAttr(IntData(v), _: IndexType | _: IntegerType) =>
+        arith.Constant(
+          IntegerAttr(IntData(v), IndexType()),
+          Result(IndexType()),
+        ).result
+
   private def walk(op: Operation): Unit =
     op match
       case d_memref.Load(memref, indices, _) =>
         indices.zip(memref.typ.params).zipWithIndex.foreach { case ((idx, d), i) =>
-          checkIndexLtDim(idx, d.getVal(), "d_memref.load", i)
+          checkIndexLtDim(idx, dimValue(d), "d_memref.load", i)
         }
       case d_memref.Store(_, memref, indices) =>
         indices.zip(memref.typ.params).zipWithIndex.foreach { case ((idx, d), i) =>
-          checkIndexLtDim(idx, d.getVal(), "d_memref.store", i)
+          checkIndexLtDim(idx, dimValue(d), "d_memref.store", i)
         }
       case d_memref.Subview(src, offsets, sizes, _, _) =>
         offsets.zip(sizes).zip(src.typ.params).zipWithIndex.foreach {
           case (((off, size), dim), axis) =>
-            checkSubviewBound(off, size, dim.getVal(), axis)
+            checkSubviewBound(off, size, dimValue(dim), axis)
         }
       case _ => ()
 

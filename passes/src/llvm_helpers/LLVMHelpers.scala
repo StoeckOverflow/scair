@@ -196,13 +196,16 @@ def buildDefaultStrides(
   if dims.isEmpty then Seq.empty
   else
     val one = cache.one(block)
-    val rev = mutable.ArrayBuffer[Value[Attribute]](one)
-    dims.reverse.drop(1).foreach { dim =>
-      val mul = llvm.Mul(asLLVMIndex(dim), asLLVMIndex(rev.last), Result(llvmIndexType))
+    val strides = Array.fill[Value[Attribute]](dims.size)(one)
+    for i <- (dims.size - 2) to 0 by -1 do
+      val mul = llvm.Mul(
+        asLLVMIndex(dims(i + 1)),
+        asLLVMIndex(strides(i + 1)),
+        Result(llvmIndexType),
+      )
       block.addOp(mul)
-      rev += mul.res
-    }
-    rev.reverse.toSeq
+      strides(i) = mul.res
+    strides.toSeq
 
 def computeAllocationSizeBytes(
     numElems: Value[Attribute],
@@ -235,8 +238,10 @@ final class CachedIndexConstants(defaultBlock: Block):
     if v == 0 && cachedZero.nonEmpty then cachedZero.get
     else if v == 1 && cachedOne.nonEmpty then cachedOne.get
     else
+      val targetBlock =
+        if v == 0 || v == 1 then defaultBlock else block
       val c = llvm.Constant(llvmIndexAttr(v), Result(llvmIndexType))
-      block.addOp(c)
+      targetBlock.addOp(c)
       seed(c.res, v)
       c.res
 
