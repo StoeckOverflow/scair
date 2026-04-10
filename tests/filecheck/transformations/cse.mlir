@@ -116,11 +116,10 @@ func.func @down_propagate_for() {
 }
 // CHECK-NEXT:    func.func @down_propagate_for() {
 // CHECK-NEXT:      %0 = "arith.constant"() <{value = 1 : i32}> : () -> i32
-// CHECK-NEXT:      "affine.for"() <{lowerBoundMap = #map1, upperBoundMap = #map2, step = 1 : index, operandSegmentSizes = array<i32: 0, 0, 0>}> ({
-// CHECK-NEXT:      ^bb0(%1: index):
+// CHECK-NEXT:      affine.for %1 = #map1() to #map2() step 1 : index {
 // CHECK-NEXT:        "foo"(%0, %0) : (i32, i32) -> ()
 // CHECK-NEXT:        affine.yield
-// CHECK-NEXT:      }) : () -> ()
+// CHECK-NEXT:      }
 // CHECK-NEXT:      func.return
 // CHECK-NEXT:    }
 
@@ -146,14 +145,13 @@ func.func @up_propagate_for() -> i32 {
   func.return %0 : i32
 }
 // CHECK-NEXT:    func.func @up_propagate_for() -> i32 {
-// CHECK-NEXT:      "affine.for"() <{lowerBoundMap = #map1, upperBoundMap = #map2, step = 1 : index, operandSegmentSizes = array<i32: 0, 0, 0>}> ({
-// CHECK-NEXT:      ^bb0(%0: index):
+// CHECK-NEXT:      affine.for %0 = #map1() to #map2() step 1 : index {
 // CHECK-NEXT:        %1 = "arith.constant"() <{value = 1 : i32}> : () -> i32
 // CHECK-NEXT:        "foo"(%1) : (i32) -> ()
 // CHECK-NEXT:        affine.yield
-// CHECK-NEXT:      }) : () -> ()
-// CHECK-NEXT:      %0 = "arith.constant"() <{value = 1 : i32}> : () -> i32
-// CHECK-NEXT:      func.return %0 : i32
+// CHECK-NEXT:      }
+// CHECK-NEXT:      %2 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+// CHECK-NEXT:      func.return %2 : i32
 // CHECK-NEXT:    }
 
 // TODO: Requires the notions of SSACFG regions and block dominance

@@ -1,4 +1,4 @@
-// RUN: scair-opt %s | filecheck %s
+// RUN: scair-opt %s | filecheck %s --dump-input=always
 
 %N, %value, %memref, %zero = "test.op"() : () -> (index, f64, memref<2x3xf64>, index)
 
@@ -42,20 +42,20 @@
 // CHECK-NEXT:  #map5 = affine_map<(d0)[] -> (d0 + 41, d0)>
 // CHECK-NEXT:  #map6 = affine_map<(d0, d1)[] -> (d0, d1)>
 // CHECK-NEXT:  #set = affine_set<()[]: (0 == 0)>
+// CHECK-NEXT:  #map7 = affine_map<(d0)[] -> (d0)>
 // CHECK-NEXT:  builtin.module {
 // CHECK-NEXT:    %0, %1, %2, %3 = "test.op"() : () -> (index, f64, memref<2x3xf64>, index)
-// CHECK-NEXT:    "affine.for"() <{lowerBoundMap = #map, upperBoundMap = #map1, step = 1 : index, operandSegmentSizes = array<i32: 0, 0, 0>}> ({
-// CHECK-NEXT:    ^bb0(%4: index):
+// CHECK-NEXT:    affine.for %4 = #map() to #map1() step 1 : index {
 // CHECK-NEXT:      affine.yield
-// CHECK-NEXT:    }) : () -> ()
+// CHECK-NEXT:    }
 // CHECK-NEXT:    "affine.parallel"(%0) <{upperBoundsGroups = dense<1> : vector<1xi32>, upperBoundsMap = #map2, lowerBoundsMap = #map, lowerBoundsGroups = dense<1> : vector<1xi32>, reductions = [], steps = [1]}> ({
-// CHECK-NEXT:    ^bb0(%4: index):
+// CHECK-NEXT:    ^bb0(%5: index):
 // CHECK-NEXT:      affine.yield
 // CHECK-NEXT:    }) : (index) -> ()
 // CHECK-NEXT:    "affine.store"(%1, %2) <{map = #map3}> : (f64, memref<2x3xf64>) -> ()
-// CHECK-NEXT:    %4 = "affine.apply"(%3, %3) <{map = #map4}> : (index, index) -> index
-// CHECK-NEXT:    %5 = "affine.min"(%3) <{map = #map5}> : (index) -> index
-// CHECK-NEXT:    %6 = "affine.load"(%2, %3, %3) <{map = #map6}> : (memref<2x3xf64>, index, index) -> f64
+// CHECK-NEXT:    %5 = "affine.apply"(%3, %3) <{map = #map4}> : (index, index) -> index
+// CHECK-NEXT:    %6 = "affine.min"(%3) <{map = #map5}> : (index) -> index
+// CHECK-NEXT:    %7 = "affine.load"(%2, %3, %3) <{map = #map6}> : (memref<2x3xf64>, index, index) -> f64
 // CHECK-NEXT:    "affine.if"() <{condition = #set}> ({
 // CHECK-NEXT:      affine.yield
 // CHECK-NEXT:    }, {
@@ -65,7 +65,7 @@
 // CHECK-NEXT:    }, {
 // CHECK-NEXT:      affine.yield
 // CHECK-NEXT:    }) : () -> ()
-// CHECK-NEXT:    %7 = affine.for %8 = #map() to #map2(%0) step 1 : index iter_args(%9 = %3 : index) {
-// CHECK-NEXT:      affine.yield %9 : index
+// CHECK-NEXT:    %8 = affine.for %9 = #map() to #map7(%0) step 1 : index iter_args(%10 = %3 : index) {
+// CHECK-NEXT:      affine.yield %10 : index
 // CHECK-NEXT:    }
 // CHECK-NEXT:  }

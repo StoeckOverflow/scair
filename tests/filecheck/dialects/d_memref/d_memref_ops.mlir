@@ -108,3 +108,40 @@ builtin.module {
 }
 
 // VERIFY: d_memref.dim: constant axis 2 out of bounds for rank 2
+
+// -----
+
+builtin.module {
+  %z_i = "arith.constant"() <{value = 0 : index}> : () -> index
+  %o_i = "arith.constant"() <{value = 1 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+  %v = "test.v"() : () -> f32
+  d_memref.store %v, %buf[%o_i, %o_i] : f32, !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+  %r = d_memref.load %buf[%o_i, %o_i] : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> f32
+  %d0 = d_memref.dim %buf, %z_i : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> index
+  %same = d_memref.cast %buf : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+  "test.keep"(%r, %d0, %same) : (f32, index, !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>) -> ()
+  d_memref.dealloc %buf : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+}
+
+// VERIFY: d_memref.alloc : () -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+// VERIFY: d_memref.cast %{{.*}} : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+
+// -----
+
+builtin.module {
+  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+  %buf = d_memref.alloc : () -> !d_memref.memref<[%m], f32>
+  %bad = d_memref.cast %buf : !d_memref.memref<[%m], f32> -> !d_memref.memref<[4], f32>
+}
+
+// VERIFY: d_memref.cast: expected pairwise SSA-identical dims
+
+// -----
+
+builtin.module {
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
+  %bad = d_memref.dim_exact %buf {axis = 0 : i32} : !d_memref.memref<[4], f32> -> !value<%buf>
+}
+
+// VERIFY: d_memref.dim_exact: expected selected embedded dim to be SSA-backed, got a literal dimension
