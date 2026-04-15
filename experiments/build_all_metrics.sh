@@ -19,6 +19,7 @@ MEMREF_CONTROL_FLOW_ITERATIONS_DEFAULT="${MEMREF_CONTROL_FLOW_ITERATIONS:-20000}
 MEMREF_CONTROL_FLOW_RUNTIME_N_DEFAULT="${MEMREF_CONTROL_FLOW_RUNTIME_N:-64}"
 SEMI_AFFINE_ITERATIONS_DEFAULT="${SEMI_AFFINE_ITERATIONS:-1000}"
 MATMUL_CHECKSUM_ITERATIONS_DEFAULT="${MATMUL_CHECKSUM_ITERATIONS:-200}"
+STRIDED_MATMUL_ITERATIONS_DEFAULT="${STRIDED_MATMUL_ITERATIONS:-200}"
 CONVOLUTION_ITERATIONS_DEFAULT="${CONVOLUTION_ITERATIONS:-50}"
 
 # The per-family CSVs are expected to share one identical header so we can
@@ -30,6 +31,7 @@ SCRIPTS=(
   "$SCAIR_ROOT/experiments/memref_control_flow/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/matmul_checksum_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/strided_matmul_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair_example.sh"
 )
 
@@ -38,6 +40,7 @@ METRIC_FILES=(
   "$SCAIR_ROOT/experiments/memref_control_flow/build_scair/metrics.csv"
   "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/build_scair/metrics.csv"
   "$SCAIR_ROOT/experiments/matmul_checksum_benchmark/build_scair/metrics.csv"
+  "$SCAIR_ROOT/experiments/strided_matmul_benchmark/build_scair/metrics.csv"
   "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair/metrics.csv"
 )
 
@@ -67,6 +70,12 @@ for script in "${SCRIPTS[@]}"; do
       BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
       BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
       ITERATIONS="$MATMUL_CHECKSUM_ITERATIONS_DEFAULT" \
+      bash "$script"
+      ;;
+    strided_matmul_benchmark)
+      BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
+      BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
+      ITERATIONS="$STRIDED_MATMUL_ITERATIONS_DEFAULT" \
       bash "$script"
       ;;
     convolution_benchmark)
