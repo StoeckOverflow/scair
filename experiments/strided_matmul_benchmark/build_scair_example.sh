@@ -21,7 +21,7 @@ MLIR_SRC="${MLIR_SRC:-$EXAMPLE_DIR/matmul_kernel_mlir_baseline.mlir}"
 SCAIR_SRC="${SCAIR_SRC:-$EXAMPLE_DIR/matmul_kernel_scair_dmemref.mlir}"
 MLIR_DRIVER_SRC="${MLIR_DRIVER_SRC:-$EXAMPLE_DIR/driver_mlir.c}"
 SCAIR_DRIVER_SRC="${SCAIR_DRIVER_SRC:-$EXAMPLE_DIR/driver_scair.c}"
-OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/build_scair}"
+OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
 
 mkdir -p "$OUT_DIR"
 
@@ -61,7 +61,7 @@ build_scair_kernel() {
   local lowered_mlir_out="$3"
   local llvm_ir_out="$4"
 
-  "$SCAIR_OPT" "$src" --passes "lower-dmemref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi" \
+  "$SCAIR_OPT" -s "$src" --passes "lower-dmemref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi" \
     | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' \
     > "$lowered_mlir_out"
   "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"

@@ -4,7 +4,7 @@ set -euo pipefail
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$SCAIR_ROOT/experiments/common_metrics.sh"
 
-OUT_DIR="${OUT_DIR:-$SCAIR_ROOT/experiments/build_metrics}"
+OUT_DIR="${OUT_DIR:-$SCAIR_ROOT/experiments/out}"
 mkdir -p "$OUT_DIR"
 
 # Use a stricter default measurement policy for the aggregate metrics run so
@@ -18,7 +18,6 @@ TYPE_POLYMORPHISM_ITERATIONS_DEFAULT="${TYPE_POLYMORPHISM_ITERATIONS:-10000000}"
 MEMREF_CONTROL_FLOW_ITERATIONS_DEFAULT="${MEMREF_CONTROL_FLOW_ITERATIONS:-20000}"
 MEMREF_CONTROL_FLOW_RUNTIME_N_DEFAULT="${MEMREF_CONTROL_FLOW_RUNTIME_N:-64}"
 SEMI_AFFINE_ITERATIONS_DEFAULT="${SEMI_AFFINE_ITERATIONS:-1000}"
-MATMUL_CHECKSUM_ITERATIONS_DEFAULT="${MATMUL_CHECKSUM_ITERATIONS:-200}"
 STRIDED_MATMUL_ITERATIONS_DEFAULT="${STRIDED_MATMUL_ITERATIONS:-200}"
 CONVOLUTION_ITERATIONS_DEFAULT="${CONVOLUTION_ITERATIONS:-50}"
 
@@ -30,7 +29,6 @@ SCRIPTS=(
   "$SCAIR_ROOT/experiments/type_polymorphism/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/memref_control_flow/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/matmul_checksum_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/strided_matmul_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair_example.sh"
 )
@@ -39,7 +37,6 @@ METRIC_FILES=(
   "$SCAIR_ROOT/experiments/type_polymorphism/build_scair/metrics.csv"
   "$SCAIR_ROOT/experiments/memref_control_flow/build_scair/metrics.csv"
   "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/build_scair/metrics.csv"
-  "$SCAIR_ROOT/experiments/matmul_checksum_benchmark/build_scair/metrics.csv"
   "$SCAIR_ROOT/experiments/strided_matmul_benchmark/build_scair/metrics.csv"
   "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair/metrics.csv"
 )
@@ -64,12 +61,6 @@ for script in "${SCRIPTS[@]}"; do
       BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
       BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
       ITERATIONS="$SEMI_AFFINE_ITERATIONS_DEFAULT" \
-      bash "$script"
-      ;;
-    matmul_checksum_benchmark)
-      BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-      BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-      ITERATIONS="$MATMUL_CHECKSUM_ITERATIONS_DEFAULT" \
       bash "$script"
       ;;
     strided_matmul_benchmark)
@@ -138,7 +129,6 @@ def rep_value(row):
 
 with open(md_path, "w", encoding="utf-8") as out:
     out.write("# Uniform Experiment Metrics Summary\n\n")
-    out.write("This summary keeps one core schema across all experiment families.\n\n")
     for family in sorted(groups):
         out.write(f"## {family}\n\n")
         out.write("| Benchmark | Variant | Rep | Build | Run | Structural ops | Func defs | Block args | MLIR LOC | LLVM LOC | Compile ms | Result | Expected | ns/iter |\n")

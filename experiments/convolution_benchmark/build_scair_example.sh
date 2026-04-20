@@ -40,7 +40,7 @@ CONV_VALUE_DEP_SRC="${CONV_VALUE_DEP_SRC:-$EXAMPLE_DIR/conv2d_kernel_scair_value
 CHECKSUM_VALUE_DEP_SRC="${CHECKSUM_VALUE_DEP_SRC:-$EXAMPLE_DIR/checksum_kernel_scair_value_dependent.mlir}"
 VALUE_DEP_DRIVER_SRC="${VALUE_DEP_DRIVER_SRC:-$EXAMPLE_DIR/driver_bare.c}"
 
-OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/build_scair}"
+OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
 mkdir -p "$OUT_DIR"
 
 require_bin "$SCAIR_OPT"
@@ -65,7 +65,7 @@ build_scair_kernel() {
   local llvm_ir_out="$4"
   local lowered_mlir_out="${llvm_ir_out%.ll}.llvm.mlir"
 
-  "$SCAIR_OPT" "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" \
+  "$SCAIR_OPT" -s "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" \
     | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' \
     > "$lowered_mlir_out"
   "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"

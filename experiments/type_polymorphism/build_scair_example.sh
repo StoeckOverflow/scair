@@ -14,7 +14,7 @@ SCAIR_OPT="${SCAIR_ROOT}/out/tools/opt/launcher.dest/run"
 MLIR_OPT="${BIN_DIR}/mlir-opt"
 MLIR_TRANSLATE="$BIN_DIR/mlir-translate"
 DRIVER_TEMPLATE="${EXAMPLE_DIR}/driver_template.c"
-OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/build_scair}"
+OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
 
 BENCHMARKS=(
   "shared_polymorphic_identity_multitype"

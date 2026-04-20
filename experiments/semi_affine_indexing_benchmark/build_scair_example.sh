@@ -13,16 +13,18 @@ source "$SCAIR_ROOT/experiments/common_metrics.sh"
 SCAIR_OPT="${SCAIR_ROOT}/out/tools/opt/launcher.dest/run"
 MLIR_TRANSLATE="$BIN_DIR/mlir-translate"
 MLIR_OPT="$BIN_DIR/mlir-opt"
-
 MLIR_BASELINE_SRC="${MLIR_BASELINE_SRC:-$EXAMPLE_DIR/semi_affine_kernel_mlir_baseline.mlir}"
 MLIR_DRIVER_SRC="${MLIR_DRIVER_SRC:-$EXAMPLE_DIR/driver.c}"
+
 BASELINE_SRC="${BASELINE_SRC:-$EXAMPLE_DIR/semi_affine_kernel_scair_baseline.mlir}"
-VALUE_DEP_SRC="${VALUE_DEP_SRC:-$EXAMPLE_DIR/semi_affine_kernel_scair_value_dependent.mlir}"
 BASELINE_DRIVER_SRC="${BASELINE_DRIVER_SRC:-$EXAMPLE_DIR/driver_baseline_bare.c}"
+
+VALUE_DEP_SRC="${VALUE_DEP_SRC:-$EXAMPLE_DIR/semi_affine_kernel_scair_value_dependent.mlir}"
+
 VALUE_DEP_DRIVER_SRC="${VALUE_DEP_DRIVER_SRC:-$EXAMPLE_DIR/driver_bare.c}"
 VALUE_DEP_LITERAL_DRIVER_SRC="${VALUE_DEP_LITERAL_DRIVER_SRC:-$EXAMPLE_DIR/driver_bare_literal_dims.c}"
 
-OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/build_scair}"
+OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
 mkdir -p "$OUT_DIR"
 
 require_bin "$SCAIR_OPT"
@@ -40,7 +42,7 @@ require_file "$VALUE_DEP_LITERAL_DRIVER_SRC"
 value_dep_driver_for_src() {
   local src="$1"
   case "$(basename "$src")" in
-    version2.mlir) echo "$VALUE_DEP_LITERAL_DRIVER_SRC" ;;
+    semi_affine_kernel_scair_value_dependent.mlir) echo "$VALUE_DEP_LITERAL_DRIVER_SRC" ;;
     *) echo "$VALUE_DEP_DRIVER_SRC" ;;
   esac
 }
@@ -59,7 +61,7 @@ build_kernel() {
   local end_ns
   start_ns=$(now_ns)
 
-  "$SCAIR_OPT" "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" \
+  "$SCAIR_OPT" -s "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" \
     | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' \
     > "$lowered_mlir_out"
   "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_mlir_out" > "$llvm_ir_out"

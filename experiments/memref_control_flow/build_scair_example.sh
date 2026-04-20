@@ -14,7 +14,7 @@ source "$SCAIR_ROOT/experiments/common_metrics.sh"
 SCAIR_OPT="${SCAIR_ROOT}/out/tools/opt/launcher.dest/run"
 MLIR_TRANSLATE="$BIN_DIR/mlir-translate"
 MLIR_OPT="$BIN_DIR/mlir-opt"
-OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/build_scair}"
+OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
 ALLOC_DRIVER_SRC="${ALLOC_DRIVER_SRC:-$EXAMPLE_DIR/driver.c}"
 
 SUBVIEW_MLIR_BASELINE_SRC="${SUBVIEW_MLIR_BASELINE_SRC:-$EXAMPLE_DIR/control_flow_selected_subview_reduction_mlir_baseline.mlir}"
@@ -60,7 +60,7 @@ build_kernel() {
   start_ns=$(now_ns)
 
   set +e
-  "$SCAIR_OPT" "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" \
+  "$SCAIR_OPT" -s "$src" --passes "$route,convert-func-to-llvm,convert-llvm-export-abi" \
     | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' \
     > "$lowered_mlir_out" 2> "$build_log"
   status=$?
