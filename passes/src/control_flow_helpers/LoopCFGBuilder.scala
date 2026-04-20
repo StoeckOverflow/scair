@@ -48,7 +48,12 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
       lhs: Value[Attribute],
       rhs: Value[Attribute],
   ): Value[Attribute] =
-    val cmp = llvm.ICmp(asLLVMIndex(lhs), asLLVMIndex(rhs), StringData("slt"), Result(I1))
+    val cmp = llvm.ICmp(
+      asLLVMIndex(lhs),
+      asLLVMIndex(rhs),
+      Result(I1),
+      llvm.ICmpPredicate.slt,
+    )
     block.addOp(cmp)
     cmp.res
 

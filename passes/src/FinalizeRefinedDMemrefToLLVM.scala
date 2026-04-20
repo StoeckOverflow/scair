@@ -366,8 +366,8 @@ private final class Builder(val funcOp: func.Func):
           val lowered = llvm.ICmp(
             remap(cmp.lhs).asInstanceOf[Operand[IntegerType | IndexType]],
             remap(cmp.rhs).asInstanceOf[Operand[IntegerType | IndexType]],
-            cmp.predicate,
             Result(I1),
+            cmp.predicate,
           )
           emit(newBlock, lowered)
           state.valueMap(cmp.res) = lowered.res

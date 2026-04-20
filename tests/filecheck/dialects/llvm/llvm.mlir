@@ -4,6 +4,7 @@
 %2 = llvm.load %0 : !llvm.ptr -> i32
 %3 = llvm.load %0 : !llvm.ptr -> index
 %4 = "llvm.getelementptr"(%0, %2) <{"elem_type" = i32, "rawConstantIndices" = array<i32: -2147483648>}> : (!llvm.ptr, i32) -> !llvm.ptr
+%5 = llvm.icmp "slt" %2, %1 : i32
 
 // CHECK:       builtin.module {
 // CHECK-NEXT:    %0, %1 = "test.op"() : () -> (!llvm.ptr, i32)
@@ -12,4 +13,5 @@
 // CHECK-NEXT:    %4 = "llvm.getelementptr"(%0, %2)
 // CHECK-SAME: <{rawConstantIndices = array<i32: -2147483648>, elem_type = i32}>
 // CHECK-SAME: : (!llvm.ptr, i32) -> !llvm.ptr
+// CHECK-NEXT:    %5 = llvm.icmp "slt" %2, %1 : i32
 // CHECK-NEXT:  }

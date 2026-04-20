@@ -328,6 +328,15 @@ private final class Builder(val funcOp: func.Func):
             newBlock,
             llvm.Return(ret._operands.map(v => remap(v).asInstanceOf[Operand[Attribute]])),
           )
+        case cmp: llvm.ICmp =>
+          val lowered = llvm.ICmp(
+            remap(cmp.lhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            remap(cmp.rhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            Result(cmp.res.typ),
+            cmp.predicate,
+          )
+          emit(newBlock, lowered)
+          state.valueMap(cmp.res) = lowered.res
         case other =>
           val copied = state.deepCopyOp(other)
           emit(newBlock, copied)
