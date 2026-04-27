@@ -14,11 +14,11 @@ object SSADominanceCheck extends VerifierCheck:
   override def run(root: Operation): OK[Unit] =
     val dom = new DominanceInfo(root)
 
-    def fail(msg: String): OK[Unit] = Err(msg)
+    def fail(msg: String, obj: AnyRef): OK[Unit] = Err(msg, Some(obj))
 
     def checkValue(v: Value[Attribute], user: Operation): OK[Unit] =
       if dom.valueDominates(v, user) then OK(())
-      else fail(s"value $v does not dominate its use in op `${user.name}`")
+      else fail(s"value $v does not dominate its use in op `${user.name}`", user)
 
     def walkAttr(a: Attribute, user: Operation): OK[Unit] =
       boundary[OK[Unit]] {

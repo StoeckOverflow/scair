@@ -27,7 +27,7 @@ final class SSADominanceCheckTest extends AnyFlatSpec:
     val module = ModuleOp(Region(Seq(block)))
 
     Verifier.verify(module) match
-      case Err(msg) =>
+      case Err(msg, _) =>
         msg should include("ssa-dominance")
       case _ =>
         fail("expected dominance failure but verification succeeded")
