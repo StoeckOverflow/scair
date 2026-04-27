@@ -1,7 +1,8 @@
 package scair.dialects.dTensor
 
 import fastparse.*
-import scair.Printer
+import scair.print.AssemblyPrinter
+import scair.print.Printer
 import scair.dialects.builtin.*
 import scair.ir.*
 import scair.parse.*
@@ -54,7 +55,7 @@ object dTensorTypeUtil:
 
   def renderAttr(a: Attribute): String =
     val out = java.io.StringWriter()
-    val printer = Printer(p = java.io.PrintWriter(out))
+    val printer = AssemblyPrinter(p = java.io.PrintWriter(out))
     printer.print(a)
     printer.flush()
     out.toString

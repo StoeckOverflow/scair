@@ -1,13 +1,13 @@
 package scair.dialects.llvm
 
 import fastparse.*
-import scair.Printer
 import scair.clair.*
 import scair.dialects.builtin.*
 import scair.enums.*
 import scair.ir.*
 import scair.parse.*
 import scair.parse.given
+import scair.print.Printer
 import scair.utils.*
 
 case class Ptr() extends DerivedAttribute["llvm.ptr"] with TypeAttribute
@@ -46,9 +46,8 @@ given AttributeCompanion[StructType]:
   override def name: String = "llvm.struct"
 
   override def parse[$: P](using Parser): P[StructType] =
-    P("<" ~ "(" ~ typeP.rep(sep = ",") ~ ")" ~ ">").map(elems =>
-      StructType(elems.map(_.asInstanceOf[TypeAttribute]))
-    )
+    P("<" ~ "(" ~ typeP.rep(sep = ",") ~ ")" ~ ">")
+      .map(elems => StructType(elems.map(_.asInstanceOf[TypeAttribute])))
 
 final case class ArrayType(
     size: IntData,
@@ -132,7 +131,7 @@ given OperationCustomParser[ICmp]:
         (typeOfP[IntegerType] | typeOfP[IndexType])
     ).flatMap((pred, lhsName, rhsName, typ) =>
       ICmpPredicate.fromString(pred) match
-        case None => Fail(s"unknown llvm.icmp predicate '$pred'")
+        case None            => Fail(s"unknown llvm.icmp predicate '$pred'")
         case Some(predicate) =>
           operandP(lhsName, typ).flatMap(lhs =>
             operandP(rhsName, typ).flatMap(rhs =>
@@ -180,11 +179,14 @@ case class GetElementPtr(
     with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
-    val rawIndices = rawConstantIndices.data.collect { case i: IntegerAttr => i }
+    val rawIndices = rawConstantIndices.data.collect { case i: IntegerAttr =>
+      i
+    }
     val numDynamicMarkers = rawIndices.count(isDynamicGEPIndex)
     if numDynamicMarkers != dynamicIndices.size then
       Err(
-        s"llvm.getelementptr: rawConstantIndices contain $numDynamicMarkers dynamic markers but op has ${dynamicIndices.size} dynamic indices"
+        s"llvm.getelementptr: rawConstantIndices contain $numDynamicMarkers dynamic markers but op has ${dynamicIndices
+            .size} dynamic indices"
       )
     else OK(this)
 
@@ -307,7 +309,7 @@ case class Func(
     with SymbolTable derives OpDefs:
 
   override def customPrint(printer: Printer): Unit =
-    val lprinter = printer.copy()
+    val lprinter = printer.scoped
     lprinter.print("llvm.func ")
     sym_visibility.foreach { visibility =>
       lprinter.print(visibility.data)

@@ -16,7 +16,7 @@ import scair.verify.Verifier
 
 private def verifyAfterPass(op: Operation, pass: ModulePass): Operation =
   Verifier.verify(op, Verifier.defaultChecks) match
-    case scair.utils.Err(errorMsg) =>
+    case scair.utils.Err(errorMsg, _) =>
       throw VerifyException(
         s"verification failed after pass '${pass.name}':\n$errorMsg"
       )

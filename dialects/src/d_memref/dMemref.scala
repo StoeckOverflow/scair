@@ -1,7 +1,7 @@
 package scair.dialects.d_memref
 
 import fastparse.*
-import scair.Printer
+import scair.print.Printer
 import scair.clair.*
 import scair.dialects.arith
 import scair.dialects.builtin.*
@@ -63,8 +63,13 @@ object dMemrefTypeUtil:
       case v: ValueAttribute =>
         v.getVal().typ match
           case _: IndexType      => OK(())
+          case _: IntegerType    => OK(())
           case _: dTensorNatType => dTensorTypeUtil.resolveNatValue(v.getVal()).map(_ => ())
           case ValueRefType(ref) => checkLayoutParam(ValueAttribute(ref.getVal()))
+          case other =>
+            Err(
+              s"layout SSA parameter must have type index, integer, !dtensor.nat, or !value<...>, got ${renderAttr(other)}"
+            )
       case IntegerAttr(_, _: IndexType)   => OK(())
       case IntegerAttr(_, _: IntegerType) => OK(())
 

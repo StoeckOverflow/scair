@@ -1,7 +1,7 @@
 package scair.dialects.d_affine
 
 import fastparse.*
-import scair.Printer
+import scair.print.Printer
 import scair.clair.*
 import scair.dialects.builtin.*
 import scair.dialects.d_memref

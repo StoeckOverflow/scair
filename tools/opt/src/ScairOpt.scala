@@ -1,10 +1,11 @@
 package scair.tools.opt
 
-import scair.Printer
 import scair.analysis.IRMetrics
 import scair.exceptions.VerifyException
 import scair.ir.*
 import scair.parse.*
+import scair.print.AssemblyPrinter
+import scair.print.ErrorPrinter
 import scair.tools.ScairToolBase
 import scair.utils.*
 import scair.verify.Verifier
@@ -122,6 +123,20 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
     // Parse the CLI args
     OParser.parse(argparser, args, ScairOptArgs()).get
 
+  def handleVerificationError(
+      error: Err,
+      operation: Operation,
+      verifyDiagnostics: Boolean,
+  ): OK[Operation] =
+    error match
+      case Err(msg, Some(_)) =>
+        val p = new ErrorPrinter(error)
+        p.print(operation)
+        if verifyDiagnostics then error else sys.exit(42)
+      case Err(msg, None) =>
+        Console.err.println(msg)
+        if verifyDiagnostics then error else sys.exit(42)
+
   def main(args: Array[String]): Unit =
 
     val parsedArgs = parseArgs(args)
@@ -162,7 +177,7 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
 
                     if !parsedArgs.skipVerify then
                       verifyWithChecks(out) match
-                        case Err(errorMsg) =>
+                        case Err(errorMsg, _) =>
                           if parsedArgs.verifyDiagnostics then
                             Err(errorMsg + "\n")
                           else throw new VerifyException(errorMsg)
@@ -172,9 +187,12 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
 
                   }
                 )
-              case Err(errorMsg) =>
-                if parsedArgs.verifyDiagnostics then Err(errorMsg + "\n")
-                else throw new VerifyException(errorMsg)
+              case err: Err =>
+                handleVerificationError(
+                  err,
+                  inputModule,
+                  parsedArgs.verifyDiagnostics,
+                )
 
           {
             if parsedArgs.emitIrMetrics then
@@ -183,14 +201,14 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
                 op => IRMetrics.collect(op).toKeyValueLines.foreach(println),
               )
             else
-              val printer = new Printer(parsedArgs.printGeneric)
+              val printer = new AssemblyPrinter(parsedArgs.printGeneric)
               processedModule.fold(
                 err => printer.print(err.msg),
                 printer.printTopLevel,
               )
               printer.flush()
           }
-        case Err(errorMsg) =>
+        case Err(msg = errorMsg, obj = _) =>
           if parsedArgs.parsingDiagnostics then println(errorMsg)
           else throw new Exception(errorMsg)
 

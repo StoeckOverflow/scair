@@ -2,7 +2,7 @@ package scair.dialects.memref
 
 import scair.clair.*
 import fastparse.*
-import scair.Printer
+import scair.print.Printer
 import scair.dialects.builtin.*
 import scair.ir.*
 import scair.parse.{Parser, operandNameP, operandP, resultP, typeOfP}
@@ -25,8 +25,8 @@ private def parseIndexOperands[$: P](names: Seq[String])(using
 //
 
 case class Alloc(
-    dynamicSizes: Seq[Operand[IndexType]],
-    symbolOperands: Seq[Operand[IndexType]],
+    dynamicSizes: Seq[Operand[IndexType]] = Seq.empty,
+    symbolOperands: Seq[Operand[IndexType]] = Seq.empty,
     memref: Result[MemrefType],
     alignment: Option[IntegerAttr] = None,
 ) extends DerivedOperation["memref.alloc"] derives OpDefs
@@ -45,14 +45,14 @@ case class Dim(
 
 case class Load(
     memref: Operand[MemrefType],
-    indices: Seq[Operand[IndexType]],
+    indices: Seq[Operand[IndexType]] = Seq.empty,
     result: Result[Attribute],
 ) extends DerivedOperation["memref.load"] derives OpDefs
 
 case class Store(
     value: Operand[Attribute],
     memref: Operand[MemrefType],
-    indices: Seq[Operand[IndexType]],
+    indices: Seq[Operand[IndexType]] = Seq.empty,
 ) extends DerivedOperation["memref.store"] derives OpDefs
 
 case class ReinterpretCast(

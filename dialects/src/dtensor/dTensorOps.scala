@@ -1,6 +1,6 @@
 package scair.dialects.dTensor
 
-import scair.Printer
+import scair.print.Printer
 import scair.clair.*
 import scair.dialects.builtin.*
 import scair.ir.*
