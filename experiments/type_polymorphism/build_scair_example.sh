@@ -22,6 +22,11 @@ BENCHMARKS=(
 )
 
 mkdir -p "$OUT_DIR"
+ENV_PATH="$(ensure_env_snapshot "$OUT_DIR")"
+GIT_COMMIT="$(git_commit_for_metrics)"
+RUN_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+MACHINE_ID="$(machine_id_for_metrics)"
+COMPILER_FLAGS="-O2"
 
 require_bin "$SCAIR_OPT"
 require_bin "$MLIR_OPT"
@@ -224,6 +229,7 @@ append_row() {
   local opt_llvm_ir="$8"
   local output_txt="$9"
   local notes="${10}"
+  local size_descriptor="benchmark=${bench};polymorphism=type_level"
 
   local representation
   representation="$(representation_group_for_variant "$variant")"
@@ -284,7 +290,25 @@ append_row() {
     "$bvar_refs" \
     "$value_refs" \
     "$(file_metric lines "$opt_llvm_ir")" \
-    "$(count_llvm_calls "$opt_llvm_ir")"
+    "$(count_llvm_calls "$opt_llvm_ir")" \
+    "type_polymorphism" \
+    "$size_descriptor" \
+    "$report_variant" \
+    "NA" \
+    "NA" \
+    "NA" \
+    "$(metric_field compile_ms "$output_txt")" \
+    "$(metric_field ns_per_iter "$output_txt")" \
+    "$(metric_field runtime_iqr_ns_per_iter "$output_txt")" \
+    "$(metric_field benchmark_repetitions "$output_txt")" \
+    "$(metric_field result "$output_txt")" \
+    "$(metric_field run_status "$output_txt")" \
+    "$COMPILER_FLAGS" \
+    "$GIT_COMMIT" \
+    "$RUN_DATE" \
+    "$MACHINE_ID" \
+    "$ENV_PATH" \
+    "$(metric_field raw_timings_path "$output_txt")"
 
   append_summary_row \
     "$summary_md" \
