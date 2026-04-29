@@ -30,6 +30,7 @@ COMMON_METRICS_HEADER="experiment_family,benchmark,variant,representation_group,
 
 BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-5}"
 BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-15}"
+BENCH_PROGRESS="${BENCH_PROGRESS:-1}"
 
 require_file() {
   local path="$1"
@@ -629,12 +630,44 @@ numeric_series_stat() {
   ' "$path"
 }
 
+benchmark_progress() {
+  local label="$1"
+  local phase="$2"
+  local current="$3"
+  local total="$4"
+  local status="${5:-}"
+
+  if [[ "${BENCH_PROGRESS:-1}" == "0" || "$total" -le 0 ]]; then
+    return
+  fi
+
+  local width=28
+  local filled=$((current * width / total))
+  local empty=$((width - filled))
+  local bar_fill
+  local bar_empty
+  printf -v bar_fill '%*s' "$filled" ''
+  printf -v bar_empty '%*s' "$empty" ''
+  bar_fill="${bar_fill// /#}"
+  bar_empty="${bar_empty// /.}"
+
+  if [[ -t 2 ]]; then
+    printf '\r[%s%s] %s %s %d/%d %s' "$bar_fill" "$bar_empty" "$label" "$phase" "$current" "$total" "$status" >&2
+    if [[ "$current" -ge "$total" && "$status" != "running" ]]; then
+      printf '\n' >&2
+    fi
+  else
+    printf '[%s%s] %s %s %d/%d %s\n' "$bar_fill" "$bar_empty" "$label" "$phase" "$current" "$total" "$status" >&2
+  fi
+}
+
 run_benchmark_repeated() {
   local output_txt="$1"
   shift
 
   local warmups="${BENCH_WARMUP_REPS:-1}"
   local reps="${BENCH_TIMING_REPS:-7}"
+  local progress_label
   local tmp_dir
   local rep_out
   local ns_values
@@ -660,13 +693,17 @@ run_benchmark_repeated() {
   ns_values="$tmp_dir/ns_values.txt"
   : > "$ns_values"
   raw_timings_path="${output_txt%.txt}.timings.txt"
+  progress_label="$(basename "${output_txt%.txt}")"
 
   for ((rep = 0; rep < warmups; ++rep)); do
+    benchmark_progress "$progress_label" "warmup" "$rep" "$warmups" "running"
     "$@" > /dev/null
+    benchmark_progress "$progress_label" "warmup" "$((rep + 1))" "$warmups" "done"
   done
 
   for ((rep = 1; rep <= reps; ++rep)); do
     rep_out="$tmp_dir/rep_${rep}.txt"
+    benchmark_progress "$progress_label" "measure" "$((rep - 1))" "$reps" "running"
     "$@" > "$rep_out"
     ns="$(metric_field ns_per_iter "$rep_out")"
     if [[ -z "$ns" || "$ns" == "NA" ]]; then
@@ -676,6 +713,7 @@ run_benchmark_repeated() {
     fi
     printf '%s\n' "$ns" >> "$ns_values"
     last_out="$rep_out"
+    benchmark_progress "$progress_label" "measure" "$rep" "$reps" "done"
   done
 
   benchmark="$(metric_field benchmark "$last_out")"

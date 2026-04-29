@@ -6,6 +6,8 @@ BIN_DIR="$LLVM_BUILD_DIR/bin"
 CC="${CC:-$BIN_DIR/clang}"
 ITERATIONS="${ITERATIONS:-1}"
 CONV_SIZE_SET="${CONV_SIZE_SET:-1x3x32x32x16x3x3,1x16x64x64x32x3x3,1x64x224x224x64x3x3}"
+CONV_LARGE_OUTPUT_ELEMENTS_THRESHOLD="${CONV_LARGE_OUTPUT_ELEMENTS_THRESHOLD:-1000000}"
+CONV_LARGE_ITERATIONS="${CONV_LARGE_ITERATIONS:-${CONVOLUTION_LARGE_ITERATIONS:-1}}"
 
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -104,14 +106,31 @@ run_with_metrics() {
   local cout="$7"
   local kh="$8"
   local kw="$9"
+  local iterations="${10:-$ITERATIONS}"
 
   set +e
-  run_benchmark_repeated "$output_txt" "$exe" "$n" "$cin" "$h" "$w" "$cout" "$kh" "$kw" "$ITERATIONS"
+  run_benchmark_repeated "$output_txt" "$exe" "$n" "$cin" "$h" "$w" "$cout" "$kh" "$kw" "$iterations"
   local status=$?
   set -e
   if [[ $status -ne 0 ]]; then
     echo "error: Conv2D benchmark run failed for size n=$n cin=$cin h=$h w=$w cout=$cout kh=$kh kw=$kw using $exe" >&2
     exit $status
+  fi
+}
+
+iterations_for_size() {
+  local n="$1"
+  local h="$2"
+  local w="$3"
+  local cout="$4"
+  local oh="$5"
+  local ow="$6"
+  local output_elements=$((n * cout * oh * ow))
+
+  if [[ "$output_elements" -ge "$CONV_LARGE_OUTPUT_ELEMENTS_THRESHOLD" ]]; then
+    echo "$CONV_LARGE_ITERATIONS"
+  else
+    echo "$ITERATIONS"
   fi
 }
 
@@ -269,8 +288,9 @@ for dims in "${CONV_SIZES[@]}"; do
 
   size_descriptor="n=${n};cin=${cin};h=${h};w=${w};cout=${cout};kh=${kh};kw=${kw};layout=NCHW/OIHW"
   tag="$(size_tag "$dims")"
+  size_iterations="$(iterations_for_size "$n" "$h" "$w" "$cout" "$oh" "$ow")"
 
-  run_with_metrics "$OUT_DIR/conv2d_mlir_baseline_exec" "$OUT_DIR/conv2d_mlir_baseline_${tag}_output.txt" "$n" "$cin" "$h" "$w" "$cout" "$kh" "$kw"
+  run_with_metrics "$OUT_DIR/conv2d_mlir_baseline_exec" "$OUT_DIR/conv2d_mlir_baseline_${tag}_output.txt" "$n" "$cin" "$h" "$w" "$cout" "$kh" "$kw" "$size_iterations"
   append_row \
     "$SUMMARY_CSV" "$SUMMARY_MD" \
     "mlir_baseline" "mlir_baseline" \
@@ -281,9 +301,9 @@ for dims in "${CONV_SIZES[@]}"; do
     "$MLIR_COMPILE_MS" \
     "$MLIR_TIMING_JSON" \
     "$size_descriptor" \
-    "upstream MLIR fixed lowering pipeline; timed region includes output reset plus kernel execution; host-side checksum excluded"
+    "upstream MLIR fixed lowering pipeline; timed region includes output reset plus kernel execution; host-side checksum excluded;driver_iterations=$size_iterations"
 
-  run_with_metrics "$OUT_DIR/conv2d_baseline_kernel_only_scair_exec" "$OUT_DIR/conv2d_baseline_kernel_only_scair_${tag}_output.txt" "$n" "$cin" "$h" "$w" "$cout" "$kh" "$kw"
+  run_with_metrics "$OUT_DIR/conv2d_baseline_kernel_only_scair_exec" "$OUT_DIR/conv2d_baseline_kernel_only_scair_${tag}_output.txt" "$n" "$cin" "$h" "$w" "$cout" "$kh" "$kw" "$size_iterations"
   append_row \
     "$SUMMARY_CSV" "$SUMMARY_MD" \
     "scair_baseline" "scair_baseline" \
@@ -294,9 +314,9 @@ for dims in "${CONV_SIZES[@]}"; do
     "$BASELINE_COMPILE_MS" \
     "$SCAIR_BASELINE_TIMING_JSON" \
     "$size_descriptor" \
-    "ScaIR dynamic baseline kernel route; timed region includes output reset plus kernel execution; host-side checksum excluded"
+    "ScaIR dynamic baseline kernel route; timed region includes output reset plus kernel execution; host-side checksum excluded;driver_iterations=$size_iterations"
 
-  run_with_metrics "$OUT_DIR/conv2d_value_dependent_scair_exec" "$OUT_DIR/conv2d_value_dependent_scair_${tag}_output.txt" "$n" "$cin" "$h" "$w" "$cout" "$kh" "$kw"
+  run_with_metrics "$OUT_DIR/conv2d_value_dependent_scair_exec" "$OUT_DIR/conv2d_value_dependent_scair_${tag}_output.txt" "$n" "$cin" "$h" "$w" "$cout" "$kh" "$kw" "$size_iterations"
   append_row \
     "$SUMMARY_CSV" "$SUMMARY_MD" \
     "value_dependent" "value_dependent" \
@@ -307,7 +327,7 @@ for dims in "${CONV_SIZES[@]}"; do
     "$VALUE_COMPILE_MS" \
     "$SCAIR_VALUE_DEP_TIMING_JSON" \
     "$size_descriptor" \
-    "ScaIR value-dependent executable; timed region includes output reset plus kernel execution; host-side checksum excluded"
+    "ScaIR value-dependent executable; timed region includes output reset plus kernel execution; host-side checksum excluded;driver_iterations=$size_iterations"
 done
 
 echo

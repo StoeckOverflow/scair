@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Thesis-facing final-run defaults
+export LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-/home/dominic/dev/llvm-clean-build}"
+export BENCH_CPU_PIN="${BENCH_CPU_PIN:-8}"
+export BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-10}"
+export BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-30}"
+
+export STRIDED_MATMUL_ITERATIONS="${STRIDED_MATMUL_ITERATIONS:-200}"
+export CONVOLUTION_ITERATIONS="${CONVOLUTION_ITERATIONS:-50}"
+export CONV_LARGE_ITERATIONS="${CONV_LARGE_ITERATIONS:-1}"
+export ATTENTION_MHA_ITERATIONS="${ATTENTION_MHA_ITERATIONS:-100}"
+export TYPE_POLYMORPHISM_ITERATIONS="${TYPE_POLYMORPHISM_ITERATIONS:-10000000}"
+export SEMI_AFFINE_ITERATIONS="${SEMI_AFFINE_ITERATIONS:-1000}"
+
+# Cache-conscious supporting profiles for tail/control-relevant experiments.
+export MATMUL_TILING_PROFILE="${MATMUL_TILING_PROFILE:-cache_control}"
+export BROADCAST_AFFINE_PROFILE="${BROADCAST_AFFINE_PROFILE:-control_heavy}"
+
+echo "Running thesis benchmark suite with:"
+echo "  LLVM_BUILD_DIR=$LLVM_BUILD_DIR"
+echo "  BENCH_CPU_PIN=$BENCH_CPU_PIN"
+echo "  BENCH_WARMUP_REPS=$BENCH_WARMUP_REPS"
+echo "  BENCH_TIMING_REPS=$BENCH_TIMING_REPS"
+echo "  MATMUL_TILING_PROFILE=$MATMUL_TILING_PROFILE"
+echo "  BROADCAST_AFFINE_PROFILE=$BROADCAST_AFFINE_PROFILE"
+echo "  CONV_LARGE_ITERATIONS=$CONV_LARGE_ITERATIONS"
+echo
+
+exec bash "$SCAIR_ROOT/experiments/build_all_metrics.sh"
