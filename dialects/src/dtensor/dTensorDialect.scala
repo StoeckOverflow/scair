@@ -19,5 +19,6 @@ val dTensorDialect = summonDialect[
     Mul,
     Matmul,
     Cast,
+    ExpandShape,
   ),
 ]
