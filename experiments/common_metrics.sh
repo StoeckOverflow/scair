@@ -26,10 +26,10 @@
 #   blocks=...
 #   block_args=...
 #   op.memref.alloc=...
-COMMON_METRICS_HEADER="experiment_family,benchmark,variant,representation_group,build_status,run_status,source_bytes,source_loc,source_ops,source_ops_structural,source_func_defs,source_block_args,source_alloc_ops,source_reinterpret_cast_ops,source_subview_ops,source_extract_strided_metadata_ops,source_memref_load_ops,source_memref_store_ops,source_dmemref_load_ops,source_dmemref_store_ops,lowered_func_defs,lowered_ops,lowered_ops_structural,lowered_mlir_lines,llvm_ir_lines,llvm_call_count,compile_ms,result,expected_result,runtime_ns_per_iter,notes,source_helper_defs,bvar_refs,value_ssa_refs,opt_llvm_lines,opt_llvm_call_count"
+COMMON_METRICS_HEADER="experiment_family,benchmark,variant,representation_group,build_status,run_status,source_bytes,source_loc,source_ops,source_ops_structural,source_func_defs,source_block_args,source_alloc_ops,source_reinterpret_cast_ops,source_subview_ops,source_extract_strided_metadata_ops,source_memref_load_ops,source_memref_store_ops,source_dmemref_load_ops,source_dmemref_store_ops,lowered_func_defs,lowered_ops,lowered_ops_structural,lowered_mlir_lines,llvm_ir_lines,llvm_call_count,compile_ms,result,expected_result,runtime_ns_per_iter,notes,source_helper_defs,bvar_refs,value_ssa_refs,opt_llvm_lines,opt_llvm_call_count,kernel,size,route,parse_time_ms,verification_time_ms,lowering_time_ms,compile_total_ms,runtime_median_ns_per_iter,runtime_iqr_ns_per_iter,benchmark_repetitions,checksum,checksum_status,compiler_flags,git_commit,date,machine_id,env_path,raw_timings_path"
 
-BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-1}"
-BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-7}"
+BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-5}"
+BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-15}"
 
 require_file() {
   local path="$1"
@@ -45,6 +45,18 @@ require_bin() {
     echo "error: missing executable: $path" >&2
     exit 1
   fi
+}
+
+require_nonempty_file() {
+  local path="$1"
+  if [[ ! -s "$path" ]]; then
+    echo "error: missing or empty file: $path" >&2
+    exit 1
+  fi
+}
+
+header_column_count() {
+  awk -F, 'NR == 1 { print NF }' <<<"$COMMON_METRICS_HEADER"
 }
 
 now_ns() {
@@ -396,6 +408,77 @@ sum_numeric_or_na() {
   fi
 }
 
+sum_decimal_or_na() {
+  local saw=0
+  local value
+  local joined=""
+  for value in "$@"; do
+    if [[ "$value" == "NA" || -z "$value" ]]; then
+      continue
+    fi
+    if [[ -n "$joined" ]]; then
+      joined+=" "
+    fi
+    joined+="$value"
+    saw=1
+  done
+  if [[ $saw -eq 0 ]]; then
+    echo "NA"
+    return
+  fi
+  awk -v values="$joined" 'BEGIN {
+    n = split(values, parts, /[[:space:]]+/)
+    sum = 0.0
+    for (i = 1; i <= n; ++i) {
+      if (parts[i] != "") sum += parts[i]
+    }
+    printf "%.2f\n", sum
+  }'
+}
+
+json_top_level_field() {
+  local path="$1"
+  local key="$2"
+  if [[ ! -f "$path" ]]; then
+    echo "NA"
+    return
+  fi
+  python3 - "$path" "$key" <<'PY'
+import json
+import sys
+
+path, key = sys.argv[1], sys.argv[2]
+with open(path, "r", encoding="utf-8") as f:
+    payload = json.load(f)
+value = payload.get(key, "NA")
+print(value if value is not None else "NA")
+PY
+}
+
+json_stage_elapsed_ms() {
+  local path="$1"
+  local label="$2"
+  if [[ ! -f "$path" ]]; then
+    echo "NA"
+    return
+  fi
+  python3 - "$path" "$label" <<'PY'
+import json
+import sys
+
+path, label = sys.argv[1], sys.argv[2]
+with open(path, "r", encoding="utf-8") as f:
+    payload = json.load(f)
+for stage in payload.get("stages", []):
+    if stage.get("label") == label:
+        value = stage.get("elapsed_ms", "NA")
+        print(value if value is not None else "NA")
+        break
+else:
+    print("NA")
+PY
+}
+
 write_metrics_csv_header() {
   local path="$1"
   printf '%s\n' "$COMMON_METRICS_HEADER" > "$path"
@@ -404,7 +487,22 @@ write_metrics_csv_header() {
 append_metrics_csv_row() {
   local path="$1"
   shift
-  printf '%s\n' "$(IFS=,; echo "$*")" >> "$path"
+  local expected
+  local actual=$#
+  local sanitized=()
+  local value
+  expected="$(header_column_count)"
+  while [[ $actual -lt $expected ]]; do
+    set -- "$@" "NA"
+    actual=$((actual + 1))
+  done
+  for value in "$@"; do
+    value="${value//$'\n'/ }"
+    value="${value//$'\r'/ }"
+    value="${value//,/;}"
+    sanitized+=("$value")
+  done
+  printf '%s\n' "$(IFS=,; echo "${sanitized[*]}")" >> "$path"
 }
 
 write_summary_header() {
@@ -444,6 +542,12 @@ append_summary_metric_notes() {
 - `Result`: observed benchmark result value produced by the executable.
 - `Expected`: expected benchmark result used as a correctness check.
 - `ns/iter`: median runtime in nanoseconds per iteration across repeated benchmark runs.
+- `parse_time_ms`, `verification_time_ms`, `lowering_time_ms`, `compile_total_ms`: compile-time split for routes that expose stage timing. `NA` means the split is not available yet for that family.
+- `runtime_iqr_ns_per_iter`: interquartile range across the recorded repetitions.
+- `checksum`: correctness guard value recorded by the benchmark driver when available.
+- `checksum_status`: `ok`, `fail`, or `NA` depending on whether a checksum-based validation was emitted.
+- `env_path`: captured environment snapshot for the benchmark family output directory.
+- `raw_timings_path`: raw per-repetition timing samples in nanoseconds per iteration.
 EOF
 }
 
@@ -480,6 +584,38 @@ numeric_series_stat() {
         printf "%.2f\n", vals[0]
       } else if (mode == "max") {
         printf "%.2f\n", vals[count - 1]
+      } else if (mode == "q1" || mode == "q3") {
+        split_point = int(count / 2)
+        if ((count % 2) == 1) {
+          low_count = split_point
+          high_start = split_point + 1
+          high_count = split_point
+        } else {
+          low_count = split_point
+          high_start = split_point
+          high_count = split_point
+        }
+
+        if (mode == "q1") {
+          if (low_count == 0) {
+            printf "%.2f\n", vals[0]
+          } else if ((low_count % 2) == 1) {
+            printf "%.2f\n", vals[int(low_count / 2)]
+          } else {
+            idx = int(low_count / 2)
+            printf "%.2f\n", (vals[idx - 1] + vals[idx]) / 2.0
+          }
+        } else {
+          if (high_count == 0) {
+            printf "%.2f\n", vals[count - 1]
+          } else if ((high_count % 2) == 1) {
+            idx = high_start + int(high_count / 2)
+            printf "%.2f\n", vals[idx]
+          } else {
+            idx = high_start + int(high_count / 2)
+            printf "%.2f\n", (vals[idx - 1] + vals[idx]) / 2.0
+          }
+        }
       } else {
         mid = int(count / 2)
         if ((count % 2) == 1) {
@@ -513,10 +649,17 @@ run_benchmark_repeated() {
   local median_ns
   local min_ns
   local max_ns
+  local q1_ns
+  local q3_ns
+  local iqr_ns
+  local checksum
+  local checksum_status
+  local raw_timings_path
 
   tmp_dir="$(mktemp -d)"
   ns_values="$tmp_dir/ns_values.txt"
   : > "$ns_values"
+  raw_timings_path="${output_txt%.txt}.timings.txt"
 
   for ((rep = 0; rep < warmups; ++rep)); do
     "$@" > /dev/null
@@ -540,9 +683,21 @@ run_benchmark_repeated() {
   iterations="$(metric_field iterations "$last_out")"
   result="$(metric_field result "$last_out")"
   expected="$(metric_field expected_result "$last_out")"
+  checksum="$(metric_field checksum "$last_out")"
   median_ns="$(numeric_series_stat median "$ns_values")"
   min_ns="$(numeric_series_stat min "$ns_values")"
   max_ns="$(numeric_series_stat max "$ns_values")"
+  q1_ns="$(numeric_series_stat q1 "$ns_values")"
+  q3_ns="$(numeric_series_stat q3 "$ns_values")"
+  iqr_ns="$(awk -v q1="$q1_ns" -v q3="$q3_ns" 'BEGIN { if (q1 == "NA" || q3 == "NA") print "NA"; else printf "%.2f\n", q3 - q1 }')"
+  cp "$ns_values" "$raw_timings_path"
+  require_nonempty_file "$raw_timings_path"
+
+  if [[ -n "$checksum" ]]; then
+    checksum_status="ok"
+  else
+    checksum_status="NA"
+  fi
 
   cat "$last_out" > "$output_txt"
   {
@@ -561,14 +716,54 @@ run_benchmark_repeated() {
     if [[ -n "$expected" ]]; then
       echo "expected_result=$expected"
     fi
+    if [[ -n "$checksum" ]]; then
+      echo "checksum=$checksum"
+      echo "checksum_status=$checksum_status"
+    fi
     if [[ -n "$iterations" ]]; then
       echo "iterations=$iterations"
     fi
     echo "timing_min_ns_per_iter=$min_ns"
     echo "timing_max_ns_per_iter=$max_ns"
+    echo "timing_q1_ns_per_iter=$q1_ns"
+    echo "timing_q3_ns_per_iter=$q3_ns"
+    echo "runtime_iqr_ns_per_iter=$iqr_ns"
     echo "runtime_ns_per_iter=$median_ns"
     echo "ns_per_iter=$median_ns"
+    echo "raw_timings_path=$raw_timings_path"
   } >> "$output_txt"
 
   rm -rf "$tmp_dir"
+}
+
+capture_env_snapshot() {
+  local out_path="$1"
+  local script_path="$SCAIR_ROOT/experiments/collect_env.py"
+  if [[ -f "$script_path" ]]; then
+    python3 "$script_path" "$out_path"
+  else
+    cat > "$out_path" <<EOF
+{"status":"missing_collect_env"}
+EOF
+  fi
+}
+
+ensure_env_snapshot() {
+  local out_dir="$1"
+  local env_path="$out_dir/env.json"
+  capture_env_snapshot "$env_path"
+  echo "$env_path"
+}
+
+git_commit_for_metrics() {
+  git rev-parse HEAD 2>/dev/null || echo "NA"
+}
+
+machine_id_for_metrics() {
+  local path="/etc/machine-id"
+  if [[ -f "$path" ]]; then
+    tr -d '\n' < "$path"
+  else
+    hostname
+  fi
 }

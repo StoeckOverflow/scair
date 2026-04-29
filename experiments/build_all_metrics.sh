@@ -7,19 +7,34 @@ source "$SCAIR_ROOT/experiments/common_metrics.sh"
 OUT_DIR="${OUT_DIR:-$SCAIR_ROOT/experiments/out}"
 mkdir -p "$OUT_DIR"
 
-# Use a stricter default measurement policy for the aggregate metrics run so
-# the reported timings are more stable than the lightweight per-family defaults.
-BENCH_WARMUP_REPS_DEFAULT="${BENCH_WARMUP_REPS:-3}"
-BENCH_TIMING_REPS_DEFAULT="${BENCH_TIMING_REPS:-9}"
+# Use thesis-facing defaults for the aggregate metrics run. Lightweight
+# validation should override these explicitly at invocation time.
+BENCH_WARMUP_REPS_DEFAULT="${BENCH_WARMUP_REPS:-5}"
+BENCH_TIMING_REPS_DEFAULT="${BENCH_TIMING_REPS:-15}"
+BENCH_CPU_PIN="${BENCH_CPU_PIN:-}"
 
 # Family-specific iteration defaults balance reproducibility against practical
 # end-to-end runtime for the full aggregate suite.
 TYPE_POLYMORPHISM_ITERATIONS_DEFAULT="${TYPE_POLYMORPHISM_ITERATIONS:-10000000}"
-MEMREF_CONTROL_FLOW_ITERATIONS_DEFAULT="${MEMREF_CONTROL_FLOW_ITERATIONS:-20000}"
-MEMREF_CONTROL_FLOW_RUNTIME_N_DEFAULT="${MEMREF_CONTROL_FLOW_RUNTIME_N:-64}"
 SEMI_AFFINE_ITERATIONS_DEFAULT="${SEMI_AFFINE_ITERATIONS:-1000}"
 STRIDED_MATMUL_ITERATIONS_DEFAULT="${STRIDED_MATMUL_ITERATIONS:-200}"
 CONVOLUTION_ITERATIONS_DEFAULT="${CONVOLUTION_ITERATIONS:-50}"
+ATTENTION_MHA_ITERATIONS_DEFAULT="${ATTENTION_MHA_ITERATIONS:-100}"
+MATMUL_TILING_ITERATIONS_DEFAULT="${MATMUL_TILING_ITERATIONS:-100}"
+MATMUL_TILING_SIZE_SET_DEFAULT="${MATMUL_TILING_SIZE_SET:-128x128x12x64,128x128x16x32,256x128x12x64}"
+BROADCAST_AFFINE_ITERATIONS_DEFAULT="${BROADCAST_AFFINE_ITERATIONS:-1000}"
+BROADCAST_AFFINE_PROFILE_DEFAULT="${BROADCAST_AFFINE_PROFILE:-default}"
+BROADCAST_AFFINE_DEFAULT_SIZE_SET="4096x3,4096x5,4096x7,4096x8,4096x16,4096x32,4096x64,16384x8,16384x16,16384x32"
+BROADCAST_AFFINE_CONTROL_HEAVY_SIZE_SET="1024x3,2048x3,4096x3,8192x3,4096x5,8192x5,4096x7,8192x7,4096x16,8192x16"
+if [[ -n "${BROADCAST_AFFINE_SIZE_SET:-}" ]]; then
+  BROADCAST_AFFINE_SIZE_SET_DEFAULT="$BROADCAST_AFFINE_SIZE_SET"
+elif [[ "$BROADCAST_AFFINE_PROFILE_DEFAULT" == "control_heavy" ]]; then
+  BROADCAST_AFFINE_SIZE_SET_DEFAULT="$BROADCAST_AFFINE_CONTROL_HEAVY_SIZE_SET"
+  BROADCAST_AFFINE_ITERATIONS_DEFAULT="${BROADCAST_AFFINE_ITERATIONS:-10000}"
+else
+  BROADCAST_AFFINE_SIZE_SET_DEFAULT="$BROADCAST_AFFINE_DEFAULT_SIZE_SET"
+fi
+SKIP_BUILD="${SKIP_BUILD:-0}"
 
 # The per-family CSVs are expected to share one identical header so we can
 # concatenate them directly. Family-specific metrics, if any, are appended after
@@ -27,61 +42,92 @@ CONVOLUTION_ITERATIONS_DEFAULT="${CONVOLUTION_ITERATIONS:-50}"
 
 SCRIPTS=(
   "$SCAIR_ROOT/experiments/type_polymorphism/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/memref_control_flow/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/strided_matmul_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/attention_mha_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/matmul_tiling_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/broadcast_affine_2d_benchmark/build_scair_example.sh"
 )
 
 METRIC_FILES=(
-  "$SCAIR_ROOT/experiments/type_polymorphism/build_scair/metrics.csv"
-  "$SCAIR_ROOT/experiments/memref_control_flow/build_scair/metrics.csv"
-  "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/build_scair/metrics.csv"
-  "$SCAIR_ROOT/experiments/strided_matmul_benchmark/build_scair/metrics.csv"
-  "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair/metrics.csv"
+  "$SCAIR_ROOT/experiments/type_polymorphism/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/strided_matmul_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/convolution_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/attention_mha_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/matmul_tiling_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/broadcast_affine_2d_benchmark/out/metrics.csv"
 )
 
-for script in "${SCRIPTS[@]}"; do
-  echo "==> Running $(basename "$(dirname "$script")") metrics build"
-  case "$(basename "$(dirname "$script")")" in
-    type_polymorphism)
-      BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-      BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-      ITERATIONS="$TYPE_POLYMORPHISM_ITERATIONS_DEFAULT" \
-      bash "$script"
-      ;;
-    memref_control_flow)
-      BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-      BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-      ITERATIONS="$MEMREF_CONTROL_FLOW_ITERATIONS_DEFAULT" \
-      RUNTIME_N="$MEMREF_CONTROL_FLOW_RUNTIME_N_DEFAULT" \
-      bash "$script"
-      ;;
-    semi_affine_indexing_benchmark)
-      BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-      BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-      ITERATIONS="$SEMI_AFFINE_ITERATIONS_DEFAULT" \
-      bash "$script"
-      ;;
-    strided_matmul_benchmark)
-      BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-      BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-      ITERATIONS="$STRIDED_MATMUL_ITERATIONS_DEFAULT" \
-      bash "$script"
-      ;;
-    convolution_benchmark)
-      BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-      BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-      ITERATIONS="$CONVOLUTION_ITERATIONS_DEFAULT" \
-      bash "$script"
-      ;;
-    *)
-      BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-      BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-      bash "$script"
-      ;;
-  esac
-done
+run_benchmark_script() {
+  local script="$1"
+  if [[ -n "$BENCH_CPU_PIN" ]]; then
+    taskset -c "$BENCH_CPU_PIN" bash "$script"
+  else
+    bash "$script"
+  fi
+}
+
+if [[ "$SKIP_BUILD" != "1" ]]; then
+  for script in "${SCRIPTS[@]}"; do
+    echo "==> Running $(basename "$(dirname "$script")") metrics build"
+    case "$(basename "$(dirname "$script")")" in
+      type_polymorphism)
+        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
+        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
+        ITERATIONS="$TYPE_POLYMORPHISM_ITERATIONS_DEFAULT" \
+        run_benchmark_script "$script"
+        ;;
+      semi_affine_indexing_benchmark)
+        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
+        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
+        ITERATIONS="$SEMI_AFFINE_ITERATIONS_DEFAULT" \
+        run_benchmark_script "$script"
+        ;;
+      strided_matmul_benchmark)
+        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
+        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
+        ITERATIONS="$STRIDED_MATMUL_ITERATIONS_DEFAULT" \
+        run_benchmark_script "$script"
+        ;;
+      convolution_benchmark)
+        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
+        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
+        ITERATIONS="$CONVOLUTION_ITERATIONS_DEFAULT" \
+        run_benchmark_script "$script"
+        ;;
+      attention_mha_benchmark)
+        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
+        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
+        ITERATIONS="$ATTENTION_MHA_ITERATIONS_DEFAULT" \
+        run_benchmark_script "$script"
+        ;;
+      matmul_tiling_benchmark)
+        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
+        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
+        ITERATIONS="$MATMUL_TILING_ITERATIONS_DEFAULT" \
+        MATMUL_TILING_SIZE_SET="$MATMUL_TILING_SIZE_SET_DEFAULT" \
+        run_benchmark_script "$script"
+        ;;
+      broadcast_affine_2d_benchmark)
+        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
+        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
+        ITERATIONS="$BROADCAST_AFFINE_ITERATIONS_DEFAULT" \
+        BROADCAST_AFFINE_SIZE_SET="$BROADCAST_AFFINE_SIZE_SET_DEFAULT" \
+        BROADCAST_AFFINE_PROFILE="$BROADCAST_AFFINE_PROFILE_DEFAULT" \
+        run_benchmark_script "$script"
+        ;;
+      *)
+        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
+        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
+        run_benchmark_script "$script"
+        ;;
+    esac
+  done
+else
+  echo "==> SKIP_BUILD=1: aggregating existing per-family metrics only"
+fi
 
 for metrics in "${METRIC_FILES[@]}"; do
   require_file "$metrics"
@@ -100,72 +146,11 @@ for metrics in "${METRIC_FILES[@]}"; do
   tail -n +2 "$metrics" >> "$ALL_CSV"
 done
 
+ENV_JSON="$OUT_DIR/env.json"
+capture_env_snapshot "$ENV_JSON"
+
 SUMMARY_MD="$OUT_DIR/summary.md"
-python3 - "$ALL_CSV" "$SUMMARY_MD" <<'PY'
-import csv
-import sys
-from collections import defaultdict
-
-csv_path, md_path = sys.argv[1], sys.argv[2]
-rows = list(csv.DictReader(open(csv_path, newline="", encoding="utf-8")))
-groups = defaultdict(list)
-for row in rows:
-    groups[row["experiment_family"]].append(row)
-
-variant_order = {
-    "mlir_baseline": 0,
-    "scair_baseline": 1,
-    "debruijn": 1,
-    "value_dependent": 2,
-}
-
-def rep_value(row):
-    note = row["notes"]
-    if note.startswith("selector="):
-        return note
-    if row["representation_group"] in {"mlir_baseline", "scair_baseline", "value_dependent"}:
-        return ""
-    return row["representation_group"]
-
-with open(md_path, "w", encoding="utf-8") as out:
-    out.write("# Uniform Experiment Metrics Summary\n\n")
-    for family in sorted(groups):
-        out.write(f"## {family}\n\n")
-        out.write("| Benchmark | Variant | Rep | Build | Run | Structural ops | Func defs | Block args | MLIR LOC | LLVM LOC | Compile ms | Result | Expected | ns/iter |\n")
-        out.write("| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: |\n")
-        sorted_rows = sorted(
-            groups[family],
-            key=lambda row: (
-                row["benchmark"],
-                variant_order.get(row["variant"], 99),
-                rep_value(row),
-            ),
-        )
-        for row in sorted_rows:
-            out.write(
-                f"| {row['benchmark']} | {row['variant']} | {rep_value(row)} | "
-                f"{row['build_status']} | {row['run_status']} | {row['source_ops_structural']} | "
-                f"{row['source_func_defs']} | {row['source_block_args']} | {row['lowered_mlir_lines']} | {row['llvm_ir_lines']} | "
-                f"{row['compile_ms']} | {row['result']} | {row['expected_result']} | "
-                f"{row['runtime_ns_per_iter']} |\n"
-            )
-        out.write("\n")
-    out.write("## Metric Definitions\n\n")
-    out.write("- `Benchmark`: benchmark or benchmark family member represented by the row.\n")
-    out.write("- `Variant`: implementation route being compared, for example `mlir_baseline`, `scair_baseline`, `debruijn`, or `value_dependent`.\n")
-    out.write("- `Rep`: representation-specific note for the row. For selector experiments this records the selector setting, such as `selector=0` or `selector=1`.\n")
-    out.write("- `Build`: build outcome for the benchmark artifact. `ok` means the benchmark built successfully. `unsupported` means the pipeline failed or the route is not currently supported.\n")
-    out.write("- `Run`: benchmark execution outcome. `ok` means the executable ran and produced timing/result data. `NA` means no run data was produced.\n")
-    out.write("- `Structural ops`: total parsed IR operation nodes in the measured source IR. This is a parser-backed structural count, not a line count and not a regex/text estimate.\n")
-    out.write("- `Func defs`: parsed count of function definition operations in the measured IR, currently `func.func` plus `llvm.func`.\n")
-    out.write("- `Block args`: parsed count of SSA block arguments across all blocks in the measured IR.\n")
-    out.write("- `MLIR LOC`: line count of the emitted lowered MLIR artifact on disk, measured with `wc -l`. This is a textual file metric taken after the MLIR file has been generated.\n")
-    out.write("- `LLVM LOC`: line count of the emitted LLVM IR `.ll` artifact on disk, measured with `wc -l`. This is a textual file metric taken after the LLVM IR file has been generated.\n")
-    out.write("- `Compile ms`: wall-clock build time for the benchmark pipeline, reported in milliseconds.\n")
-    out.write("- `Result`: observed benchmark result value produced by the executable.\n")
-    out.write("- `Expected`: expected benchmark result used as a correctness check.\n")
-    out.write("- `ns/iter`: median runtime in nanoseconds per iteration across repeated benchmark runs.\n")
-PY
+python3 "$SCAIR_ROOT/experiments/summarize_results.py" "$ALL_CSV" "$SUMMARY_MD"
 
 echo
 echo "Aggregated metrics complete."
