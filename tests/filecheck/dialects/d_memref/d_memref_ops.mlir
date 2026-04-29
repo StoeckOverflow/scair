@@ -22,10 +22,28 @@ builtin.module {
   d_memref.dealloc %buf : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]>
 }
 
-// VERIFY: d_memref.dim %{{.*}}, %{{.*}} : !d_memref.memref<[%{{.*}}, %{{.*}}], f32, offset: 0, strides: [%{{.*}}, 1]> -> index
-// VERIFY: d_memref.dim_exact %{{.*}} {axis = 0 : i32} : !d_memref.memref<[%{{.*}}, %{{.*}}], f32, offset: 0, strides: [%{{.*}}, 1]> -> !value<%{{.*}}>
-// VERIFY: d_memref.subview %{{.*}}[%{{.*}}, %{{.*}}][%{{.*}}, %{{.*}}][%{{.*}}, %{{.*}}]
-// VERIFY: d_memref.reinterpret_cast %{{.*}}
+// VERIFY: builtin.module {
+// VERIFY-NEXT:   %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+// VERIFY-NEXT:   %1 = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
+// VERIFY-NEXT:   %2 = "dtensor.shape.to_index"(%0) : (!dtensor.nat) -> index
+// VERIFY-NEXT:   %3 = "dtensor.shape.to_index"(%1) : (!dtensor.nat) -> index
+// VERIFY-NEXT:   %4 = "arith.constant"() <{value = 0 : index}> : () -> index
+// VERIFY-NEXT:   %5 = "arith.constant"() <{value = 1 : index}> : () -> index
+// VERIFY-NEXT:   %6 = d_memref.alloc : () -> !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]>
+// VERIFY-NEXT:   %7 = "test.v"() : () -> f32
+// VERIFY-NEXT:   d_memref.store %7, %6[%5, %5] : f32, !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]>
+// VERIFY-NEXT:   %8 = d_memref.load %6[%5, %5] : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> f32
+// VERIFY-NEXT:   %9 = d_memref.dim %6, %4 : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> index
+// VERIFY-NEXT:   %10 = d_memref.dim_exact %6 {axis = 0 : i32} : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> !value<%0>
+// VERIFY-NEXT:   %11 = d_memref.subview %6[%4, %4][%2, %3][%5, %5] : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> !d_memref.memref<[%0, %1], f32>
+// VERIFY-NEXT:   %12 = d_memref.cast %11 : !d_memref.memref<[%0, %1], f32> -> !d_memref.memref<[%0, %1], f32>
+// VERIFY-NEXT:   %13 = d_memref.reinterpret_cast %6
+// VERIFY-NEXT:   : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> to !d_memref.memref<[%0, %1], f32, offset: %4, strides: [%3, %5]>
+// VERIFY-NEXT:   %14 = "test.vx"() : () -> !d_memref.vector<%0, f32>
+// VERIFY-NEXT:   %15 = "test.mx"() : () -> !d_memref.matrix<%0, %1, f32>
+// VERIFY-NEXT:   "test.keep"(%8, %9, %10, %12, %13, %14, %15) : (f32, index, !value<%0>, !d_memref.memref<[%0, %1], f32>, !d_memref.memref<[%0, %1], f32, offset: %4, strides: [%3, %5]>, !d_memref.vector<%0, f32>, !d_memref.matrix<%0, %1, f32>) -> ()
+// VERIFY-NEXT:   d_memref.dealloc %6 : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]>
+// VERIFY-NEXT: }
 
 // -----
 
@@ -124,8 +142,18 @@ builtin.module {
   d_memref.dealloc %buf : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
 }
 
-// VERIFY: d_memref.alloc : () -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
-// VERIFY: d_memref.cast %{{.*}} : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+// VERIFY: builtin.module {
+// VERIFY-NEXT:   %0 = "arith.constant"() <{value = 0 : index}> : () -> index
+// VERIFY-NEXT:   %1 = "arith.constant"() <{value = 1 : index}> : () -> index
+// VERIFY-NEXT:   %2 = d_memref.alloc : () -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+// VERIFY-NEXT:   %3 = "test.v"() : () -> f32
+// VERIFY-NEXT:   d_memref.store %3, %2[%1, %1] : f32, !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+// VERIFY-NEXT:   %4 = d_memref.load %2[%1, %1] : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> f32
+// VERIFY-NEXT:   %5 = d_memref.dim %2, %0 : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> index
+// VERIFY-NEXT:   %6 = d_memref.cast %2 : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+// VERIFY-NEXT:   "test.keep"(%4, %5, %6) : (f32, index, !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>) -> ()
+// VERIFY-NEXT:   d_memref.dealloc %2 : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+// VERIFY-NEXT: }
 
 // -----
 
