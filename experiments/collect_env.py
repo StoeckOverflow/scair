@@ -32,6 +32,45 @@ def first_available(*values: str):
     return "unknown"
 
 
+def first_cpu_from_list(value: str) -> str:
+    if not value or value in {"NA", "unknown", "unavailable"}:
+        return "0"
+    first = value.split(",", 1)[0].strip()
+    if "-" in first:
+        first = first.split("-", 1)[0].strip()
+    return first if first.isdigit() else "0"
+
+
+def tool_version(llvm_build_dir: str, tool: str) -> str:
+    tool_path = Path(llvm_build_dir) / "bin" / tool
+    if not tool_path.exists():
+        return "unavailable"
+    lines = command_output([str(tool_path), "--version"]).splitlines()
+    for line in lines:
+        if "version" in line.lower():
+            return line
+    return lines[0] if lines else "unavailable"
+
+
+def read_cache_hierarchy(cpu: str):
+    cache_root = Path(f"/sys/devices/system/cpu/cpu{cpu}/cache")
+    entries = []
+    if not cache_root.exists():
+        return {"cpu": cpu, "status": "unavailable", "entries": entries}
+
+    for index in sorted(cache_root.glob("index*")):
+        entries.append(
+            {
+                "index": index.name,
+                "level": read_text_if_exists(str(index / "level")),
+                "type": read_text_if_exists(str(index / "type")),
+                "size": read_text_if_exists(str(index / "size")),
+                "shared_cpu_list": read_text_if_exists(str(index / "shared_cpu_list")),
+            }
+        )
+    return {"cpu": cpu, "status": "ok", "entries": entries}
+
+
 def read_machine_id():
     machine_id = Path("/etc/machine-id")
     if machine_id.exists():
@@ -47,6 +86,11 @@ def main() -> int:
     out_path = Path(sys.argv[1])
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    llvm_build_dir = os.environ.get("LLVM_BUILD_DIR", str(Path.home() / "dev/llvm-source/build"))
+    cpu_affinity = command_output(["bash", "-lc", "taskset -pc $$ | cut -d: -f2- | sed 's/^ //'"])
+    bench_cpu_pin = os.environ.get("BENCH_CPU_PIN", "NA")
+    cache_cpu = first_cpu_from_list(bench_cpu_pin if bench_cpu_pin != "NA" else cpu_affinity)
+
     payload = {
         "captured_at_utc": datetime.now(timezone.utc).isoformat(),
         "hostname": socket.gethostname(),
@@ -56,8 +100,9 @@ def main() -> int:
         "arch": platform.machine(),
         "python": platform.python_version(),
         "cpu_model": command_output(["bash", "-lc", "grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ //'"]),
-        "clang_version": command_output(["bash", "-lc", "$HOME/dev/llvm-source/build/bin/clang --version | head -n 1"]),
-        "mlir_opt_version": command_output(["bash", "-lc", "$HOME/dev/llvm-source/build/bin/mlir-opt --version | head -n 1"]),
+        "clang_version": tool_version(llvm_build_dir, "clang"),
+        "mlir_opt_version": tool_version(llvm_build_dir, "mlir-opt"),
+        "mlir_translate_version": tool_version(llvm_build_dir, "mlir-translate"),
         "git_commit": command_output(["git", "rev-parse", "HEAD"]),
         "omp_num_threads": os.environ.get("OMP_NUM_THREADS", "NA"),
         "mlir_num_threads": os.environ.get("MLIR_NUM_THREADS", "NA"),
@@ -66,7 +111,7 @@ def main() -> int:
         "veclib_maximum_threads": os.environ.get("VECLIB_MAXIMUM_THREADS", "NA"),
         "numexpr_num_threads": os.environ.get("NUMEXPR_NUM_THREADS", "NA"),
         "cc": os.environ.get("CC", "NA"),
-        "llvm_build_dir": os.environ.get("LLVM_BUILD_DIR", str(Path.home() / "dev/llvm-source/build")),
+        "llvm_build_dir": llvm_build_dir,
         "java_tool_options": os.environ.get("JAVA_TOOL_OPTIONS", "NA"),
         "jdk_java_options": os.environ.get("JDK_JAVA_OPTIONS", "NA"),
         "_java_options": os.environ.get("_JAVA_OPTIONS", "NA"),
@@ -75,7 +120,9 @@ def main() -> int:
             read_text_if_exists("/sys/devices/system/cpu/intel_pstate/no_turbo"),
             read_text_if_exists("/sys/devices/system/cpu/cpufreq/boost"),
         ),
-        "cpu_affinity": command_output(["bash", "-lc", "taskset -pc $$ | cut -d: -f2- | sed 's/^ //'"]),
+        "bench_cpu_pin": bench_cpu_pin,
+        "cpu_affinity": cpu_affinity,
+        "cache_hierarchy": read_cache_hierarchy(cache_cpu),
     }
     out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return 0
