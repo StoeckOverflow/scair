@@ -1,15 +1,17 @@
 package scair.dialects.dTensor
 
-import fastparse.*
 import scair.print.AssemblyPrinter
-import scair.print.Printer
 import scair.dialects.builtin.*
 import scair.ir.*
-import scair.parse.*
-import scair.parse.given
 import scair.utils.*
 
 object dTensorTypeUtil:
+
+  enum NatProductFactor:
+    case Const(value: BigInt)
+    case Atom(value: Value[Attribute])
+
+  final case class NatProductFactors(factors: Seq[NatProductFactor])
 
   private def resolveNatBase(
       v: Value[Attribute],
@@ -86,6 +88,82 @@ object dTensorTypeUtil:
       (resolveNatBase(l.getVal()), resolveNatBase(r.getVal())) match
         case (OK(lv), OK(rv)) => lv eq rv
         case _                => false
+    )
+
+  private def natConstValue(v: Value[Attribute]): Option[BigInt] =
+    v.owner match
+      case Some(NatConst(IntegerAttr(IntData(k), _), _)) => Some(k)
+      case _                                             => None
+
+  private def appendConstProduct(
+      factors: Seq[NatProductFactor],
+      value: BigInt,
+  ): Seq[NatProductFactor] =
+    if value == 1 then factors
+    else
+      factors.lastOption match
+        case Some(NatProductFactor.Const(prev)) =>
+          factors.dropRight(1) :+ NatProductFactor.Const(prev * value)
+        case _ => factors :+ NatProductFactor.Const(value)
+
+  def orderedNatProductFactors(
+      v: Value[Attribute]
+  ): OK[NatProductFactors] =
+    resolveNatBase(v).flatMap(base =>
+      natConstValue(base) match
+        case Some(k) => OK(NatProductFactors(appendConstProduct(Seq.empty, k)))
+        case None =>
+          base.owner match
+            case Some(NatMul(lhs, rhs, _)) =>
+              orderedNatProductFactors(lhs).flatMap(lhsFactors =>
+                orderedNatProductFactors(rhs).map(rhsFactors =>
+                  NatProductFactors(
+                    (lhsFactors.factors ++ rhsFactors.factors).foldLeft(
+                      Seq.empty[NatProductFactor]
+                    ) {
+                      case (acc, NatProductFactor.Const(k)) =>
+                        appendConstProduct(acc, k)
+                      case (acc, factor) => acc :+ factor
+                    }
+                  )
+                )
+              )
+            case _ => OK(NatProductFactors(Seq(NatProductFactor.Atom(base))))
+    )
+
+  def sameOrderedNatProduct(
+      lhs: Value[Attribute],
+      rhs: Seq[Value[Attribute]],
+  ): OK[Boolean] =
+    val rhsFactors = rhs.foldLeft[OK[NatProductFactors]](
+      OK(NatProductFactors(Seq.empty))
+    ) { case (acc, dim) =>
+      acc.flatMap(factors =>
+        orderedNatProductFactors(dim).map(dimFactors =>
+          NatProductFactors(
+            (factors.factors ++ dimFactors.factors).foldLeft(
+              Seq.empty[NatProductFactor]
+            ) {
+              case (merged, NatProductFactor.Const(k)) =>
+                appendConstProduct(merged, k)
+              case (merged, factor) => merged :+ factor
+            }
+          )
+        )
+      )
+    }
+
+    orderedNatProductFactors(lhs).flatMap(lhsFactors =>
+      rhsFactors.map(rhsFactors =>
+        lhsFactors.factors.size == rhsFactors.factors.size &&
+          lhsFactors.factors.zip(rhsFactors.factors).forall {
+            case (NatProductFactor.Const(l), NatProductFactor.Const(r)) =>
+              l == r
+            case (NatProductFactor.Atom(l), NatProductFactor.Atom(r)) =>
+              l eq r
+            case _ => false
+          }
+      )
     )
 
   def checkSameTensorShapeAndElem(

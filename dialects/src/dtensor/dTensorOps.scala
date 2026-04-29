@@ -186,7 +186,7 @@ final case class ExpandShape(
       groups: Seq[Seq[Int]],
       srcRank: Int,
       resRank: Int,
-  ): OK[Int] =
+  ): OK[Unit] =
     if groups.size != srcRank then
       Err(
         s"dtensor.expand_shape: expected $srcRank reassociation groups, got ${groups.size}"
@@ -202,72 +202,29 @@ final case class ExpandShape(
         Err(
           s"dtensor.expand_shape: reassociation must cover result dims contiguously as ${expected.mkString("[", ", ", "]")}"
         )
-      else
-        val badGroup = groups.collectFirst {
-          case group if group.size != 1 && group.size != 2 => group
-        }
-        badGroup match
-          case Some(group) =>
-            Err(
-              s"dtensor.expand_shape: v1 supports only singleton groups and one 2-dim split, got ${group.mkString("[", ", ", "]")}"
-            )
-          case None =>
-            val splitGroups = groups.zipWithIndex.collect {
-              case (group, idx) if group.size == 2 => idx
-            }
-            splitGroups match
-              case Seq(splitIdx) => OK(splitIdx)
-              case _ =>
-                Err(
-                  s"dtensor.expand_shape: v1 expects exactly one source dim split into two result dims, got ${splitGroups.size}"
-                )
+      else OK(())
 
-  private def sameDim(lhs: Value[Attribute], rhs: ValueAttribute): Boolean =
-    dTensorTypeUtil.sameDims(Seq(ValueAttribute(lhs)), Seq(rhs))
-
-  private def verifySplit(
-      groups: Seq[Seq[Int]],
-      splitSrcIdx: Int,
-  ): OK[Operation] =
+  private def verifyGroupProducts(groups: Seq[Seq[Int]]): OK[Operation] =
     groups.zipWithIndex
       .foldLeft[OK[Unit]](OK(())) { case (acc, (group, srcIdx)) =>
         acc.flatMap(_ =>
-          if srcIdx == splitSrcIdx then OK(())
-          else
-            val resIdx = group.head
-            if dTensorTypeUtil.sameDims(
-                Seq(src.typ.params(srcIdx)),
-                Seq(res.typ.params(resIdx)),
-              )
-            then OK(())
-            else
+          val srcDim = src.typ.params(srcIdx).getVal()
+          val resDims = group.map(resIdx => res.typ.params(resIdx).getVal())
+          dTensorTypeUtil.sameOrderedNatProduct(srcDim, resDims).flatMap {
+            case true => OK(())
+            case false =>
               Err(
-                s"dtensor.expand_shape: expected unchanged dim $srcIdx to be SSA-identical to result dim $resIdx"
+                s"dtensor.expand_shape: expected source dim $srcIdx to equal ordered product of result dims ${group.mkString("[", ", ", "]")}"
               )
+          }
         )
       }
-      .flatMap(_ =>
-        dTensorTypeUtil.resolveNatValue(src.typ.params(splitSrcIdx).getVal())
-      )
-      .flatMap(splitNat =>
-        splitNat.owner match
-          case Some(NatMul(lhs, rhs, _)) =>
-            val Seq(lhsResIdx, rhsResIdx) = groups(splitSrcIdx)
-            if !sameDim(lhs, res.typ.params(lhsResIdx)) then
-              Err(
-                "dtensor.expand_shape: split lhs must match the first result split dim"
-              )
-            else if !sameDim(rhs, res.typ.params(rhsResIdx)) then
-              Err(
-                "dtensor.expand_shape: split rhs must match the second result split dim"
-              )
-            else OK(this)
-          case _ =>
-            Err(
-              "dtensor.expand_shape: split source dim must be produced by direct dtensor.nat.mul"
-            )
-      )
+      .map(_ => this)
 
+  /** ScaIR carries expand-shape output sizes in the dependent result tensor type.
+    * Unlike MLIR tensor.expand_shape, this op intentionally has no separate
+    * output_shape/static_output_shape operands in this phase.
+    */
   override def customVerify(): OK[Operation] =
     val srcRank = src.typ.params.size
     val resRank = res.typ.params.size
@@ -275,13 +232,13 @@ final case class ExpandShape(
       Err(
         s"dtensor.expand_shape: expected equal element types, got ${src.typ.elem} and ${res.typ.elem}"
       )
-    else if resRank != srcRank + 1 then
+    else if resRank < srcRank then
       Err(
-        s"dtensor.expand_shape: v1 expected result rank = source rank + 1, got $srcRank -> $resRank"
+        s"dtensor.expand_shape: expected result rank >= source rank, got $srcRank -> $resRank"
       )
     else
       parseReassociationGroups.flatMap(groups =>
-        checkReassociation(groups, srcRank, resRank).flatMap(splitSrcIdx =>
-          verifySplit(groups, splitSrcIdx)
+        checkReassociation(groups, srcRank, resRank).flatMap(_ =>
+          verifyGroupProducts(groups)
         )
       )

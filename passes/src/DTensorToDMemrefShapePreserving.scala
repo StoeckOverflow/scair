@@ -37,6 +37,73 @@ private def idxConst(v: Int): arith.Constant =
 private def toIndex(nat: Value[Attribute]): ShapeToIndex =
   ShapeToIndex(nat.asInstanceOf[Operand[dTensorNatType]], Result(IndexType()))
 
+private def layoutParamValue(param: d_memref.LayoutParam): Option[Value[Attribute]] =
+  param match
+    case v: ValueAttribute => Some(v.getVal())
+    case _                 => None
+
+private def layoutFromValue(v: Value[Attribute]): d_memref.LayoutParam =
+  ValueAttribute(v)
+
+private def layoutOne: d_memref.LayoutParam =
+  IntegerAttr(IntData(1), IndexType())
+
+private def layoutZero: d_memref.LayoutParam =
+  IntegerAttr(IntData(0), IndexType())
+
+private def multiplyLayoutByIndex(
+    lhs: d_memref.LayoutParam,
+    rhs: Value[Attribute],
+): (Seq[Operation], d_memref.LayoutParam) =
+  lhs match
+    case IntegerAttr(IntData(1), _: IndexType | _: IntegerType) =>
+      (Seq.empty, layoutFromValue(rhs))
+    case _ =>
+      layoutParamValue(lhs) match
+        case Some(lhsValue) =>
+          val mul = arith.MulI(
+            lhsValue.asInstanceOf[Operand[arith.AnyIntegerType]],
+            rhs.asInstanceOf[Operand[arith.AnyIntegerType]],
+            Result(IndexType()),
+          )
+          (Seq(mul), layoutFromValue(mul.result))
+        case None =>
+          throw new IllegalArgumentException(
+            "dtensor expand_shape lowering only supports unit literal or SSA layout strides"
+          )
+
+private def buildSourceRowMajorStrides(
+    dimIdxValues: Seq[Value[Attribute]]
+): (Seq[Operation], Seq[d_memref.LayoutParam]) =
+  val strides = Array.fill[d_memref.LayoutParam](dimIdxValues.size)(layoutOne)
+  var current: d_memref.LayoutParam = layoutOne
+  var ops = Seq.empty[Operation]
+  for i <- dimIdxValues.indices.reverse do
+    strides(i) = current
+    if i > 0 then
+      val (nextOps, nextCurrent) = multiplyLayoutByIndex(current, dimIdxValues(i))
+      ops = ops ++ nextOps
+      current = nextCurrent
+  (ops, strides.toSeq)
+
+private def reassociationGroups(
+    reassociation: ArrayAttribute[Attribute]
+): Seq[Seq[Int]] =
+  reassociation.attrValues.map {
+    case group: ArrayAttribute[?] =>
+      group.attrValues.map {
+        case IntegerAttr(IntData(idx), _) => idx.toInt
+        case other =>
+          throw new IllegalArgumentException(
+            s"dtensor expand_shape lowering expected integer reassociation index, got ${dTensorTypeUtil.renderAttr(other)}"
+          )
+      }
+    case other =>
+      throw new IllegalArgumentException(
+        s"dtensor expand_shape lowering expected array reassociation group, got ${dTensorTypeUtil.renderAttr(other)}"
+      )
+  }
+
 private def identityMap: AffineMapAttr =
   AffineMapAttr(
     AffineMap(
@@ -142,14 +209,57 @@ private val LowerCast = pattern {
     (prefix ++ Seq(lowered, castBack), Seq(castBack.outputs.head))
 }
 
+private val LowerExpandShape = pattern {
+  case ExpandShape(src, reassociation, res) =>
+    val srcMemType = DTensorDMemrefConversion.tensorToMemrefType(src.typ)
+    val (prefix, memValue) = DTensorDMemrefConversion.toMemrefValue(src, srcMemType)
+    val srcDimIdxs = src.typ.params.map(_.getVal()).map(toIndex)
+    val resDimIdxs = res.typ.params.map(_.getVal()).map(toIndex)
+    val (srcStrideOps, srcStrides) =
+      buildSourceRowMajorStrides(srcDimIdxs.map(_.res))
+    val groups = reassociationGroups(reassociation)
+    val resultStrides = Array.fill[d_memref.LayoutParam](res.typ.params.size)(layoutOne)
+    var splitStrideOps = Seq.empty[Operation]
+
+    groups.zipWithIndex.foreach { case (group, srcIdx) =>
+      var currentStride = srcStrides(srcIdx)
+      group.reverse.foreach { resIdx =>
+        resultStrides(resIdx) = currentStride
+        if resIdx != group.head then
+          val (ops, nextStride) =
+            multiplyLayoutByIndex(currentStride, resDimIdxs(resIdx).res)
+          splitStrideOps = splitStrideOps ++ ops
+          currentStride = nextStride
+      }
+    }
+
+    val resMemType = d_memref.dMemrefMemrefType(
+      res.typ.params,
+      res.typ.elem,
+      offset = Some(layoutZero),
+      strides = Some(resultStrides.toSeq),
+    )
+    val reinterpret = d_memref.ReinterpretCast(
+      memValue.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+      Result(resMemType),
+    )
+    val castBack = castBackToTensor(reinterpret.res, res.typ)
+    (
+      prefix ++ srcDimIdxs ++ resDimIdxs ++ srcStrideOps ++ splitStrideOps ++
+        Seq(reinterpret, castBack),
+      Seq(castBack.outputs.head),
+    )
+}
+
 /**
  * Lowers a small shape-preserving subset of `dtensor` ops to `d_memref` while
  * keeping tensor-typed SSA results via unrealized casts.
  *
  * This pass rewrites `dtensor.empty` to buffer allocation, rewrites
  * `dtensor.fill` to allocate-and-store loop nests, rewrites `dtensor.dim` to
- * `d_memref.dim_exact`, and rewrites `dtensor.cast` to `d_memref.cast`. In each
- * case where a tensor result must remain visible, it bridges back with
+ * `d_memref.dim_exact`, rewrites `dtensor.cast` to `d_memref.cast`, and rewrites
+ * generic row-major `dtensor.expand_shape` metadata to `d_memref.reinterpret_cast`.
+ * In each case where a tensor result must remain visible, it bridges back with
  * `unrealized_conversion_cast` so value-dependent shapes are preserved in the
  * underlying `!d_memref.memref`.
  *
@@ -169,12 +279,17 @@ private val LowerCast = pattern {
  * `<dtensor.cast %src : !dtensor.tensor<...> to !dtensor.tensor<...>>`
  * `->`
  * `<unrealized_conversion_cast to source memref + d_memref.cast + unrealized_conversion_cast back to tensor>`
+ *
+ * `<dtensor.expand_shape %src : !dtensor.tensor<[..., product], ...> to !dtensor.tensor<[..., factors...], ...>>`
+ * `->`
+ * `<unrealized_conversion_cast to source memref + d_memref.reinterpret_cast with row-major expanded strides + unrealized_conversion_cast back to tensor>`
  */
 final class DTensorToDMemrefShapePreserving(ctx: MLContext)
     extends WalkerPass(ctx):
   /** Scope (intentionally narrow):
     *   - lower a minimal executable subset: `dtensor.empty`, `dtensor.fill`,
-    *     `dtensor.cast`, and `dtensor.dim`
+    *     `dtensor.cast`, `dtensor.dim`, and generic row-major
+    *     `dtensor.expand_shape`
     *   - preserve value-dependent shapes in `!d_memref.memref`
     *   - use unrealized casts as temporary bridges between `!dtensor.tensor`
     *     and `!d_memref.memref`
@@ -184,5 +299,7 @@ final class DTensorToDMemrefShapePreserving(ctx: MLContext)
   override val name: String = "dtensor-to-dmemref-shape-preserving"
 
   override val walker: PatternRewriteWalker = PatternRewriteWalker(
-    GreedyRewritePatternApplier(Seq(LowerEmpty, LowerFill, LowerDim, LowerCast))
+    GreedyRewritePatternApplier(
+      Seq(LowerEmpty, LowerFill, LowerDim, LowerCast, LowerExpandShape)
+    )
   )
