@@ -26,6 +26,12 @@ VALUE_DEP_LITERAL_DRIVER_SRC="${VALUE_DEP_LITERAL_DRIVER_SRC:-$EXAMPLE_DIR/drive
 
 OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
 mkdir -p "$OUT_DIR"
+ENV_PATH="$(ensure_env_snapshot "$OUT_DIR")"
+GIT_COMMIT="$(git_commit_for_metrics)"
+RUN_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+MACHINE_ID="$(machine_id_for_metrics)"
+SIZE_DESCRIPTOR="m=8;n=8;layout=semi_affine"
+COMPILER_FLAGS="-O2"
 
 require_bin "$SCAIR_OPT"
 require_bin "$MLIR_OPT"
@@ -153,7 +159,25 @@ append_row() {
     "0" \
     "0" \
     "NA" \
-    "NA"
+    "NA" \
+    "semi_affine" \
+    "$SIZE_DESCRIPTOR" \
+    "$variant" \
+    "NA" \
+    "NA" \
+    "NA" \
+    "$(metric_field compile_ms "$output_txt")" \
+    "$(metric_field ns_per_iter "$output_txt")" \
+    "$(metric_field runtime_iqr_ns_per_iter "$output_txt")" \
+    "$(metric_field benchmark_repetitions "$output_txt")" \
+    "$(metric_field result "$output_txt")" \
+    "$(metric_field run_status "$output_txt")" \
+    "$COMPILER_FLAGS" \
+    "$GIT_COMMIT" \
+    "$RUN_DATE" \
+    "$MACHINE_ID" \
+    "$ENV_PATH" \
+    "$(metric_field raw_timings_path "$output_txt")"
 
   append_summary_row \
     "$summary_md" \
