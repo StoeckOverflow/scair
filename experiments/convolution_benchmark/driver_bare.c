@@ -4,7 +4,7 @@
 #include <time.h>
 
 #ifndef BENCH_LABEL
-#define BENCH_LABEL "conv2d_checksum"
+#define BENCH_LABEL "conv2d_kernel"
 #endif
 
 #ifndef VARIANT_LABEL
@@ -19,14 +19,15 @@ extern void conv2d_dynamic(
     float *Kflat,
     float *Yflat);
 
-extern void checksum_dynamic(
-    int64_t n_nat, int64_t cout_nat, int64_t oh_nat, int64_t ow_nat,
-    float *Yflat,
-    float *out);
-
 static double elapsed_ns(struct timespec start, struct timespec end) {
   return (double)(end.tv_sec - start.tv_sec) * 1000000000.0 +
          (double)(end.tv_nsec - start.tv_nsec);
+}
+
+static double checksum_host(const float *ptr, int64_t n) {
+  double sum = 0.0;
+  for (int64_t i = 0; i < n; ++i) sum += (double)ptr[i];
+  return sum;
 }
 
 int main(int argc, char **argv) {
@@ -57,14 +58,11 @@ int main(int argc, char **argv) {
   float *X = (float *)malloc((size_t)xflat * sizeof(float));
   float *K = (float *)malloc((size_t)kflat * sizeof(float));
   float *Y = (float *)malloc((size_t)yflat * sizeof(float));
-  float *out = (float *)malloc(sizeof(float));
-
-  if (!X || !K || !Y || !out) {
+  if (!X || !K || !Y) {
     fprintf(stderr, "allocation failed\n");
     free(X);
     free(K);
     free(Y);
-    free(out);
     return 2;
   }
 
@@ -76,25 +74,22 @@ int main(int argc, char **argv) {
   clock_gettime(CLOCK_MONOTONIC, &start);
   for (int64_t iter = 0; iter < iterations; ++iter) {
     for (int64_t i = 0; i < yflat; ++i) Y[i] = 0.0f;
-    out[0] = 0.0f;
     conv2d_dynamic(n, cin, h, w, cout, kh, kw, oh, ow, X, K, Y);
-    checksum_dynamic(n, cout, oh, ow, Y, out);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
-
-  float expected = (float)(n * cout * oh * ow * cin * kh * kw);
-  if (out[0] != expected) {
-    fprintf(stderr, "unexpected checksum: got %.1f expected %.1f\n", out[0], expected);
+  const double result = checksum_host(Y, yflat);
+  const double expected = (double)n * (double)cout * (double)oh * (double)ow * (double)cin * (double)kh * (double)kw;
+  if (result != expected) {
+    fprintf(stderr, "unexpected checksum: got %.1f expected %.1f\n", result, expected);
     free(X);
     free(K);
     free(Y);
-    free(out);
     return 3;
   }
 
   printf("benchmark=%s\n", BENCH_LABEL);
   printf("variant=%s\n", VARIANT_LABEL);
-  printf("result=%.1f\n", out[0]);
+  printf("result=%.1f\n", result);
   printf("expected_result=%.1f\n", expected);
   printf("iterations=%lld\n", (long long)iterations);
   printf("total_ns=%.0f\n", elapsed_ns(start, end));
@@ -103,6 +98,5 @@ int main(int argc, char **argv) {
   free(X);
   free(K);
   free(Y);
-  free(out);
   return 0;
 }
