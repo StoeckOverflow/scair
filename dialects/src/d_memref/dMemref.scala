@@ -620,6 +620,7 @@ final case class ReinterpretCast(
     src: Operand[dMemrefMemrefType],
     res: Result[dMemrefMemrefType],
 ) extends DerivedOperation["d_memref.reinterpret_cast"]
+    with NoMemoryEffect
     derives OpDefs:
 
   override def customVerify(): OK[Operation] =
