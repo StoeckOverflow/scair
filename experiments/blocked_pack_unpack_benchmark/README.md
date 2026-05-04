@@ -27,6 +27,12 @@ Tests:
 - compares conservative dynamic tail/min logic with value-dependent `dtensor.nat.mul` provenance
 - value-dependent route exposes a rectangular $M_o\times N_o\times T_M\times T_N$ loop structure
 
+Variant notes:
+- `mlir_baseline`: upstream MLIR baseline route
+- `scair_baseline`: ScaIR dynamic memref baseline without dependent provenance
+- `value_dependent`: ScaIR dependent route exposing rectangular product-provenance loops
+- deterministic input values are chosen so the numeric result/checksum is non-negative
+
 Use in thesis:
 - structural/code-generation evidence with supporting runtime validation
 - inspect generated IR artifacts for baseline tail/min logic and dependent rectangular factorized loops

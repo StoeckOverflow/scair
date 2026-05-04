@@ -8,7 +8,7 @@
 #endif
 
 #ifndef VARIANT_LABEL
-#define VARIANT_LABEL "mlir_baseline"
+#define VARIANT_LABEL "scair_baseline"
 #endif
 
 #ifndef BLOCKED_PACK_MO
@@ -45,7 +45,7 @@ typedef struct {
   int64_t strides[1];
 } MemRef1D_i64;
 
-extern void _mlir_ciface_blocked_pack(
+extern void blocked_pack(
     int64_t mo, int64_t no, int64_t tm, int64_t tn,
     MemRef1D_i64 *src, MemRef1D_i64 *dst);
 
@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
   struct timespec end;
   clock_gettime(CLOCK_MONOTONIC, &start);
   for (int64_t iter = 0; iter < iterations; ++iter) {
-    _mlir_ciface_blocked_pack(kMo, kNo, kTm, kTn, &src_ref, &dst_ref);
+    blocked_pack(kMo, kNo, kTm, kTn, &src_ref, &dst_ref);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
 

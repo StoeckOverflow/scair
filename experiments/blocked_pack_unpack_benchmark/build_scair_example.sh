@@ -6,7 +6,7 @@ BIN_DIR="$LLVM_BUILD_DIR/bin"
 CC="${CC:-$BIN_DIR/clang}"
 ITERATIONS="${BLOCKED_PACK_ITERATIONS:-${ITERATIONS:-1000}}"
 BLOCKED_PACK_SIZE_SET="${BLOCKED_PACK_SIZE_SET:-64x64x16x16,128x32x8x32,128x64x16x16}"
-BLOCKED_PACK_ROUTES="${BLOCKED_PACK_ROUTES:-mlir_baseline,value_dependent}"
+BLOCKED_PACK_ROUTES="${BLOCKED_PACK_ROUTES:-mlir_baseline,scair_baseline,value_dependent}"
 
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,6 +17,8 @@ MLIR_OPT="$BIN_DIR/mlir-opt"
 MLIR_TRANSLATE="$BIN_DIR/mlir-translate"
 MLIR_BASELINE_SRC="${MLIR_BASELINE_SRC:-$EXAMPLE_DIR/pack_mlir_baseline.mlir}"
 MLIR_DRIVER_SRC="${MLIR_DRIVER_SRC:-$EXAMPLE_DIR/driver_mlir.c}"
+SCAIR_BASELINE_SRC="${SCAIR_BASELINE_SRC:-$EXAMPLE_DIR/pack_scair_baseline.mlir}"
+SCAIR_BASELINE_DRIVER_SRC="${SCAIR_BASELINE_DRIVER_SRC:-$EXAMPLE_DIR/driver_baseline.c}"
 VALUE_DEP_SRC="${VALUE_DEP_SRC:-$EXAMPLE_DIR/pack_scair_value_dependent.mlir}"
 VALUE_DEP_DRIVER_SRC="${VALUE_DEP_DRIVER_SRC:-$EXAMPLE_DIR/driver.c}"
 OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
@@ -35,6 +37,8 @@ require_bin "$MLIR_TRANSLATE"
 require_bin "$CC"
 require_file "$MLIR_BASELINE_SRC"
 require_file "$MLIR_DRIVER_SRC"
+require_file "$SCAIR_BASELINE_SRC"
+require_file "$SCAIR_BASELINE_DRIVER_SRC"
 require_file "$VALUE_DEP_SRC"
 require_file "$VALUE_DEP_DRIVER_SRC"
 
@@ -341,6 +345,32 @@ for dims in "${BLOCKED_PACK_SIZES[@]}"; do
       "$OUT_DIR/${artifact_tag}_mlir_baseline.ll" \
       "$OUT_DIR/${artifact_tag}_mlir_baseline.output.txt" \
       "benchmark_class=supporting_microbenchmark;operation=blocked_pack;claim_scope=baseline_conservative_dynamic_tile_bounds_with_min_tail_control;timed_region=kernel_only_repeated;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");rectangular_factorized=no;natmul_count=0" \
+      "$row_size_descriptor"
+  fi
+
+  if route_enabled "scair_baseline"; then
+    echo "==> Building ScaIR dynamic blocked_pack baseline for $row_size_descriptor"
+    build_scair_variant \
+      "scair_baseline" \
+      "$SCAIR_BASELINE_SRC" \
+      "lower-dynamic-memref-to-llvm-baseline" \
+      "canonicalize,cse,dce" \
+      "$SCAIR_BASELINE_DRIVER_SRC" \
+      "$artifact_tag" \
+      "$mo" \
+      "$no" \
+      "$tm" \
+      "$tn"
+
+    append_row \
+      "$METRICS_CSV" \
+      "$SUMMARY_MD" \
+      "scair_baseline" \
+      "$OUT_DIR/${artifact_tag}_scair_baseline.input.mlir" \
+      "$OUT_DIR/${artifact_tag}_scair_baseline.llvm.mlir" \
+      "$OUT_DIR/${artifact_tag}_scair_baseline.ll" \
+      "$OUT_DIR/${artifact_tag}_scair_baseline.output.txt" \
+      "benchmark_class=supporting_microbenchmark;operation=blocked_pack;claim_scope=scair_dynamic_memref_baseline;timed_region=kernel_only_repeated;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_scair_baseline.tiled.mlir");rectangular_factorized=no;natmul_count=0" \
       "$row_size_descriptor"
   fi
 

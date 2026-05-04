@@ -48,7 +48,7 @@ static double elapsed_ns(struct timespec start, struct timespec end) {
 
 static void init_src(int64_t *src) {
   for (int64_t i = 0; i < kElements; ++i) {
-    src[i] = (int64_t)((i * 1315423911ull + 17ull) & 0x7fff) - 16384;
+    src[i] = (int64_t)((i * 1315423911ull + 17ull) & 0x7fff);
   }
 }
 
