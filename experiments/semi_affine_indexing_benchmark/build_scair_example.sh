@@ -30,7 +30,7 @@ ENV_PATH="$(ensure_env_snapshot "$OUT_DIR")"
 GIT_COMMIT="$(git_commit_for_metrics)"
 RUN_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 MACHINE_ID="$(machine_id_for_metrics)"
-SIZE_DESCRIPTOR="m=8;n=8;layout=semi_affine"
+SIZE_DESCRIPTOR="m=256;n=1024;layout=semi_affine"
 COMPILER_FLAGS="-O2"
 
 require_bin "$SCAIR_OPT"

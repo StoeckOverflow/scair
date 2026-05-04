@@ -29,3 +29,8 @@ Use in thesis:
 - expressiveness and lowering evidence for dynamic-strided semi-affine layouts
 - supporting runtime validation only; near-parity results should not be framed as a broad speedup claim
 - useful for showing that value-dependent memory provenance composes with affine-style indexing
+
+Metric interpretation / limitations:
+- The benchmark reports a 256x1024 fill/reduction and should not be described as an 8x8 case.
+- `scair_baseline` is the ScaIR dynamic memref baseline and intentionally does not carry dependent `d_memref` provenance.
+- The runtime result validates the generated route and checksum, but the benchmark is not a broad speedup claim for semi-affine indexing.

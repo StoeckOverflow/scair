@@ -28,3 +28,8 @@ Variant notes:
 Use in thesis:
 - structural/code-generation evidence with supporting runtime validation
 - not a broad matmul speedup claim or proof of general product solving
+
+Metric interpretation / limitations:
+- `scair_baseline` is the ScaIR dynamic memref baseline and intentionally does not carry dependent `dtensor.nat.mul` provenance.
+- The current `scair_baseline` route is also intentionally untiled; do not describe this benchmark as a comparison against an ordinary tiled ScaIR baseline until a separate `scair_baseline_tiled` control exists.
+- `tail_handling_present`, `factorized_tile_count`, and `tail_free_factorized` are artifact checks over generated `.tiled.mlir`, not semantic proofs.

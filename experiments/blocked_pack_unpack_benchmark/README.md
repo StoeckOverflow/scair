@@ -38,3 +38,8 @@ Use in thesis:
 - inspect generated IR artifacts for baseline tail/min logic and dependent rectangular factorized loops
 - runtime should be described as near parity to modest improvement, not a general pack/unpack speedup claim
 - benchmark is pack-only; it does not include unpack, static-oracle variants, or general product solving
+
+Metric interpretation / limitations:
+- `scair_baseline` is the ScaIR dynamic memref baseline and intentionally does not carry dependent `dtensor.nat.mul` provenance.
+- A plain ScaIR baseline artifact may still contain rectangular `affine.for` loops; `dependent_rectangular_factorized` is the precise metric for rectangular structure backed by dependent provenance.
+- The legacy `rectangular_factorized` note is kept for compatibility and should be read as a route-specific artifact indicator, not as a complete semantic distinction between all baselines.

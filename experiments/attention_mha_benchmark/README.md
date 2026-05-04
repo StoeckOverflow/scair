@@ -38,3 +38,8 @@ Variant notes:
 Use in thesis:
 - supporting evidence only; not a headline runtime benchmark
 - does not isolate full model performance or general attention optimization
+
+Metric interpretation / limitations:
+- `scair_baseline` is the ScaIR dynamic memref baseline and intentionally does not carry dependent `dtensor.nat.mul` provenance.
+- The value-dependent route demonstrates preserved head/head-dimension provenance and factorization-aware generated structure; it should not be framed as a broad attention-performance result.
+- `affine_cleanup_present`, `factorized_tile_count`, and `tail_free_factorized` are artifact checks over generated `.tiled.mlir`, not semantic proofs.

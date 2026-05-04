@@ -33,3 +33,8 @@ Variant notes:
 Use in thesis:
 - cache/control-heavy supporting evidence only
 - not a full BatchNorm benchmark and not a general runtime-speedup claim
+
+Metric interpretation / limitations:
+- `scair_baseline` is the ScaIR dynamic memref baseline and intentionally does not carry dependent `dtensor.nat.mul` provenance.
+- A plain ScaIR baseline artifact may still contain rectangular `affine.for` loops; `dependent_rectangular_factorized` is the precise metric for rectangular structure backed by dependent provenance.
+- The legacy `rectangular_factorized` note is kept for compatibility and should be read as a route-specific artifact indicator, not as a complete semantic distinction between all baselines.

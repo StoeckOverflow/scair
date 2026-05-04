@@ -344,7 +344,7 @@ for dims in "${BLOCKED_PACK_SIZES[@]}"; do
       "$OUT_DIR/${artifact_tag}_mlir_baseline.llvm.mlir" \
       "$OUT_DIR/${artifact_tag}_mlir_baseline.ll" \
       "$OUT_DIR/${artifact_tag}_mlir_baseline.output.txt" \
-      "benchmark_class=supporting_microbenchmark;operation=blocked_pack;claim_scope=baseline_conservative_dynamic_tile_bounds_with_min_tail_control;timed_region=kernel_only_repeated;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");rectangular_factorized=no;natmul_count=0" \
+      "benchmark_class=supporting_microbenchmark;operation=blocked_pack;claim_scope=baseline_conservative_dynamic_tile_bounds_with_min_tail_control;timed_region=kernel_only_repeated;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");rectangular_factorized=no;dependent_rectangular_factorized=no;natmul_count=0" \
       "$row_size_descriptor"
   fi
 
@@ -370,7 +370,7 @@ for dims in "${BLOCKED_PACK_SIZES[@]}"; do
       "$OUT_DIR/${artifact_tag}_scair_baseline.llvm.mlir" \
       "$OUT_DIR/${artifact_tag}_scair_baseline.ll" \
       "$OUT_DIR/${artifact_tag}_scair_baseline.output.txt" \
-      "benchmark_class=supporting_microbenchmark;operation=blocked_pack;claim_scope=scair_dynamic_memref_baseline;timed_region=kernel_only_repeated;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_scair_baseline.tiled.mlir");rectangular_factorized=no;natmul_count=0" \
+      "benchmark_class=supporting_microbenchmark;operation=blocked_pack;claim_scope=scair_dynamic_memref_baseline;timed_region=kernel_only_repeated;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_scair_baseline.tiled.mlir");rectangular_factorized=no;dependent_rectangular_factorized=no;natmul_count=0" \
       "$row_size_descriptor"
   fi
 
@@ -396,7 +396,7 @@ for dims in "${BLOCKED_PACK_SIZES[@]}"; do
       "$OUT_DIR/${artifact_tag}_value_dependent.llvm.mlir" \
       "$OUT_DIR/${artifact_tag}_value_dependent.ll" \
       "$OUT_DIR/${artifact_tag}_value_dependent.output.txt" \
-      "benchmark_class=supporting_microbenchmark;operation=blocked_pack;claim_scope=dependent_natmul_provenance_and_rectangular_mo_no_tm_tn_loop_structure;timed_region=kernel_only_repeated;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");rectangular_factorized=$(rectangular_loop_present "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");natmul_count=$(natmul_count "$OUT_DIR/${artifact_tag}_value_dependent.input.mlir")" \
+      "benchmark_class=supporting_microbenchmark;operation=blocked_pack;claim_scope=dependent_natmul_provenance_and_rectangular_mo_no_tm_tn_loop_structure;timed_region=kernel_only_repeated;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");rectangular_factorized=$(rectangular_loop_present "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");dependent_rectangular_factorized=$(rectangular_loop_present "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");natmul_count=$(natmul_count "$OUT_DIR/${artifact_tag}_value_dependent.input.mlir")" \
       "$row_size_descriptor"
   fi
 done
@@ -433,6 +433,7 @@ for row in csv.DictReader(csv_path.open(newline="", encoding="utf-8")):
             "benchmark_repetitions": row["benchmark_repetitions"],
             "tail_handling_present": notes.get("tail_handling_present", "NA"),
             "rectangular_factorized": notes.get("rectangular_factorized", "NA"),
+            "dependent_rectangular_factorized": notes.get("dependent_rectangular_factorized", "NA"),
             "natmul_count": notes.get("natmul_count", "NA"),
         }
     )
