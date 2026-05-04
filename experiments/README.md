@@ -14,4 +14,5 @@ Metric interpretation:
 Limitations:
 - Supporting microbenchmarks demonstrate code-generation structure and validation, not broad application speedup claims.
 - `scair_baseline` means ScaIR dynamic memref baseline lowering, not dependent `d_memref` / `dtensor.nat.mul` provenance.
+- `MATMUL_TILING_PROFILE=cache_sweep` adds cache-sensitive explicit tile-size rows for the matmul tiling benchmark, but it is not an auto-tuning or hardware-optimality claim.
 - Clean final thesis runs should regenerate `out/` directories from scratch so stale artifacts cannot be confused with current `metrics.csv` rows.

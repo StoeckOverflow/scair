@@ -10,7 +10,9 @@ ITERATIONS="${MATMUL_TILING_ITERATIONS:-${ITERATIONS:-100}}"
 MATMUL_TILING_PROFILE="${MATMUL_TILING_PROFILE:-default}"
 MATMUL_TILING_DEFAULT_SIZE_SET="128x128x12x64,128x128x16x32,256x128x12x64"
 MATMUL_TILING_CACHE_CONTROL_SIZE_SET="8x8x4096x3,8x8x4096x5,8x8x4096x7,8x8x4096x8,16x16x2048x3,16x16x2048x5,16x16x2048x7,16x16x1024x16,32x16x1024x8"
+MATMUL_TILING_CACHE_SWEEP_SIZE_SET="${MATMUL_TILING_CACHE_SWEEP_SIZE_SET:-$MATMUL_TILING_CACHE_CONTROL_SIZE_SET}"
 MATMUL_TILING_SIZE_SET="${MATMUL_TILING_SIZE_SET:-}"
+MATMUL_TILING_TILE_SIZE_SET="${MATMUL_TILING_TILE_SIZE_SET:-}"
 MATMUL_TILING_TILE_POLICY_ENV="${MATMUL_TILING_TILE_POLICY:-}"
 MATMUL_TILING_TILE_POLICY="${MATMUL_TILING_TILE_POLICY:-fixed32}"
 MATMUL_TILING_ROUTES="${MATMUL_TILING_ROUTES:-mlir_baseline,scair_baseline,value_dependent}"
@@ -25,14 +27,23 @@ if [[ -z "$MATMUL_TILING_SIZE_SET" ]]; then
         ITERATIONS=1000
       fi
       ;;
+    cache_sweep)
+      MATMUL_TILING_SIZE_SET="$MATMUL_TILING_CACHE_SWEEP_SIZE_SET"
+      if [[ -z "$MATMUL_TILING_ITERATIONS_ENV" && -z "$ITERATIONS_ENV" ]]; then
+        ITERATIONS=1000
+      fi
+      ;;
     *)
-      echo "error: unsupported MATMUL_TILING_PROFILE '$MATMUL_TILING_PROFILE' (expected default or cache_control)" >&2
+      echo "error: unsupported MATMUL_TILING_PROFILE '$MATMUL_TILING_PROFILE' (expected default, cache_control, or cache_sweep)" >&2
       exit 1
       ;;
   esac
 fi
 if [[ "$MATMUL_TILING_PROFILE" == "cache_control" && -z "$MATMUL_TILING_TILE_POLICY_ENV" ]]; then
   MATMUL_TILING_TILE_POLICY="inner_factor"
+fi
+if [[ "$MATMUL_TILING_PROFILE" == "cache_sweep" && -z "$MATMUL_TILING_TILE_SIZE_SET" ]]; then
+  MATMUL_TILING_TILE_SIZE_SET="8,16,32,64,128"
 fi
 
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -78,8 +89,13 @@ size_descriptor() {
   local n="$2"
   local k0="$3"
   local k1="$4"
+  local tile_size="${5:-}"
   local k=$((k0 * k1))
-  echo "m=$m;n=$n;k0=$k0;k1=$k1;k=$k"
+  local descriptor="m=$m;n=$n;k0=$k0;k1=$k1;k=$k"
+  if [[ -n "$tile_size" ]]; then
+    descriptor+=";tile_size=$tile_size"
+  fi
+  echo "$descriptor"
 }
 
 route_enabled() {
@@ -96,6 +112,12 @@ route_enabled() {
 
 mlir_affine_tile_args_for() {
   local k1="$1"
+  local explicit_tile_size="${2:-}"
+  if [[ -n "$explicit_tile_size" ]]; then
+    echo "--affine-loop-tile=tile-size=$explicit_tile_size"
+    return
+  fi
+
   if [[ -n "${MLIR_AFFINE_TILE_ARGS:-}" ]]; then
     echo "$MLIR_AFFINE_TILE_ARGS"
     return
@@ -113,6 +135,34 @@ mlir_affine_tile_args_for() {
       exit 1
       ;;
   esac
+}
+
+mlir_tile_size_for_notes() {
+  local k1="$1"
+  if [[ -n "${MLIR_AFFINE_TILE_ARGS:-}" ]]; then
+    echo "custom"
+    return
+  fi
+
+  case "$MATMUL_TILING_TILE_POLICY" in
+    fixed32)
+      echo "32"
+      ;;
+    inner_factor)
+      echo "$k1"
+      ;;
+    *)
+      echo "NA"
+      ;;
+  esac
+}
+
+validate_tile_size() {
+  local tile_size="$1"
+  if ! [[ "$tile_size" =~ ^[1-9][0-9]*$ ]]; then
+    echo "error: invalid MATMUL_TILING_TILE_SIZE_SET entry '$tile_size' (expected positive integer)" >&2
+    exit 1
+  fi
 }
 
 tail_handling_present() {
@@ -166,6 +216,7 @@ build_mlir_variant() {
   local n="$6"
   local k0="$7"
   local k1="$8"
+  local explicit_tile_size="${9:-}"
   local prefix="$OUT_DIR/${artifact_tag}_${variant}"
   local input_ir="$prefix.input.mlir"
   local tiled_ir="$prefix.tiled.mlir"
@@ -181,7 +232,7 @@ build_mlir_variant() {
 
   cp "$src" "$input_ir"
   start_ns=$(now_ns)
-  mlir_affine_tile_args="$(mlir_affine_tile_args_for "$k1")"
+  mlir_affine_tile_args="$(mlir_affine_tile_args_for "$k1" "$explicit_tile_size")"
 
   "$MLIR_OPT" "$src" \
     "$mlir_affine_tile_args" \
@@ -368,6 +419,7 @@ write_summary_header "$SUMMARY_MD" "Matmul Factorization-Aware Tiling Benchmark 
 printf '%s\n' "$COMMON_METRICS_HEADER" > "$METRICS_CSV"
 
 IFS=',' read -r -a MATMUL_TILING_SIZES <<<"$MATMUL_TILING_SIZE_SET"
+IFS=',' read -r -a MATMUL_TILING_TILE_SIZES <<<"$MATMUL_TILING_TILE_SIZE_SET"
 for dims in "${MATMUL_TILING_SIZES[@]}"; do
   IFS='x' read -r m n k0 k1 <<<"$dims"
   if [[ -z "${m:-}" || -z "${n:-}" || -z "${k0:-}" || -z "${k1:-}" ]]; then
@@ -379,27 +431,57 @@ for dims in "${MATMUL_TILING_SIZES[@]}"; do
   row_size_descriptor="$(size_descriptor "$m" "$n" "$k0" "$k1")"
 
   if route_enabled "mlir_baseline"; then
-    echo "==> Building upstream MLIR matmul tiling baseline for $row_size_descriptor"
-    build_mlir_variant \
-      "mlir_baseline" \
-      "$MLIR_BASELINE_SRC" \
-      "$MLIR_DRIVER_SRC" \
-      "$artifact_tag" \
-      "$m" \
-      "$n" \
-      "$k0" \
-      "$k1"
+    if [[ "$MATMUL_TILING_PROFILE" == "cache_sweep" ]]; then
+      for tile_size in "${MATMUL_TILING_TILE_SIZES[@]}"; do
+        validate_tile_size "$tile_size"
+        tile_artifact_tag="${artifact_tag}_tile${tile_size}"
+        tile_size_descriptor="$(size_descriptor "$m" "$n" "$k0" "$k1" "$tile_size")"
+        echo "==> Building upstream MLIR matmul tiling baseline for $tile_size_descriptor"
+        build_mlir_variant \
+          "mlir_baseline" \
+          "$MLIR_BASELINE_SRC" \
+          "$MLIR_DRIVER_SRC" \
+          "$tile_artifact_tag" \
+          "$m" \
+          "$n" \
+          "$k0" \
+          "$k1" \
+          "$tile_size"
 
-    append_row \
-      "$METRICS_CSV" \
-      "$SUMMARY_MD" \
-      "mlir_baseline" \
-      "$OUT_DIR/${artifact_tag}_mlir_baseline.input.mlir" \
-      "$OUT_DIR/${artifact_tag}_mlir_baseline.llvm.mlir" \
-      "$OUT_DIR/${artifact_tag}_mlir_baseline.ll" \
-      "$OUT_DIR/${artifact_tag}_mlir_baseline.output.txt" \
-      "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;tile_policy=$MATMUL_TILING_TILE_POLICY;mlir_tile_args=$(mlir_affine_tile_args_for "$k1");mlir_tile_scope=upstream_affine_legal_bands;factorization=K0*K1;claim_scope=baseline_has_index_product_bound_but_no_dependent_natmul_provenance;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");tail_free_factorized=no" \
-      "$row_size_descriptor"
+        append_row \
+          "$METRICS_CSV" \
+          "$SUMMARY_MD" \
+          "mlir_baseline" \
+          "$OUT_DIR/${tile_artifact_tag}_mlir_baseline.input.mlir" \
+          "$OUT_DIR/${tile_artifact_tag}_mlir_baseline.llvm.mlir" \
+          "$OUT_DIR/${tile_artifact_tag}_mlir_baseline.ll" \
+          "$OUT_DIR/${tile_artifact_tag}_mlir_baseline.output.txt" \
+          "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;cache_sweep=yes;tile_policy=explicit_sweep;tile_size=$tile_size;mlir_tile_args=$(mlir_affine_tile_args_for "$k1" "$tile_size");mlir_tile_scope=upstream_affine_legal_bands;factorization=K0*K1;claim_scope=baseline_has_index_product_bound_but_no_dependent_natmul_provenance;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${tile_artifact_tag}_mlir_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${tile_artifact_tag}_mlir_baseline.tiled.mlir");tail_free_factorized=no" \
+          "$tile_size_descriptor"
+      done
+    else
+      echo "==> Building upstream MLIR matmul tiling baseline for $row_size_descriptor"
+      build_mlir_variant \
+        "mlir_baseline" \
+        "$MLIR_BASELINE_SRC" \
+        "$MLIR_DRIVER_SRC" \
+        "$artifact_tag" \
+        "$m" \
+        "$n" \
+        "$k0" \
+        "$k1"
+
+      append_row \
+        "$METRICS_CSV" \
+        "$SUMMARY_MD" \
+        "mlir_baseline" \
+        "$OUT_DIR/${artifact_tag}_mlir_baseline.input.mlir" \
+        "$OUT_DIR/${artifact_tag}_mlir_baseline.llvm.mlir" \
+        "$OUT_DIR/${artifact_tag}_mlir_baseline.ll" \
+        "$OUT_DIR/${artifact_tag}_mlir_baseline.output.txt" \
+        "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;cache_sweep=no;tile_policy=$MATMUL_TILING_TILE_POLICY;tile_size=$(mlir_tile_size_for_notes "$k1");mlir_tile_args=$(mlir_affine_tile_args_for "$k1");mlir_tile_scope=upstream_affine_legal_bands;factorization=K0*K1;claim_scope=baseline_has_index_product_bound_but_no_dependent_natmul_provenance;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");tail_free_factorized=no" \
+        "$row_size_descriptor"
+    fi
   fi
 
   if route_enabled "scair_baseline"; then
@@ -424,8 +506,8 @@ for dims in "${MATMUL_TILING_SIZES[@]}"; do
       "$OUT_DIR/${artifact_tag}_scair_baseline.llvm.mlir" \
       "$OUT_DIR/${artifact_tag}_scair_baseline.ll" \
       "$OUT_DIR/${artifact_tag}_scair_baseline.output.txt" \
-      "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;tile_policy=$MATMUL_TILING_TILE_POLICY;mlir_tile_args=NA;mlir_tile_scope=NA;factorization=K0*K1;claim_scope=scair_dynamic_memref_baseline;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_scair_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_scair_baseline.tiled.mlir");tail_free_factorized=no" \
-      "$row_size_descriptor"
+      "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;cache_sweep=$([[ "$MATMUL_TILING_PROFILE" == "cache_sweep" ]] && echo yes || echo no);tile_policy=none;tile_size=untiled;mlir_tile_args=NA;mlir_tile_scope=NA;factorization=K0*K1;claim_scope=scair_dynamic_memref_baseline;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_scair_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_scair_baseline.tiled.mlir");tail_free_factorized=no" \
+      "$([[ "$MATMUL_TILING_PROFILE" == "cache_sweep" ]] && size_descriptor "$m" "$n" "$k0" "$k1" "untiled" || echo "$row_size_descriptor")"
   fi
 
   if route_enabled "value_dependent"; then
@@ -450,8 +532,8 @@ for dims in "${MATMUL_TILING_SIZES[@]}"; do
       "$OUT_DIR/${artifact_tag}_value_dependent.llvm.mlir" \
       "$OUT_DIR/${artifact_tag}_value_dependent.ll" \
       "$OUT_DIR/${artifact_tag}_value_dependent.output.txt" \
-      "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;tile_policy=$MATMUL_TILING_TILE_POLICY;mlir_tile_args=NA;mlir_tile_scope=NA;factorization=K0*K1;claim_scope=dependent_natmul_guides_tail_free_reduction_tiling_in_tested_case;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir")" \
-      "$row_size_descriptor"
+      "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;cache_sweep=$([[ "$MATMUL_TILING_PROFILE" == "cache_sweep" ]] && echo yes || echo no);tile_policy=factorization_aware;tile_size=dependent_factorized;mlir_tile_args=NA;mlir_tile_scope=NA;factorization=K0*K1;claim_scope=dependent_natmul_guides_tail_free_reduction_tiling_in_tested_case;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir")" \
+      "$([[ "$MATMUL_TILING_PROFILE" == "cache_sweep" ]] && size_descriptor "$m" "$n" "$k0" "$k1" "dependent_factorized" || echo "$row_size_descriptor")"
   fi
 done
 
@@ -481,6 +563,9 @@ for row in csv.DictReader(csv_path.open(newline="", encoding="utf-8")):
             "runtime_median_ns_per_iter": row["runtime_median_ns_per_iter"],
             "runtime_iqr_ns_per_iter": row["runtime_iqr_ns_per_iter"],
             "benchmark_repetitions": row["benchmark_repetitions"],
+            "cache_sweep": notes.get("cache_sweep", "NA"),
+            "tile_policy": notes.get("tile_policy", "NA"),
+            "tile_size": notes.get("tile_size", "NA"),
             "tail_handling_present": notes.get("tail_handling_present", "NA"),
             "factorized_tile_count": notes.get("factorized_tile_count", "NA"),
             "tail_free_factorized": notes.get("tail_free_factorized", "NA"),
