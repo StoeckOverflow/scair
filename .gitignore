@@ -41,3 +41,6 @@ full-classpath
 # Mill specific
 .mill/
 out/
+
+# Python
+__pycache__/
