@@ -29,6 +29,12 @@ Tests:
 - supporting attention/MHA route with explicit $H=\mathrm{heads}\cdot D$ factorization
 - structural/code-generation evidence for preserving head and head-dimension information
 
+Variant notes:
+- `mlir_baseline`: upstream MLIR baseline route
+- `scair_baseline`: ScaIR dynamic memref baseline without dependent provenance
+- `value_dependent`: ScaIR dependent route with factorization-aware structure
+- deterministic value inputs are chosen so the numeric output checksum is non-negative
+
 Use in thesis:
 - supporting evidence only; not a headline runtime benchmark
 - does not isolate full model performance or general attention optimization

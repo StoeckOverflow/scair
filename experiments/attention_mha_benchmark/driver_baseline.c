@@ -12,7 +12,7 @@
 #endif
 
 #ifndef VARIANT_LABEL
-#define VARIANT_LABEL "mlir_baseline"
+#define VARIANT_LABEL "scair_baseline"
 #endif
 
 enum {
@@ -34,7 +34,7 @@ typedef struct {
   int64_t strides[1];
 } MemRef1D_f32;
 
-extern void _mlir_ciface_attention_mha(
+extern void attention_mha(
     int64_t batch, int64_t seq, int64_t heads, int64_t head_dim,
     MemRef1D_f32 *Q, MemRef1D_f32 *K, MemRef1D_f32 *V,
     MemRef1D_f32 *score, MemRef1D_f32 *prob, MemRef1D_f32 *tmp_out, MemRef1D_f32 *out);
@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
     fill(prob, kScoreElements, 0.0f);
     fill(tmp_out, kOutputElements, 0.0f);
     fill(out, kOutputElements, 0.0f);
-    _mlir_ciface_attention_mha(
+    attention_mha(
         kBatch, kSeq, kHeads, kHeadDim,
         &Qref, &Kref, &Vref, &scoreRef, &probRef, &tmpOutRef, &outRef);
   }

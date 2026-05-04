@@ -5,6 +5,7 @@ LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-$HOME/dev/llvm-source/build}"
 BIN_DIR="$LLVM_BUILD_DIR/bin"
 CC="${CC:-$BIN_DIR/clang}"
 ITERATIONS="${ITERATIONS:-100}"
+ATTENTION_MHA_ROUTES="${ATTENTION_MHA_ROUTES:-mlir_baseline,scair_baseline,value_dependent}"
 
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,6 +16,8 @@ MLIR_OPT="$BIN_DIR/mlir-opt"
 MLIR_TRANSLATE="$BIN_DIR/mlir-translate"
 MLIR_BASELINE_SRC="${MLIR_BASELINE_SRC:-$EXAMPLE_DIR/attention_kernel_mlir_baseline.mlir}"
 MLIR_DRIVER_SRC="${MLIR_DRIVER_SRC:-$EXAMPLE_DIR/driver_mlir.c}"
+SCAIR_BASELINE_SRC="${SCAIR_BASELINE_SRC:-$EXAMPLE_DIR/attention_kernel_scair_baseline.mlir}"
+SCAIR_BASELINE_DRIVER_SRC="${SCAIR_BASELINE_DRIVER_SRC:-$EXAMPLE_DIR/driver_baseline.c}"
 VALUE_DEP_SRC="${VALUE_DEP_SRC:-$EXAMPLE_DIR/attention_kernel_scair_value_dependent.mlir}"
 VALUE_DEP_DRIVER_SRC="${VALUE_DEP_DRIVER_SRC:-$EXAMPLE_DIR/driver.c}"
 HELPER_SRC="${HELPER_SRC:-$EXAMPLE_DIR/attention_helper.c}"
@@ -35,11 +38,25 @@ require_bin "$MLIR_TRANSLATE"
 require_bin "$CC"
 require_file "$MLIR_BASELINE_SRC"
 require_file "$MLIR_DRIVER_SRC"
+require_file "$SCAIR_BASELINE_SRC"
+require_file "$SCAIR_BASELINE_DRIVER_SRC"
 require_file "$VALUE_DEP_SRC"
 require_file "$VALUE_DEP_DRIVER_SRC"
 require_file "$HELPER_SRC"
 
 BENCHMARK_NAME="attention_mha"
+
+route_enabled() {
+  local route="$1"
+  local entry
+  IFS=',' read -r -a ATTENTION_MHA_ROUTE_LIST <<<"$ATTENTION_MHA_ROUTES"
+  for entry in "${ATTENTION_MHA_ROUTE_LIST[@]}"; do
+    if [[ "$entry" == "$route" || "$entry" == "all" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
 affine_cleanup_present() {
   local path="$1"
@@ -248,8 +265,8 @@ append_row() {
     "$(metric_field ns_per_iter "$output_txt")" \
     "$(metric_field runtime_iqr_ns_per_iter "$output_txt")" \
     "$(metric_field benchmark_repetitions "$output_txt")" \
-    "$(metric_field result "$output_txt")" \
-    "ok" \
+    "$(metric_field checksum "$output_txt")" \
+    "$(metric_field checksum_status "$output_txt")" \
     "$COMPILER_FLAGS" \
     "$GIT_COMMIT" \
     "$RUN_DATE" \
@@ -275,20 +292,6 @@ append_row() {
     "$(metric_field ns_per_iter "$output_txt")"
 }
 
-echo "==> Building upstream MLIR standard MHA baseline"
-build_mlir_variant \
-  "mlir_baseline" \
-  "$MLIR_BASELINE_SRC" \
-  "$MLIR_DRIVER_SRC"
-
-echo "==> Building ScaIR standard MHA value-dependent kernel"
-build_scair_variant \
-  "value_dependent" \
-  "$VALUE_DEP_SRC" \
-  "attention-factorization-aware-dependent-tiling,canonicalize,cse,lower-dmemref-to-llvm" \
-  "attention-factorization-aware-dependent-tiling,canonicalize,cse" \
-  "$VALUE_DEP_DRIVER_SRC"
-
 SUMMARY_MD="$OUT_DIR/summary.md"
 METRICS_CSV="$OUT_DIR/metrics.csv"
 METRICS_JSON="$OUT_DIR/metrics.json"
@@ -296,51 +299,94 @@ METRICS_JSON="$OUT_DIR/metrics.json"
 write_summary_header "$SUMMARY_MD" "Attention MHA Benchmark Summary"
 printf '%s\n' "$COMMON_METRICS_HEADER" > "$METRICS_CSV"
 
-append_row \
-  "$METRICS_CSV" \
-  "$SUMMARY_MD" \
-  "mlir_baseline" \
-  "$OUT_DIR/mlir_baseline.input.mlir" \
-  "$OUT_DIR/mlir_baseline.llvm.mlir" \
-  "$OUT_DIR/mlir_baseline.ll" \
-  "$OUT_DIR/mlir_baseline.output.txt" \
-  "affine_cleanup_present=$(affine_cleanup_present "$OUT_DIR/mlir_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/mlir_baseline.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/mlir_baseline.tiled.mlir")"
+if route_enabled "mlir_baseline"; then
+  echo "==> Building upstream MLIR standard MHA baseline"
+  build_mlir_variant \
+    "mlir_baseline" \
+    "$MLIR_BASELINE_SRC" \
+    "$MLIR_DRIVER_SRC"
 
-append_row \
-  "$METRICS_CSV" \
-  "$SUMMARY_MD" \
-  "value_dependent" \
-  "$OUT_DIR/value_dependent.input.mlir" \
-  "$OUT_DIR/value_dependent.llvm.mlir" \
-  "$OUT_DIR/value_dependent.ll" \
-  "$OUT_DIR/value_dependent.output.txt" \
-  "affine_cleanup_present=$(affine_cleanup_present "$OUT_DIR/value_dependent.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/value_dependent.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/value_dependent.tiled.mlir")"
+  append_row \
+    "$METRICS_CSV" \
+    "$SUMMARY_MD" \
+    "mlir_baseline" \
+    "$OUT_DIR/mlir_baseline.input.mlir" \
+    "$OUT_DIR/mlir_baseline.llvm.mlir" \
+    "$OUT_DIR/mlir_baseline.ll" \
+    "$OUT_DIR/mlir_baseline.output.txt" \
+    "claim_scope=upstream_mlir_baseline;affine_cleanup_present=$(affine_cleanup_present "$OUT_DIR/mlir_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/mlir_baseline.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/mlir_baseline.tiled.mlir")"
+fi
+
+if route_enabled "scair_baseline"; then
+  echo "==> Building ScaIR standard MHA dynamic baseline"
+  build_scair_variant \
+    "scair_baseline" \
+    "$SCAIR_BASELINE_SRC" \
+    "lower-dynamic-memref-to-llvm-baseline" \
+    "canonicalize,cse,dce" \
+    "$SCAIR_BASELINE_DRIVER_SRC"
+
+  append_row \
+    "$METRICS_CSV" \
+    "$SUMMARY_MD" \
+    "scair_baseline" \
+    "$OUT_DIR/scair_baseline.input.mlir" \
+    "$OUT_DIR/scair_baseline.llvm.mlir" \
+    "$OUT_DIR/scair_baseline.ll" \
+    "$OUT_DIR/scair_baseline.output.txt" \
+    "claim_scope=scair_dynamic_memref_baseline;affine_cleanup_present=$(affine_cleanup_present "$OUT_DIR/scair_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/scair_baseline.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/scair_baseline.tiled.mlir")"
+fi
+
+if route_enabled "value_dependent"; then
+  echo "==> Building ScaIR standard MHA value-dependent kernel"
+  build_scair_variant \
+    "value_dependent" \
+    "$VALUE_DEP_SRC" \
+    "attention-factorization-aware-dependent-tiling,canonicalize,cse,lower-dmemref-to-llvm" \
+    "attention-factorization-aware-dependent-tiling,canonicalize,cse" \
+    "$VALUE_DEP_DRIVER_SRC"
+
+  append_row \
+    "$METRICS_CSV" \
+    "$SUMMARY_MD" \
+    "value_dependent" \
+    "$OUT_DIR/value_dependent.input.mlir" \
+    "$OUT_DIR/value_dependent.llvm.mlir" \
+    "$OUT_DIR/value_dependent.ll" \
+    "$OUT_DIR/value_dependent.output.txt" \
+    "claim_scope=dependent_natmul_provenance;affine_cleanup_present=$(affine_cleanup_present "$OUT_DIR/value_dependent.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/value_dependent.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/value_dependent.tiled.mlir")"
+fi
 
 append_summary_metric_notes "$SUMMARY_MD"
 
-python3 - "$METRICS_JSON" "$OUT_DIR/mlir_baseline.tiled.mlir" "$OUT_DIR/value_dependent.tiled.mlir" <<'PY'
+python3 - "$METRICS_CSV" "$METRICS_JSON" <<'PY'
+import csv
 import json
 import sys
 from pathlib import Path
 
-json_path = Path(sys.argv[1])
-baseline_tiled = Path(sys.argv[2]).read_text(encoding="utf-8")
-dependent_tiled = Path(sys.argv[3]).read_text(encoding="utf-8")
+csv_path = Path(sys.argv[1])
+json_path = Path(sys.argv[2])
+payload = []
 
-payload = [
-    {
-        "variant": "mlir_baseline",
-        "affine_cleanup_present": "yes" if " to min " in baseline_tiled else "no",
-        "factorized_tile_count": baseline_tiled.count("step 1 : i32"),
-        "tail_free_factorized": "yes" if "step 1 : i32" in baseline_tiled else "no",
-    },
-    {
-        "variant": "value_dependent",
-        "affine_cleanup_present": "yes" if " to min " in dependent_tiled else "no",
-        "factorized_tile_count": dependent_tiled.count("step 1 : i32"),
-        "tail_free_factorized": "yes" if "step 1 : i32" in dependent_tiled else "no",
-    },
-]
+for row in csv.DictReader(csv_path.open(newline="", encoding="utf-8")):
+    notes = {}
+    for item in row["notes"].split(";"):
+        if "=" in item:
+            key, value = item.split("=", 1)
+            notes[key] = value
+    payload.append(
+        {
+            "variant": row["variant"],
+            "run_status": row["run_status"],
+            "runtime_median_ns_per_iter": row["runtime_median_ns_per_iter"],
+            "runtime_iqr_ns_per_iter": row["runtime_iqr_ns_per_iter"],
+            "benchmark_repetitions": row["benchmark_repetitions"],
+            "affine_cleanup_present": notes.get("affine_cleanup_present", "NA"),
+            "factorized_tile_count": notes.get("factorized_tile_count", "NA"),
+            "tail_free_factorized": notes.get("tail_free_factorized", "NA"),
+        }
+    )
 
 json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 PY
@@ -348,12 +394,7 @@ PY
 echo
 echo "Attention MHA benchmark build complete."
 echo "Produced:"
-echo "  $OUT_DIR/mlir_baseline.input.mlir"
-echo "  $OUT_DIR/mlir_baseline.tiled.mlir"
-echo "  $OUT_DIR/mlir_baseline.llvm.mlir"
-echo "  $OUT_DIR/value_dependent.input.mlir"
-echo "  $OUT_DIR/value_dependent.tiled.mlir"
-echo "  $OUT_DIR/value_dependent.llvm.mlir"
+echo "  enabled route artifacts under $OUT_DIR"
 echo "  $OUT_DIR/metrics.csv"
 echo "  $OUT_DIR/metrics.json"
 echo "  $OUT_DIR/summary.md"

@@ -37,7 +37,7 @@ static void init_input(float *Q, float *K, float *V) {
   for (int64_t i = 0; i < kQKVElements; ++i) {
     Q[i] = (float)((i % 23) - 11) / 32.0f;
     K[i] = (float)(((i * 7) % 29) - 14) / 29.0f;
-    V[i] = (float)(((i * 5) % 31) - 15) / 27.0f;
+    V[i] = (float)(((i * 5) % 31) + 1) / 27.0f;
   }
 }
 
@@ -176,6 +176,7 @@ int main(int argc, char **argv) {
   printf("variant=%s\n", VARIANT_LABEL);
   printf("result=%.9g\n", result);
   printf("expected_result=%.9g\n", expected);
+  printf("checksum=%.9g\n", result);
   printf("iterations=%lld\n", (long long)iterations);
   printf("total_ns=%.0f\n", total_ns);
   printf("ns_per_iter=%.2f\n", total_ns / (double)iterations);
