@@ -28,7 +28,7 @@ Variant notes:
 - `mlir_baseline`: upstream MLIR baseline route
 - `scair_baseline`: ScaIR dynamic memref baseline without dependent provenance
 - `value_dependent`: ScaIR dependent route exposing the factorized rectangular loop structure
-- reported `checksum` is a nonnegative fingerprint for metrics; signed mathematical validation remains in `result` and `expected_result`
+- deterministic input values are chosen so the numeric result/checksum is non-negative
 
 Use in thesis:
 - cache/control-heavy supporting evidence only

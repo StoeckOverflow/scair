@@ -54,11 +54,11 @@ static MemRef1D_i64 make1D(int64_t *ptr, int64_t n) {
 
 static void init_inputs(int64_t *X, int64_t *scale, int64_t *bias) {
   for (int64_t i = 0; i < kK; ++i) {
-    X[i] = (int64_t)((i % 17) - 8);
+    X[i] = (int64_t)((i % 17) + 1);
   }
   for (int64_t j = 0; j < kK1; ++j) {
     scale[j] = (int64_t)((j % 5) + 2);
-    bias[j] = (int64_t)((j * 3) % 11 - 5);
+    bias[j] = (int64_t)((j * 3) % 11);
   }
 }
 
@@ -79,15 +79,6 @@ static int64_t checksum(const int64_t *ptr, int64_t n) {
   int64_t sum = 0;
   for (int64_t i = 0; i < n; ++i) sum += ptr[i];
   return sum;
-}
-
-static uint64_t checksum_fingerprint(const int64_t *ptr, int64_t n) {
-  uint64_t hash = 1469598103934665603ull;
-  for (int64_t i = 0; i < n; ++i) {
-    hash ^= (uint64_t)ptr[i];
-    hash *= 1099511628211ull;
-  }
-  return hash & 0x7fffffffffffffffull;
 }
 
 static int verify_equal(const int64_t *got, const int64_t *expected, int64_t n) {
@@ -158,7 +149,7 @@ int main(int argc, char **argv) {
   printf("variant=%s\n", VARIANT_LABEL);
   printf("result=%lld\n", (long long)result);
   printf("expected_result=%lld\n", (long long)expected);
-  printf("checksum=%llu\n", (unsigned long long)checksum_fingerprint(Y, kK));
+  printf("checksum=%lld\n", (long long)result);
   printf("iterations=%lld\n", (long long)iterations);
   printf("ns_per_iter=%.2f\n", elapsed_ns(start, end) / (double)iterations);
 
