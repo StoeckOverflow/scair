@@ -1,0 +1,12 @@
+# This archive intentionally tracks generated benchmark artifacts that are
+# ignored elsewhere in the repository.
+!*.txt
+!*.log
+!*.o
+!*.out
+!*.exec
+!*.ll
+!*.mlir
+!*.csv
+!*.json
+!*.md

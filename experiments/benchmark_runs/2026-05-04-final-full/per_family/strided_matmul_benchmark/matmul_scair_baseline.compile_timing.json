@@ -1,0 +1,21 @@
+{
+  "total_ms": 1218.24,
+  "stages": [
+    {
+      "label": "verification",
+      "command": "/home/dominic/dev/scair/out/tools/opt/launcher.dest/run -s \"/home/dominic/dev/scair/experiments/strided_matmul_benchmark/matmul_kernel_scair_baseline.mlir\" > /dev/null",
+      "returncode": 0,
+      "elapsed_ms": 534.27,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "label": "lowering",
+      "command": "/home/dominic/dev/scair/out/tools/opt/launcher.dest/run -s \"/home/dominic/dev/scair/experiments/strided_matmul_benchmark/matmul_kernel_scair_baseline.mlir\" --passes \"lower-dynamic-memref-to-llvm-baseline,convert-func-to-llvm,convert-llvm-export-abi\" > /dev/null",
+      "returncode": 0,
+      "elapsed_ms": 683.94,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

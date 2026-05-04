@@ -1,0 +1,21 @@
+{
+  "total_ms": 22.52,
+  "stages": [
+    {
+      "label": "verification",
+      "command": "/home/dominic/dev/llvm-source/build/bin/mlir-opt \"/home/dominic/dev/scair/experiments/convolution_benchmark/conv2d_kernel.mlir\" > /dev/null",
+      "returncode": 0,
+      "elapsed_ms": 10.73,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "label": "lowering",
+      "command": "/home/dominic/dev/llvm-source/build/bin/mlir-opt \"/home/dominic/dev/scair/experiments/convolution_benchmark/conv2d_kernel.mlir\" --lower-affine --convert-scf-to-cf --expand-strided-metadata --finalize-memref-to-llvm --convert-arith-to-llvm --convert-index-to-llvm --convert-cf-to-llvm --convert-func-to-llvm --reconcile-unrealized-casts > /dev/null",
+      "returncode": 0,
+      "elapsed_ms": 11.76,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

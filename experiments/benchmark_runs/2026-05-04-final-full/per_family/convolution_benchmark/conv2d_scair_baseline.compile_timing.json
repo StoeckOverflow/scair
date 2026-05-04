@@ -1,0 +1,21 @@
+{
+  "total_ms": 1456.57,
+  "stages": [
+    {
+      "label": "verification",
+      "command": "/home/dominic/dev/scair/out/tools/opt/launcher.dest/run -s \"/home/dominic/dev/scair/experiments/convolution_benchmark/conv2d_kernel_scair_baseline.mlir\" > /dev/null",
+      "returncode": 0,
+      "elapsed_ms": 622.39,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "label": "lowering",
+      "command": "/home/dominic/dev/scair/out/tools/opt/launcher.dest/run -s \"/home/dominic/dev/scair/experiments/convolution_benchmark/conv2d_kernel_scair_baseline.mlir\" --passes \"lower-dynamic-memref-to-llvm-baseline,convert-func-to-llvm,convert-llvm-export-abi\" > /dev/null",
+      "returncode": 0,
+      "elapsed_ms": 834.16,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}
