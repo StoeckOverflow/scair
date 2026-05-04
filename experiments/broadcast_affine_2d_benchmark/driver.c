@@ -63,6 +63,15 @@ static int64_t checksum(const int64_t *ptr, int64_t n) {
   return sum;
 }
 
+static uint64_t checksum_fingerprint(const int64_t *ptr, int64_t n) {
+  uint64_t hash = 1469598103934665603ull;
+  for (int64_t i = 0; i < n; ++i) {
+    hash ^= (uint64_t)ptr[i];
+    hash *= 1099511628211ull;
+  }
+  return hash & 0x7fffffffffffffffull;
+}
+
 static int verify_equal(const int64_t *got, const int64_t *expected, int64_t n) {
   for (int64_t i = 0; i < n; ++i) {
     if (got[i] != expected[i]) return 0;
@@ -126,7 +135,7 @@ int main(int argc, char **argv) {
   printf("variant=%s\n", VARIANT_LABEL);
   printf("result=%lld\n", (long long)result);
   printf("expected_result=%lld\n", (long long)expected);
-  printf("checksum=%lld\n", (long long)result);
+  printf("checksum=%llu\n", (unsigned long long)checksum_fingerprint(Y, kK));
   printf("iterations=%lld\n", (long long)iterations);
   printf("ns_per_iter=%.2f\n", elapsed_ns(start, end) / (double)iterations);
 

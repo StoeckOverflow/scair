@@ -8,7 +8,7 @@
 #endif
 
 #ifndef VARIANT_LABEL
-#define VARIANT_LABEL "mlir_baseline"
+#define VARIANT_LABEL "scair_baseline"
 #endif
 
 #ifndef BROADCAST_AFFINE_K0
@@ -33,7 +33,7 @@ typedef struct {
   int64_t strides[1];
 } MemRef1D_i64;
 
-extern void _mlir_ciface_broadcast_affine_2d(
+extern void broadcast_affine_2d(
     int64_t k0, int64_t k1,
     MemRef1D_i64 *X, MemRef1D_i64 *scale, MemRef1D_i64 *bias, MemRef1D_i64 *Y);
 
@@ -134,7 +134,7 @@ int main(int argc, char **argv) {
   struct timespec end;
   clock_gettime(CLOCK_MONOTONIC, &start);
   for (int64_t iter = 0; iter < iterations; ++iter) {
-    _mlir_ciface_broadcast_affine_2d(kK0, kK1, &Xref, &scaleRef, &biasRef, &Yref);
+    broadcast_affine_2d(kK0, kK1, &Xref, &scaleRef, &biasRef, &Yref);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
 

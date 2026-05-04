@@ -1,12 +1,11 @@
-"builtin.module"() ({
-  "func.func"() ({
-  ^bb0(
+builtin.module {
+  func.func @broadcast_affine_2d(
       %k0 : index,
       %k1 : index,
       %X : memref<?xi64>,
       %scale : memref<?xi64>,
       %bias : memref<?xi64>,
-      %Y : memref<?xi64>):
+      %Y : memref<?xi64>) attributes {llvm.emit_c_interface} {
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
     %k = arith.muli %k0, %k1 : index
@@ -25,9 +24,5 @@
       }
     }
     "func.return"() : () -> ()
-  }) {
-    function_type = (index, index, memref<?xi64>, memref<?xi64>, memref<?xi64>, memref<?xi64>) -> (),
-    llvm.emit_c_interface,
-    sym_name = "broadcast_affine_2d"
-  } : () -> ()
-}) : () -> ()
+  }
+}
