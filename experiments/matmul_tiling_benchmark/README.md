@@ -18,6 +18,12 @@ Tests:
 - compares ordinary dynamic $K$ arithmetic with value-dependent $dtensor.nat.mul$ provenance
 - value-dependent LLVM IR is shape-generic, so per-size `.ll` artifacts may be identical and are kept per row for traceability
 
+Variant notes:
+- `mlir_baseline`: upstream MLIR affine tiling baseline
+- `scair_baseline`: ScaIR dynamic memref baseline without dependent provenance or tiling
+- `value_dependent`: ScaIR dependent route with factorization-aware tiling
+- if added later, `scair_baseline_tiled` should be documented as the ordinary ScaIR tiling control so the comparison separates baseline lowering, generic tiling, and dependent factorization-aware tiling
+
 Use in thesis:
 - structural/code-generation evidence with supporting runtime validation
 - not a broad matmul speedup claim or proof of general product solving

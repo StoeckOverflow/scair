@@ -13,6 +13,7 @@ MATMUL_TILING_CACHE_CONTROL_SIZE_SET="8x8x4096x3,8x8x4096x5,8x8x4096x7,8x8x4096x
 MATMUL_TILING_SIZE_SET="${MATMUL_TILING_SIZE_SET:-}"
 MATMUL_TILING_TILE_POLICY_ENV="${MATMUL_TILING_TILE_POLICY:-}"
 MATMUL_TILING_TILE_POLICY="${MATMUL_TILING_TILE_POLICY:-fixed32}"
+MATMUL_TILING_ROUTES="${MATMUL_TILING_ROUTES:-mlir_baseline,scair_baseline,value_dependent}"
 if [[ -z "$MATMUL_TILING_SIZE_SET" ]]; then
   case "$MATMUL_TILING_PROFILE" in
     default)
@@ -43,6 +44,8 @@ MLIR_OPT="$BIN_DIR/mlir-opt"
 MLIR_TRANSLATE="$BIN_DIR/mlir-translate"
 MLIR_BASELINE_SRC="${MLIR_BASELINE_SRC:-$EXAMPLE_DIR/matmul_kernel_mlir_baseline.mlir}"
 MLIR_DRIVER_SRC="${MLIR_DRIVER_SRC:-$EXAMPLE_DIR/driver_mlir.c}"
+SCAIR_BASELINE_SRC="${SCAIR_BASELINE_SRC:-$EXAMPLE_DIR/matmul_kernel_scair_baseline.mlir}"
+SCAIR_BASELINE_DRIVER_SRC="${SCAIR_BASELINE_DRIVER_SRC:-$EXAMPLE_DIR/driver_baseline.c}"
 VALUE_DEP_SRC="${VALUE_DEP_SRC:-$EXAMPLE_DIR/matmul_kernel_scair_value_dependent.mlir}"
 VALUE_DEP_DRIVER_SRC="${VALUE_DEP_DRIVER_SRC:-$EXAMPLE_DIR/driver.c}"
 OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
@@ -61,6 +64,8 @@ require_bin "$MLIR_TRANSLATE"
 require_bin "$CC"
 require_file "$MLIR_BASELINE_SRC"
 require_file "$MLIR_DRIVER_SRC"
+require_file "$SCAIR_BASELINE_SRC"
+require_file "$SCAIR_BASELINE_DRIVER_SRC"
 require_file "$VALUE_DEP_SRC"
 require_file "$VALUE_DEP_DRIVER_SRC"
 
@@ -75,6 +80,18 @@ size_descriptor() {
   local k1="$4"
   local k=$((k0 * k1))
   echo "m=$m;n=$n;k0=$k0;k1=$k1;k=$k"
+}
+
+route_enabled() {
+  local route="$1"
+  local entry
+  IFS=',' read -r -a MATMUL_TILING_ROUTE_LIST <<<"$MATMUL_TILING_ROUTES"
+  for entry in "${MATMUL_TILING_ROUTE_LIST[@]}"; do
+    if [[ "$entry" == "$route" || "$entry" == "all" ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 mlir_affine_tile_args_for() {
@@ -361,51 +378,81 @@ for dims in "${MATMUL_TILING_SIZES[@]}"; do
   artifact_tag="$(size_tag "$dims")"
   row_size_descriptor="$(size_descriptor "$m" "$n" "$k0" "$k1")"
 
-  echo "==> Building upstream MLIR matmul tiling baseline for $row_size_descriptor"
-  build_mlir_variant \
-    "mlir_baseline" \
-    "$MLIR_BASELINE_SRC" \
-    "$MLIR_DRIVER_SRC" \
-    "$artifact_tag" \
-    "$m" \
-    "$n" \
-    "$k0" \
-    "$k1"
+  if route_enabled "mlir_baseline"; then
+    echo "==> Building upstream MLIR matmul tiling baseline for $row_size_descriptor"
+    build_mlir_variant \
+      "mlir_baseline" \
+      "$MLIR_BASELINE_SRC" \
+      "$MLIR_DRIVER_SRC" \
+      "$artifact_tag" \
+      "$m" \
+      "$n" \
+      "$k0" \
+      "$k1"
 
-  echo "==> Building value-dependent matmul tiling kernel for $row_size_descriptor"
-  build_scair_variant \
-    "value_dependent" \
-    "$VALUE_DEP_SRC" \
-    "dtensor-to-dmemref-shape-preserving,canonicalize,cse,dce,attention-factorization-aware-dependent-tiling,lower-dmemref-to-llvm" \
-    "dtensor-to-dmemref-shape-preserving,canonicalize,cse,dce,attention-factorization-aware-dependent-tiling" \
-    "$VALUE_DEP_DRIVER_SRC" \
-    "$artifact_tag" \
-    "$m" \
-    "$n" \
-    "$k0" \
-    "$k1"
+    append_row \
+      "$METRICS_CSV" \
+      "$SUMMARY_MD" \
+      "mlir_baseline" \
+      "$OUT_DIR/${artifact_tag}_mlir_baseline.input.mlir" \
+      "$OUT_DIR/${artifact_tag}_mlir_baseline.llvm.mlir" \
+      "$OUT_DIR/${artifact_tag}_mlir_baseline.ll" \
+      "$OUT_DIR/${artifact_tag}_mlir_baseline.output.txt" \
+      "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;tile_policy=$MATMUL_TILING_TILE_POLICY;mlir_tile_args=$(mlir_affine_tile_args_for "$k1");mlir_tile_scope=upstream_affine_legal_bands;factorization=K0*K1;claim_scope=baseline_has_index_product_bound_but_no_dependent_natmul_provenance;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");tail_free_factorized=no" \
+      "$row_size_descriptor"
+  fi
 
-  append_row \
-    "$METRICS_CSV" \
-    "$SUMMARY_MD" \
-    "mlir_baseline" \
-    "$OUT_DIR/${artifact_tag}_mlir_baseline.input.mlir" \
-    "$OUT_DIR/${artifact_tag}_mlir_baseline.llvm.mlir" \
-    "$OUT_DIR/${artifact_tag}_mlir_baseline.ll" \
-    "$OUT_DIR/${artifact_tag}_mlir_baseline.output.txt" \
-    "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;tile_policy=$MATMUL_TILING_TILE_POLICY;mlir_tile_args=$(mlir_affine_tile_args_for "$k1");mlir_tile_scope=upstream_affine_legal_bands;factorization=K0*K1;claim_scope=baseline_has_index_product_bound_but_no_dependent_natmul_provenance;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_mlir_baseline.tiled.mlir");tail_free_factorized=no" \
-    "$row_size_descriptor"
+  if route_enabled "scair_baseline"; then
+    echo "==> Building ScaIR dynamic matmul tiling baseline for $row_size_descriptor"
+    build_scair_variant \
+      "scair_baseline" \
+      "$SCAIR_BASELINE_SRC" \
+      "lower-dynamic-memref-to-llvm-baseline" \
+      "canonicalize,cse,dce" \
+      "$SCAIR_BASELINE_DRIVER_SRC" \
+      "$artifact_tag" \
+      "$m" \
+      "$n" \
+      "$k0" \
+      "$k1"
 
-  append_row \
-    "$METRICS_CSV" \
-    "$SUMMARY_MD" \
-    "value_dependent" \
-    "$OUT_DIR/${artifact_tag}_value_dependent.input.mlir" \
-    "$OUT_DIR/${artifact_tag}_value_dependent.llvm.mlir" \
-    "$OUT_DIR/${artifact_tag}_value_dependent.ll" \
-    "$OUT_DIR/${artifact_tag}_value_dependent.output.txt" \
-    "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;tile_policy=$MATMUL_TILING_TILE_POLICY;mlir_tile_args=NA;mlir_tile_scope=NA;factorization=K0*K1;claim_scope=dependent_natmul_guides_tail_free_reduction_tiling_in_tested_case;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir")" \
-    "$row_size_descriptor"
+    append_row \
+      "$METRICS_CSV" \
+      "$SUMMARY_MD" \
+      "scair_baseline" \
+      "$OUT_DIR/${artifact_tag}_scair_baseline.input.mlir" \
+      "$OUT_DIR/${artifact_tag}_scair_baseline.llvm.mlir" \
+      "$OUT_DIR/${artifact_tag}_scair_baseline.ll" \
+      "$OUT_DIR/${artifact_tag}_scair_baseline.output.txt" \
+      "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;tile_policy=$MATMUL_TILING_TILE_POLICY;mlir_tile_args=NA;mlir_tile_scope=NA;factorization=K0*K1;claim_scope=scair_dynamic_memref_baseline;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_scair_baseline.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_scair_baseline.tiled.mlir");tail_free_factorized=no" \
+      "$row_size_descriptor"
+  fi
+
+  if route_enabled "value_dependent"; then
+    echo "==> Building value-dependent matmul tiling kernel for $row_size_descriptor"
+    build_scair_variant \
+      "value_dependent" \
+      "$VALUE_DEP_SRC" \
+      "dtensor-to-dmemref-shape-preserving,canonicalize,cse,dce,attention-factorization-aware-dependent-tiling,lower-dmemref-to-llvm" \
+      "dtensor-to-dmemref-shape-preserving,canonicalize,cse,dce,attention-factorization-aware-dependent-tiling" \
+      "$VALUE_DEP_DRIVER_SRC" \
+      "$artifact_tag" \
+      "$m" \
+      "$n" \
+      "$k0" \
+      "$k1"
+
+    append_row \
+      "$METRICS_CSV" \
+      "$SUMMARY_MD" \
+      "value_dependent" \
+      "$OUT_DIR/${artifact_tag}_value_dependent.input.mlir" \
+      "$OUT_DIR/${artifact_tag}_value_dependent.llvm.mlir" \
+      "$OUT_DIR/${artifact_tag}_value_dependent.ll" \
+      "$OUT_DIR/${artifact_tag}_value_dependent.output.txt" \
+      "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;tile_policy=$MATMUL_TILING_TILE_POLICY;mlir_tile_args=NA;mlir_tile_scope=NA;factorization=K0*K1;claim_scope=dependent_natmul_guides_tail_free_reduction_tiling_in_tested_case;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir")" \
+      "$row_size_descriptor"
+  fi
 done
 
 append_summary_metric_notes "$SUMMARY_MD"
