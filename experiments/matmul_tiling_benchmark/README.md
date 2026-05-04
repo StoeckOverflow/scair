@@ -23,6 +23,7 @@ Variant notes:
 - `scair_baseline`: ScaIR dynamic memref baseline without dependent provenance or tiling
 - `value_dependent`: ScaIR dependent route with factorization-aware tiling
 - if added later, `scair_baseline_tiled` should be documented as the ordinary ScaIR tiling control so the comparison separates baseline lowering, generic tiling, and dependent factorization-aware tiling
+- deterministic input values are chosen so the numeric result/checksum is non-negative
 
 Use in thesis:
 - structural/code-generation evidence with supporting runtime validation

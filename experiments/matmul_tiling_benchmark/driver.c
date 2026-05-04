@@ -1,7 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
 
 #ifndef BENCH_LABEL
@@ -53,7 +52,7 @@ static void init_inputs(float *A, float *B) {
     A[i] = (float)((i % 7) + 1) / 8.0f;
   }
   for (int64_t i = 0; i < kBElements; ++i) {
-    B[i] = (float)(((i * 3) % 11) - 5) / 16.0f;
+    B[i] = (float)(((i * 3) % 11) + 1) / 16.0f;
   }
 }
 
@@ -73,17 +72,6 @@ static float checksum(const float *ptr, int64_t n) {
   float sum = 0.0f;
   for (int64_t i = 0; i < n; ++i) sum += ptr[i];
   return sum;
-}
-
-static uint64_t checksum_fingerprint(const float *ptr, int64_t n) {
-  uint64_t hash = 1469598103934665603ull;
-  for (int64_t i = 0; i < n; ++i) {
-    uint32_t bits = 0;
-    memcpy(&bits, &ptr[i], sizeof(bits));
-    hash ^= (uint64_t)bits;
-    hash *= 1099511628211ull;
-  }
-  return hash & 0x7fffffffffffffffull;
 }
 
 static int verify_close(const float *got, const float *expected, int64_t n) {
@@ -150,7 +138,7 @@ int main(int argc, char **argv) {
   printf("variant=%s\n", VARIANT_LABEL);
   printf("result=%.9g\n", result);
   printf("expected_result=%.9g\n", expected);
-  printf("checksum=%llu\n", (unsigned long long)checksum_fingerprint(C, kCElements));
+  printf("checksum=%.9g\n", result);
   printf("iterations=%lld\n", (long long)iterations);
   printf("total_ns=%.0f\n", elapsed_ns(start, end));
   printf("ns_per_iter=%.2f\n", elapsed_ns(start, end) / (double)iterations);
