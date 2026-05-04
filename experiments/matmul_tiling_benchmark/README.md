@@ -16,6 +16,7 @@ $$
 Tests:
 - supporting reduction-tiling benchmark for direct product provenance $K=K_0K_1$
 - compares ordinary dynamic $K$ arithmetic with value-dependent $dtensor.nat.mul$ provenance
+- value-dependent LLVM IR is shape-generic, so per-size `.ll` artifacts may be identical and are kept per row for traceability
 
 Use in thesis:
 - structural/code-generation evidence with supporting runtime validation
