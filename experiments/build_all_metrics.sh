@@ -41,21 +41,6 @@ elif [[ "$MATMUL_TILING_PROFILE_DEFAULT" == "cache_sweep" ]]; then
 else
   MATMUL_TILING_SIZE_SET_DEFAULT="$MATMUL_TILING_DEFAULT_SIZE_SET"
 fi
-BROADCAST_AFFINE_ITERATIONS_DEFAULT="${BROADCAST_AFFINE_ITERATIONS:-1000}"
-BROADCAST_AFFINE_PROFILE_DEFAULT="${BROADCAST_AFFINE_PROFILE:-default}"
-BROADCAST_AFFINE_DEFAULT_SIZE_SET="4096x3,4096x5,4096x7,4096x8,4096x16,4096x32,4096x64,16384x8,16384x16,16384x32"
-BROADCAST_AFFINE_CONTROL_HEAVY_SIZE_SET="1024x3,2048x3,4096x3,8192x3,4096x5,8192x5,4096x7,8192x7,4096x16,8192x16"
-if [[ -n "${BROADCAST_AFFINE_SIZE_SET:-}" ]]; then
-  BROADCAST_AFFINE_SIZE_SET_DEFAULT="$BROADCAST_AFFINE_SIZE_SET"
-elif [[ "$BROADCAST_AFFINE_PROFILE_DEFAULT" == "control_heavy" ]]; then
-  BROADCAST_AFFINE_SIZE_SET_DEFAULT="$BROADCAST_AFFINE_CONTROL_HEAVY_SIZE_SET"
-  BROADCAST_AFFINE_ITERATIONS_DEFAULT="${BROADCAST_AFFINE_ITERATIONS:-10000}"
-else
-  BROADCAST_AFFINE_SIZE_SET_DEFAULT="$BROADCAST_AFFINE_DEFAULT_SIZE_SET"
-fi
-BLOCKED_PACK_ITERATIONS_DEFAULT="${BLOCKED_PACK_ITERATIONS:-100}"
-BLOCKED_PACK_DEFAULT_SIZE_SET="64x64x16x16,128x32x8x32,128x64x16x16"
-BLOCKED_PACK_SIZE_SET_DEFAULT="${BLOCKED_PACK_SIZE_SET:-$BLOCKED_PACK_DEFAULT_SIZE_SET}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
 # The per-family CSVs are expected to share one identical header so we can
@@ -69,8 +54,6 @@ SCRIPTS=(
   "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/attention_mha_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/matmul_tiling_benchmark/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/broadcast_affine_2d_benchmark/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/blocked_pack_unpack_benchmark/build_scair_example.sh"
 )
 
 METRIC_FILES=(
@@ -80,8 +63,6 @@ METRIC_FILES=(
   "$SCAIR_ROOT/experiments/convolution_benchmark/out/metrics.csv"
   "$SCAIR_ROOT/experiments/attention_mha_benchmark/out/metrics.csv"
   "$SCAIR_ROOT/experiments/matmul_tiling_benchmark/out/metrics.csv"
-  "$SCAIR_ROOT/experiments/broadcast_affine_2d_benchmark/out/metrics.csv"
-  "$SCAIR_ROOT/experiments/blocked_pack_unpack_benchmark/out/metrics.csv"
 )
 
 run_benchmark_script() {
@@ -135,21 +116,6 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
         MATMUL_TILING_PROFILE="$MATMUL_TILING_PROFILE_DEFAULT" \
         MATMUL_TILING_TILE_POLICY="$MATMUL_TILING_TILE_POLICY_DEFAULT" \
         MATMUL_TILING_TILE_SIZE_SET="$MATMUL_TILING_TILE_SIZE_SET_DEFAULT" \
-        run_benchmark_script "$script"
-        ;;
-      broadcast_affine_2d_benchmark)
-        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-        ITERATIONS="$BROADCAST_AFFINE_ITERATIONS_DEFAULT" \
-        BROADCAST_AFFINE_SIZE_SET="$BROADCAST_AFFINE_SIZE_SET_DEFAULT" \
-        BROADCAST_AFFINE_PROFILE="$BROADCAST_AFFINE_PROFILE_DEFAULT" \
-        run_benchmark_script "$script"
-        ;;
-      blocked_pack_unpack_benchmark)
-        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-        ITERATIONS="$BLOCKED_PACK_ITERATIONS_DEFAULT" \
-        BLOCKED_PACK_SIZE_SET="$BLOCKED_PACK_SIZE_SET_DEFAULT" \
         run_benchmark_script "$script"
         ;;
       *)
