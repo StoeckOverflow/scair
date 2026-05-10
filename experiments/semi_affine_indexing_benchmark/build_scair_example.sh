@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-$HOME/dev/llvm-source/build}"
+LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-$HOME/dev/llvm-clean-build}"
 BIN_DIR="$LLVM_BUILD_DIR/bin"
 CC="${CC:-$BIN_DIR/clang}"
 ITERATIONS="${ITERATIONS:-100}"
+SEMI_AFFINE_ROWS="${SEMI_AFFINE_ROWS:-256}"
+SEMI_AFFINE_COLS="${SEMI_AFFINE_COLS:-1024}"
+SEMI_AFFINE_STRIDE1="${SEMI_AFFINE_STRIDE1:-2}"
+SEMI_AFFINE_STRIDE0="${SEMI_AFFINE_STRIDE0:-$((SEMI_AFFINE_COLS * SEMI_AFFINE_STRIDE1))}"
 
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCAIR_ROOT/experiments/common_metrics.sh"
 
 SCAIR_OPT="${SCAIR_ROOT}/out/tools/opt/launcher.dest/run"
-MLIR_TRANSLATE="$BIN_DIR/mlir-translate"
-MLIR_OPT="$BIN_DIR/mlir-opt"
+MLIR_TRANSLATE="${MLIR_TRANSLATE:-$BIN_DIR/mlir-translate}"
+MLIR_OPT="${MLIR_OPT:-$BIN_DIR/mlir-opt}"
 MLIR_BASELINE_SRC="${MLIR_BASELINE_SRC:-$EXAMPLE_DIR/semi_affine_kernel_mlir_baseline.mlir}"
 MLIR_DRIVER_SRC="${MLIR_DRIVER_SRC:-$EXAMPLE_DIR/driver.c}"
 
@@ -30,7 +34,7 @@ ENV_PATH="$(ensure_env_snapshot "$OUT_DIR")"
 GIT_COMMIT="$(git_commit_for_metrics)"
 RUN_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 MACHINE_ID="$(machine_id_for_metrics)"
-SIZE_DESCRIPTOR="m=256;n=1024;layout=semi_affine"
+SIZE_DESCRIPTOR="rows=${SEMI_AFFINE_ROWS};cols=${SEMI_AFFINE_COLS};stride0=${SEMI_AFFINE_STRIDE0};stride1=${SEMI_AFFINE_STRIDE1};layout=semi_affine"
 COMPILER_FLAGS="-O2"
 
 require_bin "$SCAIR_OPT"
@@ -212,7 +216,9 @@ echo "==> Linking upstream MLIR semi-affine baseline executable"
   "$OUT_DIR/semi_affine_mlir_baseline.o" \
   -o "$OUT_DIR/semi_affine_mlir_baseline_exec"
 run_benchmark_repeated "$OUT_DIR/semi_affine_mlir_baseline_output.txt" \
-  "$OUT_DIR/semi_affine_mlir_baseline_exec" "$ITERATIONS"
+  "$OUT_DIR/semi_affine_mlir_baseline_exec" "$ITERATIONS" \
+  "$SEMI_AFFINE_STRIDE0" "$SEMI_AFFINE_STRIDE1" \
+  "$SEMI_AFFINE_ROWS" "$SEMI_AFFINE_COLS"
 cat "$OUT_DIR/semi_affine_mlir_baseline_metrics.txt" >> "$OUT_DIR/semi_affine_mlir_baseline_output.txt"
 
 echo "==> Building ScaIR semi-affine baseline kernel-only"
@@ -231,7 +237,9 @@ echo "==> Linking ScaIR semi-affine baseline kernel-only executable"
   "$OUT_DIR/semi_affine_baseline_kernel_only_scair.o" \
   -o "$OUT_DIR/semi_affine_baseline_kernel_only_scair_exec"
 run_benchmark_repeated "$OUT_DIR/semi_affine_baseline_kernel_only_scair_output.txt" \
-  "$OUT_DIR/semi_affine_baseline_kernel_only_scair_exec" "$ITERATIONS"
+  "$OUT_DIR/semi_affine_baseline_kernel_only_scair_exec" "$ITERATIONS" \
+  "$SEMI_AFFINE_STRIDE0" "$SEMI_AFFINE_STRIDE1" \
+  "$SEMI_AFFINE_ROWS" "$SEMI_AFFINE_COLS"
 cat "$OUT_DIR/semi_affine_baseline_kernel_only_scair_metrics.txt" >> "$OUT_DIR/semi_affine_baseline_kernel_only_scair_output.txt"
 
 echo "==> Building ScaIR semi-affine value-dependent kernel-only"
@@ -250,7 +258,9 @@ echo "==> Linking ScaIR semi-affine value-dependent executable"
   "$OUT_DIR/semi_affine_value_dependent_scair.o" \
   -o "$OUT_DIR/semi_affine_value_dependent_scair_exec"
 run_benchmark_repeated "$OUT_DIR/semi_affine_value_dependent_scair_output.txt" \
-  "$OUT_DIR/semi_affine_value_dependent_scair_exec" "$ITERATIONS"
+  "$OUT_DIR/semi_affine_value_dependent_scair_exec" "$ITERATIONS" \
+  "$SEMI_AFFINE_STRIDE0" "$SEMI_AFFINE_STRIDE1" \
+  "$SEMI_AFFINE_ROWS" "$SEMI_AFFINE_COLS"
 cat "$OUT_DIR/semi_affine_value_dependent_scair_metrics.txt" >> "$OUT_DIR/semi_affine_value_dependent_scair_output.txt"
 
 SUMMARY_MD="$OUT_DIR/summary.md"
