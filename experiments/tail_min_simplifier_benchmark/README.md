@@ -17,8 +17,9 @@ provenance proves exact divisibility.
 ## Variants
 
 - `ordinary_d_affine_guarded_tile`: uses ordinary `arith.muli` product
-  structure. The `dependent-tail-min-simplify` pass runs, but the tail min must
-  remain because no dependent proof is present.
+  structure. The `dependent-tail-min-simplify` pass runs, but there is no
+  dependent proof to consume; this route is a no-proof/no-transform control and
+  does not create a tail/min guard in the generated IR.
 - `dependent_guarded_tile_no_simplify`: uses `dtensor.nat.mul` but does not run
   the simplifier. This shows the conservative guarded form before proof
   consumption.
@@ -30,8 +31,9 @@ provenance proves exact divisibility.
 - `stock_affine_guarded_tile`: emits stock `affine.for ... to min` from an
   ordinary product loop and then runs upstream
   `canonicalize,cse,affine-simplify-min-max`. This control illustrates that
-  upstream affine cleanup does not see ScaIR’s dependent nat proof when the
-  product is represented only as ordinary SSA arithmetic.
+  upstream affine cleanup keeps the `to min` tail because it does not see
+  ScaIR’s dependent nat proof when the product is represented only as ordinary
+  SSA arithmetic. This is the real min-retaining negative control.
 
 ## Metrics
 

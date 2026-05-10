@@ -117,11 +117,11 @@ write_route_manifest() {
 
 | Route | Role |
 |---|---|
-| `ordinary_d_affine_guarded_tile` | Negative control: ordinary `arith.muli` product keeps the min tail guard. |
+| `ordinary_d_affine_guarded_tile` | Ordinary `d_affine` no-proof control: the proof-consuming simplifier has no dependent fact to consume, and this route does not create a tail/min guard. |
 | `dependent_guarded_tile_no_simplify` | Shows guarded dependent tiling before proof-consuming tail cleanup. |
 | `dependent_guarded_tile_simplified` | Consumes explicit `dtensor.nat.mul` facts to remove the min tail guard. |
 | `dependent_exact_tile_reference` | Exact tiling route that never emits the tail guard. |
-| `stock_affine_guarded_tile` | Upstream affine-facing negative control. |
+| `stock_affine_guarded_tile` | Real min-retaining negative control: upstream affine cleanup keeps the `affine.for ... to min` tail guard for an ordinary product. |
 
 The simplifier is conservative. Missing a non-standard tail form is an
 optimization miss; removing a min without a dependent product proof is invalid.
@@ -131,8 +131,8 @@ MD
 [
   {
     "route": "ordinary_d_affine_guarded_tile",
-    "claim_role": "negative_control",
-    "expected_tail": "arith_minsi",
+    "claim_role": "ordinary_d_affine_no_proof_control",
+    "expected_tail": "none",
     "product_representation": "arith.muli"
   },
   {
@@ -180,7 +180,7 @@ run_scair_pipeline "$ORDINARY_SOURCE" "$ordinary_guarded" "ordinary-product-tile
 ordinary_guarded_ops="$(total_op_count "$ordinary_guarded")"
 run_scair_pipeline "$ORDINARY_SOURCE" "$ordinary_cleanup" "ordinary-product-tile-with-tail,dependent-tail-min-simplify,canonicalize,cse,dce"
 metric_row "ordinary_d_affine_guarded_tile" "after_guarded_tiling" "scair" "ok" "$ordinary_guarded" "NA" "ordinary_arith_muli_product_no_dependent_proof"
-metric_row "ordinary_d_affine_guarded_tile" "after_tail_min_simplify_cleanup" "scair" "ok" "$ordinary_cleanup" "$ordinary_guarded_ops" "min_retained_without_dtensor_nat_mul"
+metric_row "ordinary_d_affine_guarded_tile" "after_tail_min_simplify_cleanup" "scair" "ok" "$ordinary_cleanup" "$ordinary_guarded_ops" "no_tail_min_emitted_without_dependent_tiling_proof"
 
 dependent_guarded="$OUT_DIR/dependent_guarded_tile.mlir"
 dependent_no_simplify="$OUT_DIR/dependent_guarded_tile_cleanup_no_simplify.mlir"
@@ -222,10 +222,10 @@ fi
   done
   echo
   echo "Key comparison:"
-  echo "- \`ordinary_d_affine_guarded_tile\` retains \`arith.minsi\` because the product is only operational \`arith.muli\`."
+  echo "- \`ordinary_d_affine_guarded_tile\` is a no-proof/no-transform control: it uses ordinary \`arith.muli\` provenance and does not emit a tail/min guard in the generated IR."
   echo "- \`dependent_guarded_tile_no_simplify\` shows the same conservative guarded shape even though a \`dtensor.nat.mul\` proof is present."
   echo "- \`dependent_guarded_tile_simplified\` consumes that proof and rewrites the min upper bound to \`tile + tileSize\`, leaving no tail/min guard."
-  echo "- \`stock_affine_guarded_tile\` is a stock-affine-facing control: upstream \`affine-simplify-min-max\` does not recover the dependent divisibility fact from ordinary SSA arithmetic."
+  echo "- \`stock_affine_guarded_tile\` is the real min-retaining negative control: upstream \`affine-simplify-min-max\` keeps the \`affine.for ... to min\` tail because it cannot recover the dependent divisibility fact from ordinary SSA arithmetic."
 } > "$SUMMARY"
 
 echo "Tail/min simplifier benchmark complete."
