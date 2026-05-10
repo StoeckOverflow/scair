@@ -3,6 +3,7 @@ package scair.dialects
 import scair.dialects.affine.AffineDialect
 import scair.dialects.arith.ArithDialect
 import scair.dialects.builtin.BuiltinDialect
+import scair.dialects.cf.CFDialect
 import scair.dialects.cmath.cmath
 import scair.dialects.complex.Complex
 import scair.dialects.d_affine.dAffineDialect
@@ -48,6 +49,7 @@ val allDialects: Seq[Dialect] =
     Test,
     IRDL,
     ArithDialect,
+    CFDialect,
     MemrefDialect,
     dMemrefDialect,
     cmath,
