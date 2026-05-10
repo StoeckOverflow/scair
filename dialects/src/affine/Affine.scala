@@ -50,21 +50,42 @@ case class For(
   override def customPrint(printer: Printer): Unit =
     val block = body.blocks.head
     val iv = block.arguments.head
+    def printMapOperands(map: AffineMapAttr, operands: Seq[Operand[IndexType]]): Unit =
+      val dimCount = map.affineMap.dimensions.size
+      val dimOperands = operands.take(dimCount)
+      val symbolOperands = operands.drop(dimCount)
+      printer.print("(")
+      printer.printList(dimOperands)
+      printer.print(")")
+      if symbolOperands.nonEmpty then
+        printer.print("[")
+        printer.printList(symbolOperands)
+        printer.print("]")
     printer.print(name, " ", iv, " = ", lowerBoundMap, "(")
-    printer.printList(lowerBoundOperands)
-    printer.print(") to ", upperBoundMap, "(")
-    printer.printList(upperBoundOperands)
-    printer.print(") step ", step)
+    printer.printList(lowerBoundOperands.take(lowerBoundMap.affineMap.dimensions.size))
+    printer.print(")")
+    if lowerBoundOperands.size > lowerBoundMap.affineMap.dimensions.size then
+      printer.print("[")
+      printer.printList(lowerBoundOperands.drop(lowerBoundMap.affineMap.dimensions.size))
+      printer.print("]")
+    printer.print(" to ")
+    if upperBoundMap.affineMap.affineExprs.size > 1 then printer.print("min ")
+    printer.print(upperBoundMap)
+    printMapOperands(upperBoundMap, upperBoundOperands)
+    printer.print(" step ", step.value.value.toString)
     if inits.nonEmpty then
       printer.print(" iter_args(")
       val iterArgs = block.arguments.tail
       printer.printListF(iterArgs.zip(inits), pair =>
         val (iterArg, init) = pair
-        printer.print(iterArg, " = ", init, " : ", init.typ)
+        printer.print(iterArg, " = ", init)
       )
       printer.print(")")
+      printer.print(" -> (")
+      printer.printList(res.map(_.typ))
+      printer.print(")")
     printer.print(" {\n")
-    printer.indented(block.operations.foreach(printer.print))
+    printer.printBlockBody(block)
     printer.withIndent(printer.print("}"))
 
 given OperationCustomParser[For]:
