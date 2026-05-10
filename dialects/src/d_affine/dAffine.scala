@@ -395,9 +395,9 @@ final case class Min(
       Err(
         s"d_affine.min: expected ${map.affineMap.symbols.size} symbol operands for map ${map.affineMap}, got ${symbolOperands.size}"
       )
-    else if map.affineMap.affineExprs.size != 1 then
+    else if map.affineMap.affineExprs.isEmpty then
       Err(
-        s"d_affine.min: only single-result affine maps are supported, got ${map.affineMap.affineExprs.size} results"
+        "d_affine.min: expected at least one affine expression"
       )
     else OK(this)
 
