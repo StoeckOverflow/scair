@@ -4,7 +4,7 @@ import scair.clair.*
 import scair.ir.*
 
 val dTensorDialect = summonDialect[
-  (dTensorNatType, dTensorVectorType, dTensorMatrixType, dTensorTensorType),
+  (dTensorNatType, dTensorPosNatType, dTensorVectorType, dTensorMatrixType, dTensorTensorType),
   (
     NatConst,
     NatParam,
@@ -12,6 +12,7 @@ val dTensorDialect = summonDialect[
     NatMul,
     ShapeToIndex,
     IndexToNat,
+    NatRefinePositive,
     Empty,
     Fill,
     Dim,
