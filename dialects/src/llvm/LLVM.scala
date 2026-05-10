@@ -159,6 +159,13 @@ case class Store(
     addr: Operand[Ptr],
 ) extends DerivedOperation["llvm.store"] derives OpDefs
 
+case class Select(
+    condition: Operand[IntegerType],
+    trueValue: Operand[Attribute],
+    falseValue: Operand[Attribute],
+    res: Result[Attribute],
+) extends DerivedOperation["llvm.select"] derives OpDefs
+
 // Mirrors MLIR's LLVM GEPOp encoding. MLIR stores one entry per GEP index in
 // rawConstantIndices; constant indices are stored directly, while dynamic/SSA
 // indices are marked with LLVM::GEPOp::kDynamicIndex (the minimum int32 value)
@@ -365,6 +372,7 @@ val LLVMDialect = summonDialect[
       ICmp,
       Load,
       Store,
+      Select,
       GetElementPtr,
       ExtractValue,
       InsertValue,
