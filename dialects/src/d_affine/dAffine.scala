@@ -7,6 +7,7 @@ import scair.dialects.builtin.*
 import scair.dialects.d_memref
 import scair.ir.*
 import scair.parse.*
+import scair.parse.given
 import scair.utils.*
 
 final case class Apply(
@@ -92,6 +93,7 @@ given OperationCustomParser[Apply]:
 final case class For(
     lowerBoundOperands: Seq[Operand[IndexType]],
     upperBoundOperands: Seq[Operand[IndexType]],
+    stepOperands: Seq[Operand[IndexType]],
     inits: Seq[Operand[Attribute]],
     res: Seq[Result[Attribute]],
     lowerBoundMap: AffineMapAttr,
@@ -136,6 +138,13 @@ final case class For(
         s"d_affine.for: init/result type mismatch at position ${bad._1}; expected ${bad._2}, got ${bad._3}"
       )
     else OK(())
+
+  private def verifyStepContract(): OK[Unit] =
+    if stepOperands.size > 1 then
+      Err(s"d_affine.for: expected at most one dynamic step operand, got ${stepOperands.size}")
+    else if stepOperands.nonEmpty then OK(())
+    else if step.value.value > 0 then OK(())
+    else Err(s"d_affine.for: expected positive step, got ${step.value.value}")
 
   private def verifyBodyShape(): OK[Unit] =
     if body.blocks.size != 1 then
@@ -188,17 +197,13 @@ final case class For(
       case None =>
         Err("d_affine.for: expected non-empty body terminated by d_affine.yield")
 
-  private def verifyStepPositive(): OK[Unit] =
-    if step.value.value > 0 then OK(())
-    else Err(s"d_affine.for: expected positive step, got ${step.value.value}")
-
   override def customVerify(): OK[Operation] =
     verifyBoundContract().flatMap(_ =>
       verifyInitResultContract()
     ).flatMap(_ =>
       verifyBodyShape()
     ).flatMap(_ =>
-      verifyStepPositive()
+      verifyStepContract()
     ).flatMap(_ =>
       verifyTerminatorContract().map(_ => this)
     )
@@ -210,7 +215,10 @@ final case class For(
     printer.printList(lowerBoundOperands)
     printer.print(") to ", upperBoundMap, "(")
     printer.printList(upperBoundOperands)
-    printer.print(") step ", step)
+    printer.print(") step ")
+    stepOperands.headOption match
+      case Some(dynamicStep) => printer.print(dynamicStep, " : ", dynamicStep.typ)
+      case None              => printer.print(step)
     if inits.nonEmpty then
       printer.print(" iter_args(")
       val iterArgs = block.arguments.tail
@@ -220,8 +228,19 @@ final case class For(
       )
       printer.print(")")
     printer.print(" {\n")
-    printer.indented(block.operations.foreach(printer.print))
+    printer.printBlockBody(block)
     printer.withIndent(printer.print("}"))
+
+private enum ForStepSpec:
+  case Static(step: IntegerAttr)
+  case Dynamic(name: String, typ: IndexType)
+
+private def forStepSpecP[$: P](using Parser): P[ForStepSpec] =
+  P(
+    operandNameP.flatMap(name =>
+      P(":" ~ typeOfP[IndexType]).map(typ => ForStepSpec.Dynamic(name, typ))
+    ) | attrOfP[IntegerAttr].map(ForStepSpec.Static(_))
+  )
 
 given OperationCustomParser[For]:
   def parse[$: P](resNames: Seq[String])(using p: Parser): P[For] =
@@ -230,11 +249,11 @@ given OperationCustomParser[For]:
         sep = ","
       ) ~ ")" ~ "to" ~ attrOfP[AffineMapAttr] ~ "(" ~ operandNameP.rep(
         sep = ","
-      ) ~ ")" ~ "step" ~ attrOfP[IntegerAttr] ~ ("iter_args" ~ "(" ~
+      ) ~ ")" ~ "step" ~ forStepSpecP ~ ("iter_args" ~ "(" ~
         (operandNameP ~ "=" ~ operandNameP ~ ":" ~ typeP).rep(
           sep = ","
         ) ~ ")").?
-    ).flatMap((ivName, lbMap, lbNames, ubMap, ubNames, step, iterArgsOpt) =>
+    ).flatMap((ivName, lbMap, lbNames, ubMap, ubNames, stepSpec, iterArgsOpt) =>
       lbNames
         .foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
           acc.flatMap(seq => operandP(n, IndexType()).map(seq :+ _))
@@ -253,34 +272,45 @@ given OperationCustomParser[For]:
                   s"d_affine.for: expected ${iterArgs.size} result names to match iter_args arity, got ${resNames.size}"
                 )
               else
-                iterArgs.foldLeft(Pass(Seq.empty[Operand[Attribute]])) {
+                val parsedStep =
+                  stepSpec match
+                    case ForStepSpec.Static(step) =>
+                      Pass((Seq.empty[Operand[IndexType]], step))
+                    case ForStepSpec.Dynamic(name, typ) =>
+                      operandP(name, typ).map(stepOperand =>
+                        (Seq(stepOperand), IntegerAttr(IntData(1), I32))
+                      )
+                parsedStep.flatMap { case (stepOperands, step) =>
+                  iterArgs.foldLeft(Pass(Seq.empty[Operand[Attribute]])) {
                   case (acc, (_, initName, ty)) =>
                     acc.flatMap(seq =>
                       operandP(initName, ty.asInstanceOf[TypeAttribute]).map(seq :+ _)
                     )
-                }.flatMap(inits =>
-                  resNames
-                    .zip(iterArgs.map(_._3))
-                    .foldLeft(Pass(Seq.empty[Result[Attribute]])) {
-                      case (acc, (resName, ty)) =>
-                        acc.flatMap(seq =>
-                          resultP(resName, ty.asInstanceOf[TypeAttribute]).map(seq :+ _)
-                        )
-                    }.flatMap(results =>
-                      regionP(Seq(ivName -> IndexType()) ++ iterArgNamesAndTys).map(body =>
-                        For(
-                          lbOps,
-                          ubOps,
-                          inits,
-                          results,
-                          lbMap,
-                          ubMap,
-                          step,
-                          body,
+                  }.flatMap(inits =>
+                    resNames
+                      .zip(iterArgs.map(_._3))
+                      .foldLeft(Pass(Seq.empty[Result[Attribute]])) {
+                        case (acc, (resName, ty)) =>
+                          acc.flatMap(seq =>
+                            resultP(resName, ty.asInstanceOf[TypeAttribute]).map(seq :+ _)
+                          )
+                      }.flatMap(results =>
+                        regionP(Seq(ivName -> IndexType()) ++ iterArgNamesAndTys).map(body =>
+                          For(
+                            lbOps,
+                            ubOps,
+                            stepOperands,
+                            inits,
+                            results,
+                            lbMap,
+                            ubMap,
+                            step,
+                            body,
+                          )
                         )
                       )
-                    )
-                )
+                  )
+                }
             )
         )
     )

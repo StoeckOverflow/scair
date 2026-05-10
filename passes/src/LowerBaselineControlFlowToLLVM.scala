@@ -189,7 +189,7 @@ private final class Builder(val funcOp: func.Func):
         case other    => lowerSimpleOp(other)
       }
       yielded.foreach { y =>
-        val step = cfg.emitIndexConstant(current, op.step.value.value)
+        val step = cfg.emitIndexConstant(current, inner.step.value.value)
         val nextIv = cfg.emitAdd(current, innerIv, step)
         cfg.emitBr(
           current,

@@ -71,6 +71,15 @@ private final class Builder(val funcOp: func.Func):
       case Right(v) => remapper(v)
     }
 
+  private def lowerStepWith(
+      op: d_affine.For,
+      remapper: Value[Attribute] => Value[Attribute],
+      block: Block,
+  ): Value[Attribute] =
+    op.stepOperands.headOption match
+      case Some(dynamicStep) => remapper(dynamicStep)
+      case None              => cfg.emitIndexConstant(block, op.step.value.value)
+
   private def lowerSimpleOp(
       op: Operation,
   ): Unit =
@@ -219,7 +228,11 @@ private final class Builder(val funcOp: func.Func):
         case other             => lowerSimpleOp(other)
       }
       yielded.foreach { y =>
-        val step = cfg.emitIndexConstant(current, inner.step.value.value)
+        val step = lowerStepWith(
+          inner,
+          v => innerHeaderMap.toMap.getOrElse(v, remap(v)),
+          current,
+        )
         val nextIv = cfg.emitAdd(current, innerIv, step)
         cfg.emitBr(
           current,
@@ -229,7 +242,7 @@ private final class Builder(val funcOp: func.Func):
       }
 
       current = outerLatch
-      val outerStep = cfg.emitIndexConstant(current, op.step.value.value)
+      val outerStep = lowerStepWith(op, remap, current)
       val nextOuter = cfg.emitAdd(current, innerOuterIv, outerStep)
       cfg.emitBr(current, Seq(nextOuter, innerAcc), outerHeader)
 
@@ -271,7 +284,7 @@ private final class Builder(val funcOp: func.Func):
           case other             => lowerSimpleOp(other)
         }
         yielded.foreach { y =>
-          val step = cfg.emitIndexConstant(current, op.step.value.value)
+          val step = lowerStepWith(op, remap, current)
           val nextIv = cfg.emitAdd(current, iv, step)
           cfg.emitBr(current, Seq(nextIv, y), header)
         }
@@ -309,7 +322,7 @@ private final class Builder(val funcOp: func.Func):
           case y: d_affine.Yield => yielded = y.args.map(remap)
           case other             => lowerSimpleOp(other)
         }
-        val step = cfg.emitIndexConstant(current, op.step.value.value)
+        val step = lowerStepWith(op, remap, current)
         val nextIv = cfg.emitAdd(current, iv, step)
         cfg.emitBr(current, Seq(nextIv) ++ yielded, header)
         current = exit
@@ -362,7 +375,7 @@ private final class Builder(val funcOp: func.Func):
                 case other =>
                   lowerSimpleOp(other)
               }
-              val step = cfg.emitIndexConstant(current, op.step.value.value)
+              val step = lowerStepWith(op, remap, current)
               val nextIv = cfg.emitAdd(current, iv, step)
               cfg.emitBr(current, Seq(nextIv), header)
               current = exit

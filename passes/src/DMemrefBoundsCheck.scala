@@ -46,7 +46,7 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
       case Some(b: Block) =>
         b.containerRegion.flatMap(_.containerOperation) match
           case Some(
-                d_affine.For(_, ubOperands, _, _, _, ubMap, _, _)
+                d_affine.For(_, ubOperands, _, _, _, _, ubMap, _, _)
               ) if b.arguments.nonEmpty && (b.arguments.head eq iv) =>
             recoverProjectedBoundOperand(ubOperands, ubMap)
           case _ => None

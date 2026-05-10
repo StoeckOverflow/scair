@@ -83,7 +83,8 @@ object run_d_affine_for extends OpImpl[d_affine.For]:
   ): Option[Any] =
     val lbCount = op.lowerBoundOperands.size
     val ubCount = op.upperBoundOperands.size
-    val minExpected = lbCount + ubCount
+    val stepCount = op.stepOperands.size
+    val minExpected = lbCount + ubCount + stepCount
     if args.size < minExpected then
       throw new Exception(
         s"d_affine.for expects at least $minExpected bound operands"
@@ -95,7 +96,15 @@ object run_d_affine_for extends OpImpl[d_affine.For]:
       )
       val lb = evalSingleResultMap(op.lowerBoundMap, lbInts, "d_affine.for lower bound")
       val ub = evalSingleResultMap(op.upperBoundMap, ubInts, "d_affine.for upper bound")
-      val step = op.step.value.value.toInt
+      val step =
+        op.stepOperands.headOption match
+          case Some(stepOperand) =>
+            asNatInt(
+              interpreter.lookup_op(stepOperand, ctx),
+              "d_affine.for dynamic step operand",
+            )
+          case None =>
+            op.step.value.value.toInt
       val bodyBlock = op.body.blocks.head
       val iv = bodyBlock.arguments.head
       val iterArgs = bodyBlock.arguments.tail
@@ -106,7 +115,7 @@ object run_d_affine_for extends OpImpl[d_affine.For]:
         case None =>
           throw new Exception("d_affine.for expects non-empty loop body")
 
-      var carried = args.drop(minExpected)
+      var carried = op.inits.map(init => interpreter.lookup_op(init, ctx))
       var i = lb
       while i < ub do
         ctx.scopedDict.update(iv, i)

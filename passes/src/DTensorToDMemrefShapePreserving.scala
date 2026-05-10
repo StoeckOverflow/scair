@@ -125,6 +125,7 @@ private def mkFor(
   d_affine.For(
     lowerBoundOperands = Seq(asIndex(lb)),
     upperBoundOperands = Seq(asIndex(ub)),
+    stepOperands = Seq.empty,
     inits = Seq.empty,
     res = Seq.empty,
     lowerBoundMap = identityMap,

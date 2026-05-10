@@ -96,6 +96,7 @@ final case class DAffineForLoopAdapter(loop: d_affine.For) extends LoopLikeAdapt
     val rebuiltLoop = d_affine.For(
       loop.lowerBoundOperands,
       loop.upperBoundOperands,
+      loop.stepOperands,
       loop.inits,
       loop.res.map(r => Result(r.typ)),
       loop.lowerBoundMap,

@@ -310,6 +310,9 @@ private def lowerOps(
           op.inits.map(v => remapValue(v, valueMapper).asInstanceOf[Operand[Attribute]])
         val bodyArgTypes =
           Seq(IndexType().asInstanceOf[TypeAttribute]) ++ loweredInits.map(_.typ.asInstanceOf[TypeAttribute])
+        val loweredBody = lowerRegionWithArgTypes(op.body, bodyArgTypes, valueMapper)
+        if !loweredBody.blocks.head.operations.lastOption.exists(_.isInstanceOf[d_affine.Yield]) then
+          loweredBody.blocks.head.addOp(d_affine.Yield(Seq.empty))
         Seq(
           d_affine.For(
             op.lowerBoundOperands.map(v =>
@@ -318,12 +321,13 @@ private def lowerOps(
             op.upperBoundOperands.map(v =>
               remapValue(v, valueMapper).asInstanceOf[Operand[IndexType]]
             ),
+            Seq.empty,
             loweredInits,
             loweredInits.map(v => Result(v.typ.asInstanceOf[TypeAttribute])),
             op.lowerBoundMap,
             op.upperBoundMap,
             op.step,
-            lowerRegionWithArgTypes(op.body, bodyArgTypes, valueMapper),
+            loweredBody,
           )
         )
       case op: scf.IfOp =>
