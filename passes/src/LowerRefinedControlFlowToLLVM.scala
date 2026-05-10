@@ -8,6 +8,7 @@ import scair.dialects.scf
 import scair.ir.*
 import scair.passes.control_flow_helpers.*
 import scair.passes.lowering_helpers.FunctionLoweringState
+import scair.passes.NatProvenance
 import scair.transformations.*
 
 import scala.collection.mutable
@@ -27,16 +28,18 @@ private final class Builder(val funcOp: func.Func):
   private def remap(v: Value[Attribute]): Value[Attribute] =
     state.remap(v)
 
+  private def unsupportedLoop(reason: String): Nothing =
+    throw new Exception(
+      s"lower-refined-control-flow-to-llvm cannot lower d_affine.for: $reason. " +
+        "Supported affine maps are constants, dims/symbols, add/sub, and constant multiplication; " +
+        "run d-affine-to-affine-compatible first when the IR should enter the stock affine pipeline."
+    )
+
   private def lowerBound(
       operands: Seq[Value[Attribute]],
       map: AffineMapAttr,
   ): Option[Value[Attribute]] =
-    identityOrConstBound(operands.map(remap), map).map {
-      case Left(k) =>
-        cfg.emitIndexConstant(current, k)
-      case Right(v) =>
-        remap(v)
-    }
+    cfg.materializeAffineMap(current, operands.map(remap), map)
 
   private def deepCopyOp(op: Operation): Operation =
     state.deepCopyOp(op)
@@ -66,10 +69,18 @@ private final class Builder(val funcOp: func.Func):
       remapper: Value[Attribute] => Value[Attribute],
       block: Block,
   ): Option[Value[Attribute]] =
-    identityOrConstBound(operands.map(remapper), map).map {
-      case Left(k)  => cfg.emitIndexConstant(block, k)
-      case Right(v) => remapper(v)
-    }
+    cfg.materializeAffineMap(block, operands.map(remapper), map)
+
+  private def lowerAffineApplyLike(
+      operands: Seq[Value[Attribute]],
+      map: AffineMapAttr,
+      result: Value[Attribute],
+  ): Unit =
+    val lowered = cfg.materializeAffineMap(current, operands.map(remap), map)
+      .getOrElse(unsupportedLoop(
+        explainUnsupportedAffineMap(map).getOrElse("unsupported d_affine.apply/min affine map")
+      ))
+    state.valueMap(result) = lowered
 
   private def lowerStepWith(
       op: d_affine.For,
@@ -84,6 +95,10 @@ private final class Builder(val funcOp: func.Func):
       op: Operation,
   ): Unit =
     op match
+      case apply: d_affine.Apply =>
+        lowerAffineApplyLike(apply.dimOperands ++ apply.symbolOperands, apply.map, apply.res)
+      case min: d_affine.Min =>
+        lowerAffineApplyLike(min.dimOperands ++ min.symbolOperands, min.map, min.res)
       case nested: d_affine.For =>
         lowerLoop(nested)
       case ifOp: scf.IfOp =>
@@ -161,7 +176,7 @@ private final class Builder(val funcOp: func.Func):
         op.upperBoundMap,
         remap,
         outerHeader,
-      ).get
+      ).getOrElse(unsupportedLoop("unsupported outer upper bound"))
       val outerCmp = cfg.emitICmpSlt(outerHeader, outerIv, outerUb)
       cfg.emitCondBr(
         outerHeader,
@@ -183,7 +198,7 @@ private final class Builder(val funcOp: func.Func):
         inner.lowerBoundMap,
         remap,
         outerBodyEntry,
-      ).get
+      ).getOrElse(unsupportedLoop("unsupported inner lower bound"))
       cfg.emitBr(
         outerBodyEntry,
         Seq(outerIv, innerLb, outerAcc) ++ prefixValues,
@@ -202,7 +217,7 @@ private final class Builder(val funcOp: func.Func):
         inner.upperBoundMap,
         v => innerHeaderMap.toMap.getOrElse(v, remap(v)),
         innerHeader,
-      ).get
+      ).getOrElse(unsupportedLoop("unsupported inner upper bound"))
       val innerCmp = cfg.emitICmpSlt(innerHeader, innerIv, innerUb)
       cfg.emitCondBr(
         innerHeader,
@@ -271,7 +286,7 @@ private final class Builder(val funcOp: func.Func):
           op.upperBoundMap,
           remap,
           header,
-        ).get
+        ).getOrElse(unsupportedLoop("unsupported loop upper bound"))
         val cmp = cfg.emitICmpSlt(header, iv, ub)
         cfg.emitCondBr(header, cmp, Seq.empty, Seq.empty, body, exit)
         current = body
@@ -312,7 +327,7 @@ private final class Builder(val funcOp: func.Func):
           op.upperBoundMap,
           remap,
           header,
-        ).get
+        ).getOrElse(unsupportedLoop("unsupported loop upper bound"))
         val cmp = cfg.emitICmpSlt(header, iv, ub)
         cfg.emitCondBr(header, cmp, Seq.empty, carried, body, exit)
         current = body
@@ -384,12 +399,20 @@ private final class Builder(val funcOp: func.Func):
   private def lowerLoop(
       op: d_affine.For,
   ): Unit =
+    op.stepOperands.headOption.foreach { step =>
+      if !NatProvenance.isPositive(step) then
+        unsupportedLoop("dynamic step is not proven strictly positive")
+    }
     if op.inits.isEmpty && op.res.isEmpty then
-      lowerVoidFor(op)
+      if !lowerVoidFor(op) then unsupportedLoop("unsupported void loop shape or bound")
     else if op.res.size > 1 then
-      lowerMultiResultFor(op).foreach(vals => state.valueMap.addAll(op.res.zip(vals)))
+      lowerMultiResultFor(op) match
+        case Some(vals) => state.valueMap.addAll(op.res.zip(vals))
+        case None       => unsupportedLoop("unsupported multi-result loop shape or lower bound")
     else
-      lowerFor(op).foreach(v => state.valueMap(op.res.head) = v)
+      lowerFor(op) match
+        case Some(v) => state.valueMap(op.res.head) = v
+        case None    => unsupportedLoop("unsupported single-result loop shape or lower bound")
 
   def lower(): func.Func =
     funcOp.body.blocks.head.operations.foreach {
@@ -409,10 +432,14 @@ private def lowerFunc(op: func.Func): Option[func.Func] =
 
 private val LowerFunc = pattern {
   case op: func.Func if op.body.blocks.exists(_.operations.exists {
-        case _: d_affine.For | _: scf.IfOp => true
-        case _                             => false
-      }) =>
-    lowerFunc(op).get
+      case _: d_affine.For | _: d_affine.Apply | _: d_affine.Min | _: scf.IfOp => true
+      case _                                                                   => false
+    }) =>
+    lowerFunc(op).getOrElse(
+      throw new Exception(
+        "lower-refined-control-flow-to-llvm only supports single-block func.func bodies"
+      )
+    )
 }
 
 // Lowers refined affine control flow to explicit LLVM CFG.

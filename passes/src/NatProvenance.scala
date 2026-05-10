@@ -118,6 +118,14 @@ object NatProvenance:
       case (Some(l), Some(r)) => l eq r
       case _                  => false
 
+  def equivalentNatOrConst(lhs: Value[Attribute], rhs: Value[Attribute]): Boolean =
+    (resolveNat(lhs), resolveNat(rhs)) match
+      case (Some(l), Some(r)) if l eq r => true
+      case _ =>
+        (exactConst(lhs), exactConst(rhs)) match
+          case (Some(l), Some(r)) => l == r
+          case _                  => false
+
   def exactConst(v: Value[Attribute]): Option[BigInt] =
     val memo = mutable.Map.empty[Value[Attribute], Option[BigInt]]
     val inProgress = mutable.Set.empty[Value[Attribute]]
@@ -150,6 +158,36 @@ object NatProvenance:
                 evalAffineApplyConst(args, map, eval)
               case Some(arith.Constant(IntegerAttr(IntData(c), _), _)) => Some(c)
               case _                                                    => None
+            inProgress -= base
+            out
+        },
+      )
+
+    eval(v)
+
+  def isPositive(v: Value[Attribute]): Boolean =
+    val memo = mutable.Map.empty[Value[Attribute], Boolean]
+    val inProgress = mutable.Set.empty[Value[Attribute]]
+
+    def eval(x: Value[Attribute]): Boolean =
+      val base = resolveNat(x).getOrElse(x)
+      memo.getOrElseUpdate(
+        base, {
+          if inProgress.contains(base) then false
+          else
+            inProgress += base
+            val out =
+              base.typ.isInstanceOf[dTensorPosNatType] ||
+                exactConst(base).exists(_ > 0) ||
+                (base.owner match
+                  case Some(ShapeToIndex(nat, _))    => eval(nat)
+                  case Some(NatAdd(lhs, rhs, _))     => eval(lhs) || eval(rhs)
+                  case Some(NatMul(lhs, rhs, _))     => eval(lhs) && eval(rhs)
+                  case Some(d_affine.Apply(dimOperands, symbolOperands, map, _)) =>
+                    recoverProjectedNatFromApply(dimOperands, symbolOperands, map).exists(eval)
+                  case Some(arith.Constant(IntegerAttr(IntData(c), _), _)) => c > 0
+                  case _                                                    => false
+                )
             inProgress -= base
             out
         },
