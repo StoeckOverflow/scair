@@ -71,8 +71,8 @@ write_route_manifest() {
 | Case | Canonical route | Expected property |
 |---|---|---|
 | `ordinary_conv_tail` | `ordinary_conv_tail` | Full Conv2D kernel with ordinary `Ci * Kh * Kw` index product keeps tail/min cleanup. |
-| `dependent_conv_guarded_tail_simplified` | `dependent_conv_guarded_tail_simplified` | Full Conv2D kernel uses the same guarded tiling shape, then removes the emitted tail/min with explicit `dtensor.nat.mul` proof. |
-| `dependent_conv_exact_dynamic` | `dependent_conv_exact_dynamic` | Full Conv2D kernel with explicit `dtensor.nat.mul` product exact-tiles by dynamic `Kh * Kw` with no tail. |
+| `dependent_conv_guarded_tail_simplified` | `dependent_conv_guarded_tail_simplified` | Full Conv2D kernel uses the same guarded tiling shape, then removes the emitted tail/min for a proven-positive dynamic `Kw` factor with explicit `dtensor.nat.mul` proof. |
+| `dependent_conv_exact_dynamic` | `dependent_conv_exact_dynamic` | Full Conv2D kernel with explicit `dtensor.nat.mul` product exact-tiles by the dynamic `Kw` factor with no tail. |
 | `dependent_conv_exact_static_affine` | `dependent_conv_exact_static_affine` | Full specialized 3x3 Conv2D kernel exact-tiles by static `Kh * Kw = 9` and bridges to stock `affine.for`. |
 
 This is a structural tiling benchmark over the same Conv2D kernel shape used by
@@ -99,7 +99,7 @@ MD
     "expected_tail": "none_after_simplification",
     "guarded_stage_tail": "arith_minsi",
     "product_representation": "dtensor.nat.mul",
-    "positivity_source": "posnat_khkw_type"
+    "positivity_source": "posnat_kw_type"
   },
   {
     "case": "dependent_conv_exact_dynamic",
@@ -107,7 +107,7 @@ MD
     "script_route": "canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps",
     "expected_tail": "none",
     "product_representation": "dtensor.nat.mul",
-    "positivity_source": "posnat_khkw_type"
+    "positivity_source": "posnat_kw_type"
   },
   {
     "case": "dependent_conv_exact_static_affine",
@@ -168,13 +168,13 @@ validate_case() {
       ;;
     dependent_conv_exact_dynamic)
       require_ir_pattern "$path" 'dtensor\.nat\.mul' "dependent conv route must preserve nat product proof before erasure"
-      require_ir_pattern "$path" 'step %[A-Za-z0-9_]+ : index' "dependent conv route must use proven positive dynamic KhKw step"
+      require_ir_pattern "$path" 'step %[A-Za-z0-9_]+ : index' "dependent conv route must use a proven-positive dynamic Kw factor step"
       require_ir_pattern "$path" 'd_memref\.load|d_memref\.store' "dependent conv route must keep full Conv2D d_memref memory body"
       reject_ir_pattern "$path" 'arith\.minsi| to min |affine\.min|d_affine\.min' "dependent conv exact route must not keep tail/min"
       ;;
     dependent_conv_guarded_tail_simplified)
       require_ir_pattern "$path" 'dtensor\.nat\.mul' "dependent guarded conv route must preserve nat product proof before erasure"
-      require_ir_pattern "$path" 'step %[A-Za-z0-9_]+ : index' "dependent guarded conv route must use proven positive dynamic KhKw step"
+      require_ir_pattern "$path" 'step %[A-Za-z0-9_]+ : index' "dependent guarded conv route must use a proven-positive dynamic Kw factor step"
       require_ir_pattern "$path" 'd_memref\.load|d_memref\.store' "dependent guarded conv route must keep full Conv2D d_memref memory body"
       reject_ir_pattern "$path" 'arith\.minsi| to min |affine\.min|d_affine\.min' "dependent guarded conv route must remove tail/min after simplification"
       ;;
@@ -263,10 +263,10 @@ if route_enabled "dependent_conv_exact_dynamic"; then
     "dependent_conv2d_tiling_kernel.mlir" \
     "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
     "Ci*(Kh*Kw) as dtensor.nat.mul" \
-    "dynamic_KhKw" \
-    "posnat_khkw_type" \
+    "dynamic_Kw" \
+    "posnat_kw_type" \
     "none" \
-    "explicit_full_conv2d_product_exact_tiles_without_tail"
+    "explicit_full_conv2d_product_exact_tiles_by_kw_factor_without_tail"
 fi
 
 if route_enabled "dependent_conv_guarded_tail_simplified"; then
@@ -277,10 +277,10 @@ if route_enabled "dependent_conv_guarded_tail_simplified"; then
     "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
     "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
     "Ci*(Kh*Kw) as dtensor.nat.mul" \
-    "dynamic_KhKw" \
-    "posnat_khkw_type" \
+    "dynamic_Kw" \
+    "posnat_kw_type" \
     "none" \
-    "same_guarded_conv2d_tiling_shape_tail_removed_by_dependent_natmul_proof"
+    "same_guarded_conv2d_tiling_shape_tail_removed_by_dependent_kw_factor_proof"
 fi
 
 if route_enabled "dependent_conv_exact_static_affine"; then

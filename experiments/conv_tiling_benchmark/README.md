@@ -21,11 +21,12 @@ The benchmark compares ordinary index arithmetic against explicit
   tiling keeps tail/min cleanup.
 - `dependent_conv_guarded_tail_simplified`: uses the same guarded tiling style
   on the dependent Conv2D kernel, records the guarded artifact with a tail/min,
-  then runs `dependent-tail-min-simplify` to remove that tail using explicit
-  `dtensor.nat.mul` provenance.
+  then runs `dependent-tail-min-simplify` to remove that tail for the
+  proven-positive dynamic `Kw` factor using explicit `dtensor.nat.mul`
+  provenance.
 - `dependent_conv_exact_dynamic`: represents `Ci * (Kh * Kw)` with explicit nat
-  product provenance and `Kh * Kw : !dtensor.posnat`; exact tiling uses a
-  dynamic proven-positive step and removes tail/min cleanup.
+  product provenance; exact tiling uses the dynamic proven-positive `Kw` factor
+  as its step and removes tail/min cleanup.
 - `dependent_conv_exact_static_affine`: represents a specialized 3x3 Conv2D
   kernel as `Ci * 9` with an explicit static nat factor; exact tiling bridges
   to stock `affine.for` with static step 9.
@@ -65,7 +66,7 @@ The expected result is structural:
 - the dependent guarded route starts from the same conservative tail shape and
   removes the tail only after the proof-consuming simplifier runs;
 - explicit dynamic `dtensor.nat.mul` product tiling is tail-free in the full
-  kernel when the tile factor is proven positive;
+  kernel when the selected `Kw` tile factor is proven positive;
 - explicit static nat factors can bridge the full specialized 3x3 kernel back
   to stock affine-compatible loops.
 
