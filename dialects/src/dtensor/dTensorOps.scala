@@ -7,35 +7,51 @@ import scair.ir.*
 import scair.utils.*
 
 final case class NatParam(
-    res: Result[dTensorNatType]
+    res: Result[dTensorNatLikeType]
 ) extends DerivedOperation["dtensor.nat.param"] derives OpDefs
 
 final case class NatConst(
     value: IntegerAttr,
-    res: Result[dTensorNatType],
+    res: Result[dTensorNatLikeType],
 ) extends DerivedOperation["dtensor.nat.const"]
     with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
-    if value.value.value >= 0 then OK(this)
-    else Err(s"dtensor.nat.const: expected non-negative literal, got $value")
+    if value.value.value < 0 then
+      Err(s"dtensor.nat.const: expected non-negative literal, got $value")
+    else if res.typ.isInstanceOf[dTensorPosNatType] && value.value.value <= 0 then
+      Err(s"dtensor.nat.const: expected positive literal for !dtensor.posnat, got $value")
+    else OK(this)
 
 final case class NatAdd(
-    lhs: Operand[dTensorNatType],
-    rhs: Operand[dTensorNatType],
-    res: Result[dTensorNatType],
+    lhs: Operand[dTensorNatLikeType],
+    rhs: Operand[dTensorNatLikeType],
+    res: Result[dTensorNatLikeType],
 ) extends DerivedOperation["dtensor.nat.add"]
-    with NoMemoryEffect derives OpDefs
+    with NoMemoryEffect derives OpDefs:
+
+  override def customVerify(): OK[Operation] =
+    if res.typ.isInstanceOf[dTensorPosNatType] &&
+      !lhs.typ.isInstanceOf[dTensorPosNatType] &&
+      !rhs.typ.isInstanceOf[dTensorPosNatType]
+    then Err("dtensor.nat.add: !dtensor.posnat result requires at least one !dtensor.posnat operand")
+    else OK(this)
 
 final case class NatMul(
-    lhs: Operand[dTensorNatType],
-    rhs: Operand[dTensorNatType],
-    res: Result[dTensorNatType],
+    lhs: Operand[dTensorNatLikeType],
+    rhs: Operand[dTensorNatLikeType],
+    res: Result[dTensorNatLikeType],
 ) extends DerivedOperation["dtensor.nat.mul"]
-    with NoMemoryEffect derives OpDefs
+    with NoMemoryEffect derives OpDefs:
+
+  override def customVerify(): OK[Operation] =
+    if res.typ.isInstanceOf[dTensorPosNatType] &&
+      (!lhs.typ.isInstanceOf[dTensorPosNatType] || !rhs.typ.isInstanceOf[dTensorPosNatType])
+    then Err("dtensor.nat.mul: !dtensor.posnat result requires two !dtensor.posnat operands")
+    else OK(this)
 
 final case class ShapeToIndex(
-    nat: Operand[dTensorNatType],
+    nat: Operand[dTensorNatLikeType],
     res: Result[IndexType],
 ) extends DerivedOperation["dtensor.shape.to_index"]
     with NoMemoryEffect derives OpDefs
@@ -45,6 +61,17 @@ final case class IndexToNat(
     res: Result[dTensorNatType],
 ) extends DerivedOperation["dtensor.index_to_nat"]
     with NoMemoryEffect derives OpDefs
+
+final case class NatRefinePositive(
+    nat: Operand[dTensorNatLikeType],
+    proof: Operand[IntegerType],
+    res: Result[dTensorPosNatType],
+) extends DerivedOperation["dtensor.nat.refine_positive"]
+    with NoMemoryEffect derives OpDefs:
+
+  override def customVerify(): OK[Operation] =
+    if proof.typ == I1 then OK(this)
+    else Err(s"dtensor.nat.refine_positive: expected i1 proof, got ${proof.typ}")
 
 final case class Empty(
     res: Result[dTensorTensorType]

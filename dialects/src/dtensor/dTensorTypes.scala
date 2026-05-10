@@ -10,10 +10,16 @@ import scair.utils.*
 type DimParam = ValueAttribute
 
 sealed trait dTensorType extends ParametrizedAttribute, TypeAttribute
+sealed trait dTensorNatLikeType extends TypeAttribute
 
 final case class dTensorNatType()
-    extends TypeAttribute
+    extends dTensorNatLikeType
     with DerivedAttribute["dtensor.nat"]
+    derives AttrDefs
+
+final case class dTensorPosNatType()
+    extends dTensorNatLikeType
+    with DerivedAttribute["dtensor.posnat"]
     derives AttrDefs
 
 /** Surface-shape aliases:

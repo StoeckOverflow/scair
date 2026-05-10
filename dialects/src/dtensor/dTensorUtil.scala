@@ -21,11 +21,11 @@ object dTensorTypeUtil:
       Err("shape SSA parameter contains a cyclic !value<...> reference")
     else
       v.typ match
-        case _: dTensorNatType => OK(v)
+        case _: dTensorNatLikeType => OK(v)
         case ValueRefType(ref) => resolveNatBase(ref.getVal(), seen + v)
         case other             =>
           Err(
-            s"shape SSA parameter must have type !dtensor.nat, got ${renderAttr(other)}"
+            s"shape SSA parameter must have type !dtensor.nat or !dtensor.posnat, got ${renderAttr(other)}"
           )
 
   def resolveNatValue(v: Value[Attribute]): OK[Value[Attribute]] =
