@@ -109,7 +109,7 @@ builtin.module {
   %bad1 = "test.bad1"() : () -> !dtensor.tensor<[%f], f32>
 }
 
-// VERIFY: shape SSA parameter must have type !dtensor.nat, got i32
+// VERIFY: shape SSA parameter must have type !dtensor.nat or !dtensor.posnat, got i32
 
 // -----
 

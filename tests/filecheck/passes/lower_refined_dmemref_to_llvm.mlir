@@ -1,4 +1,4 @@
-// RUN: scair-opt %s -p lower-dmemref-to-llvm | filecheck %s -dump-input=always
+// RUN: scair-opt %s -p lower-dmemref-to-llvm | filecheck %s --implicit-check-not=llvm.extractvalue --implicit-check-not=llvm.insertvalue -dump-input=always
 
 builtin.module {
   func.func @semi_affine_layout_map(%stride0 : index, %stride1 : index) -> f32 {

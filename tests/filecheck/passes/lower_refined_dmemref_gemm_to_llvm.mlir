@@ -1,4 +1,4 @@
-// RUN: scair-opt %s -p lower-dmemref-to-llvm | filecheck %s
+// RUN: scair-opt %s -p lower-dmemref-to-llvm | filecheck %s --implicit-check-not=llvm.extractvalue --implicit-check-not=llvm.insertvalue
 
 builtin.module {
   func.func @main() -> i32 {

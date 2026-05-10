@@ -116,7 +116,7 @@ func.func @down_propagate_for() {
 }
 // CHECK-NEXT:    func.func @down_propagate_for() {
 // CHECK-NEXT:      %0 = "arith.constant"() <{value = 1 : i32}> : () -> i32
-// CHECK-NEXT:      affine.for %1 = #map1() to #map2() step 1 : index {
+// CHECK-NEXT:      affine.for %1 = #map1() to #map2() step 1 {
 // CHECK-NEXT:        "foo"(%0, %0) : (i32, i32) -> ()
 // CHECK-NEXT:        affine.yield
 // CHECK-NEXT:      }
@@ -145,7 +145,7 @@ func.func @up_propagate_for() -> i32 {
   func.return %0 : i32
 }
 // CHECK-NEXT:    func.func @up_propagate_for() -> i32 {
-// CHECK-NEXT:      affine.for %0 = #map1() to #map2() step 1 : index {
+// CHECK-NEXT:      affine.for %0 = #map1() to #map2() step 1 {
 // CHECK-NEXT:        %1 = "arith.constant"() <{value = 1 : i32}> : () -> i32
 // CHECK-NEXT:        "foo"(%1) : (i32) -> ()
 // CHECK-NEXT:        affine.yield

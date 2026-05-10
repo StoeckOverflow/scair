@@ -19,6 +19,23 @@ builtin.module {
 // -----
 
 builtin.module {
+  %lb_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+  %ub_nat = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
+  %step_nat = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
+  %lb = "dtensor.shape.to_index"(%lb_nat) : (!dtensor.nat) -> index
+  %ub = "dtensor.shape.to_index"(%ub_nat) : (!dtensor.nat) -> index
+  %step = "dtensor.shape.to_index"(%step_nat) : (!dtensor.nat) -> index
+  d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step %step : index {
+    d_affine.yield
+  }
+}
+
+// VERIFY: d_affine.for %{{.*}} = #{{.*}}(%{{.*}}) to #{{.*}}(%{{.*}}) step %{{.*}} : index {
+// VERIFY: d_affine.yield
+
+// -----
+
+builtin.module {
   %i = "arith.constant"() <{value = 7 : index}> : () -> index
   %r = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%i)[%i] : (index)[index] -> index
   "test.keep"(%r) : (index) -> ()

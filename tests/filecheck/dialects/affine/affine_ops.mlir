@@ -45,7 +45,7 @@
 // CHECK-NEXT:  #map7 = affine_map<(d0)[] -> (d0)>
 // CHECK-NEXT:  builtin.module {
 // CHECK-NEXT:    %0, %1, %2, %3 = "test.op"() : () -> (index, f64, memref<2x3xf64>, index)
-// CHECK-NEXT:    affine.for %4 = #map() to #map1() step 1 : index {
+// CHECK-NEXT:    affine.for %4 = #map() to #map1() step 1 {
 // CHECK-NEXT:      affine.yield
 // CHECK-NEXT:    }
 // CHECK-NEXT:    "affine.parallel"(%0) <{upperBoundsGroups = dense<1> : vector<1xi32>, upperBoundsMap = #map2, lowerBoundsMap = #map, lowerBoundsGroups = dense<1> : vector<1xi32>, reductions = [], steps = [1]}> ({
@@ -65,7 +65,7 @@
 // CHECK-NEXT:    }, {
 // CHECK-NEXT:      affine.yield
 // CHECK-NEXT:    }) : () -> ()
-// CHECK-NEXT:    %8 = affine.for %9 = #map() to #map7(%0) step 1 : index iter_args(%10 = %3 : index) {
+// CHECK-NEXT:    %8 = affine.for %9 = #map() to #map7(%0) step 1 iter_args(%10 = %3) -> (index) {
 // CHECK-NEXT:      affine.yield %10 : index
 // CHECK-NEXT:    }
 // CHECK-NEXT:  }

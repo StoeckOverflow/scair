@@ -237,3 +237,21 @@ builtin.module {
   // expected-error @below {{dtensor.nat.const: expected non-negative literal}}
   %n = "dtensor.nat.const"() <{value = -1 : i32}> : () -> !dtensor.nat
 }
+
+// -----
+
+// Invalid: posnat const must be strictly positive.
+builtin.module {
+  // expected-error @below {{dtensor.nat.const: expected positive literal for !dtensor.posnat}}
+  %n = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.posnat
+}
+
+// -----
+
+// Invalid: posnat product requires positive operands.
+builtin.module {
+  %n = "dtensor.nat.param"() : () -> !dtensor.nat
+  %p = "dtensor.nat.param"() : () -> !dtensor.posnat
+  // expected-error @below {{dtensor.nat.mul: !dtensor.posnat result requires two !dtensor.posnat operands}}
+  %bad = "dtensor.nat.mul"(%n, %p) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.posnat
+}
