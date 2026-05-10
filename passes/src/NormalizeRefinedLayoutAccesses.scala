@@ -25,8 +25,8 @@ private def materializeLayoutParam(param: d_memref.LayoutParam): (Vector[Operati
     case v: ValueAttribute =>
       v.getVal().typ match
         case _: IndexType => (Vector.empty, v.getVal())
-        case _: dTensor.dTensorNatType =>
-          val cast = dTensor.ShapeToIndex(v.getVal().asInstanceOf[Operand[dTensor.dTensorNatType]], Result(IndexType()))
+        case _: dTensor.dTensorNatLikeType =>
+          val cast = dTensor.ShapeToIndex(v.getVal().asInstanceOf[Operand[dTensor.dTensorNatLikeType]], Result(IndexType()))
           (Vector(cast), cast.res)
         case ValueRefType(ref) =>
           materializeLayoutParam(ValueAttribute(ref.getVal()))

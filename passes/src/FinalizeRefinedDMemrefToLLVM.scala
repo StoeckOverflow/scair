@@ -38,7 +38,7 @@ private final class Builder(val funcOp: func.Func):
   private def convertCarrierType(attr: Attribute): Attribute =
     attr match
       case _: d_memref.dMemrefMemrefType => llvm.Ptr()
-      case _: dTensor.dTensorNatType     => llvmIndexType
+      case _: dTensor.dTensorNatLikeType => llvmIndexType
       case _: IndexType                  => llvmIndexType
       case other                         => other
 
@@ -133,7 +133,7 @@ private final class Builder(val funcOp: func.Func):
           )
           emit(entry, alias)
           state.valueMap(oldArg) = alias.res
-        case _: dTensor.dTensorNatType =>
+        case _: dTensor.dTensorNatLikeType =>
           state.valueMap(oldArg) = newArg
         case _ => ()
     }
@@ -303,7 +303,7 @@ private final class Builder(val funcOp: func.Func):
   private def lowerCall(call: func.Call, block: Block): func.Call =
     val loweredOperands = call._operands.map { operand =>
       operand.typ match
-        case _: dTensor.dTensorNatType =>
+        case _: dTensor.dTensorNatLikeType =>
           materializeNatOrIndex(operand, block).asInstanceOf[Operand[Attribute]]
         case ValueRefType(_) =>
           materializeNatOrIndex(operand, block).asInstanceOf[Operand[Attribute]]

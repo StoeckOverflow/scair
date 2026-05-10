@@ -173,7 +173,7 @@ private def materializeDimOperands(
         param match
           case p: ValueAttribute =>
             p.getVal().typ match
-              case _: dTensor.dTensorNatType =>
+              case _: dTensor.dTensorNatLikeType =>
                 p.getVal().asInstanceOf[Operand[Attribute]]
               case _: IndexType =>
                 val nat = dTensor.IndexToNat(

@@ -91,7 +91,7 @@ private def originalFunctionType(op: llvm.Func): FunctionType =
 
 private def containsInternalABIType(attr: Attribute): Boolean =
   attr match
-    case _: dTensor.dTensorNatType | _: d_memref.dMemrefMemrefType =>
+    case _: dTensor.dTensorNatLikeType | _: d_memref.dMemrefMemrefType =>
       true
     case ValueRefType(ref) =>
       containsInternalABIType(ref.getVal().typ)

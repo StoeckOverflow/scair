@@ -35,7 +35,7 @@ private def idxConst(v: Int): arith.Constant =
   arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
 
 private def toIndex(nat: Value[Attribute]): ShapeToIndex =
-  ShapeToIndex(nat.asInstanceOf[Operand[dTensorNatType]], Result(IndexType()))
+  ShapeToIndex(nat.asInstanceOf[Operand[dTensorNatLikeType]], Result(IndexType()))
 
 private def layoutParamValue(param: d_memref.LayoutParam): Option[Value[Attribute]] =
   param match

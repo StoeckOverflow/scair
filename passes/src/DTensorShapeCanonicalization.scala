@@ -7,7 +7,7 @@ import scair.ir.*
 import scair.transformations.{GreedyRewritePatternApplier, PatternRewriteWalker, WalkerPass, PatternAction, pattern}
 
 private def constValue(
-    v: Value[dTensorNatType]
+    v: Value[dTensorNatLikeType]
 ): Option[(BigInt, IntegerType | IndexType)] =
   v.owner match
     case Some(NatConst(IntegerAttr(IntData(k), typ), _)) => Some((k, typ))
@@ -16,26 +16,27 @@ private def constValue(
 private def mkNatConst(
     k: BigInt,
     typ: IntegerType | IndexType,
+    resType: dTensorNatLikeType,
 ): NatConst =
-  NatConst(IntegerAttr(IntData(k), typ), Result(dTensorNatType()))
+  NatConst(IntegerAttr(IntData(k), typ), Result(resType))
 
-private val NatAddFold = pattern { case NatAdd(lhs, rhs, _) =>
+private val NatAddFold = pattern { case NatAdd(lhs, rhs, res) =>
   (constValue(lhs), constValue(rhs)) match
     case (Some((0, _)), _)              => (Seq(), Seq(rhs))
     case (_, Some((0, _)))              => (Seq(), Seq(lhs))
     case (Some((a, aty)), Some((b, _))) =>
-      mkNatConst(a + b, aty)
+      mkNatConst(a + b, aty, res.typ)
     case _ => PatternAction.Abort
 }
 
-private val NatMulFold = pattern { case NatMul(lhs, rhs, _) =>
+private val NatMulFold = pattern { case NatMul(lhs, rhs, res) =>
   (constValue(lhs), constValue(rhs)) match
     case (Some((0, _)), _)              => (Seq(), Seq(lhs))
     case (_, Some((0, _)))              => (Seq(), Seq(rhs))
     case (Some((1, _)), _)              => (Seq(), Seq(rhs))
     case (_, Some((1, _)))              => (Seq(), Seq(lhs))
     case (Some((a, aty)), Some((b, _))) =>
-      mkNatConst(a * b, aty)
+      mkNatConst(a * b, aty, res.typ)
     case _ => PatternAction.Abort
 }
 
