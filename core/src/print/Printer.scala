@@ -1,6 +1,7 @@
 package scair.print
 
 import scair.ir.*
+import scair.dialects.builtin.{I1, IntData, IntegerAttr}
 
 import java.io.Writer
 import scala.annotation.targetName
@@ -60,7 +61,12 @@ abstract class Printer(strictlyGeneric: Boolean, p: Writer):
   ): Unit =
     printListF(
       attrs,
-      (k, v) => print(k, " = ", v),
+      (k, v) =>
+        v match
+          case IntegerAttr(IntData(1), I1) if k == "llvm.emit_c_interface" =>
+            print(k)
+          case _ =>
+            print(k, " = ", v),
       " {",
       ", ",
       "}",
