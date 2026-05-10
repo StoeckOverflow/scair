@@ -399,7 +399,24 @@ case class CmpF(
     val predicate: CmpFPredicate,
     val fastmath: FastMathFlagsAttr = FastMathFlagsAttr(FastMathFlags.none),
 ) extends DerivedOperation["arith.cmpf"]
-    with NoMemoryEffect derives OpDefs
+    with NoMemoryEffect derives OpDefs:
+  override def updated(
+      operands: Seq[Value[Attribute]],
+      successors: Seq[Block],
+      results: Seq[Result[Attribute]],
+      regions: Seq[Region],
+      properties: Map[String, Attribute],
+      attributes: DictType[String, Attribute],
+  ): Operation =
+    val copied = CmpF(
+      operands(0).asInstanceOf[Operand[FloatType]],
+      operands(1).asInstanceOf[Operand[FloatType]],
+      results.head.asInstanceOf[Result[I1]],
+      predicate,
+      fastmath,
+    )
+    copied.attributes.addAll(attributes)
+    copied
 
 case class CmpI(
     val lhs: Operand[AnyIntegerType],
@@ -407,7 +424,23 @@ case class CmpI(
     val result: Result[I1],
     val predicate: CmpIPredicate,
 ) extends DerivedOperation["arith.cmpi"]
-    with NoMemoryEffect derives OpDefs
+    with NoMemoryEffect derives OpDefs:
+  override def updated(
+      operands: Seq[Value[Attribute]],
+      successors: Seq[Block],
+      results: Seq[Result[Attribute]],
+      regions: Seq[Region],
+      properties: Map[String, Attribute],
+      attributes: DictType[String, Attribute],
+  ): Operation =
+    val copied = CmpI(
+      operands(0).asInstanceOf[Operand[AnyIntegerType]],
+      operands(1).asInstanceOf[Operand[AnyIntegerType]],
+      results.head.asInstanceOf[Result[I1]],
+      predicate,
+    )
+    copied.attributes.addAll(attributes)
+    copied
 
 case class Constant(
     val value: Attribute,

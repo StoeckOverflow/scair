@@ -118,6 +118,22 @@ case class ICmp(
     res: Result[IntegerType],
     predicate: ICmpPredicate,
 ) extends DerivedOperation["llvm.icmp"] derives OpDefs:
+  override def updated(
+      operands: Seq[Value[Attribute]],
+      successors: Seq[Block],
+      results: Seq[Result[Attribute]],
+      regions: Seq[Region],
+      properties: Map[String, Attribute],
+      attributes: DictType[String, Attribute],
+  ): Operation =
+    val copied = ICmp(
+      operands(0).asInstanceOf[Operand[IntegerType | IndexType]],
+      operands(1).asInstanceOf[Operand[IntegerType | IndexType]],
+      results.head.asInstanceOf[Result[IntegerType]],
+      predicate,
+    )
+    copied.attributes.addAll(attributes)
+    copied
 
   override def customPrint(printer: Printer): Unit =
     printer.print(name, " ")
@@ -278,6 +294,9 @@ case class Return(
 ) extends DerivedOperation["llvm.return"]
     with IsTerminator derives OpDefs
 
+case class Unreachable() extends DerivedOperation["llvm.unreachable"]
+    with IsTerminator derives OpDefs
+
 given OperationCustomParser[Func]:
 
   def parseResultTypes[$: P](using Parser): P[Seq[Attribute]] =
@@ -382,5 +401,6 @@ val LLVMDialect = summonDialect[
       Br,
       CondBr,
       Return,
+      Unreachable,
   ),
 ]
