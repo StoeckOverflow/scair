@@ -11,6 +11,10 @@
 #define VARIANT_LABEL "value_dependent"
 #endif
 
+#ifndef MATMUL_TILING_TIMED_REGION_KERNEL_ONLY
+#define MATMUL_TILING_TIMED_REGION_KERNEL_ONLY 0
+#endif
+
 enum {
 #ifndef MATMUL_TILING_M
 #define MATMUL_TILING_M 128
@@ -90,7 +94,6 @@ int main(int argc, char **argv) {
     fprintf(stderr, "iterations must be positive\n");
     return 1;
   }
-
   float *A = (float *)malloc((size_t)kAElements * sizeof(float));
   float *B = (float *)malloc((size_t)kBElements * sizeof(float));
   float *C = (float *)malloc((size_t)kCElements * sizeof(float));
@@ -112,9 +115,14 @@ int main(int argc, char **argv) {
 
   struct timespec start;
   struct timespec end;
+  if (MATMUL_TILING_TIMED_REGION_KERNEL_ONLY) {
+    fill(C, kCElements, 0.0f);
+  }
   clock_gettime(CLOCK_MONOTONIC, &start);
   for (int64_t iter = 0; iter < iterations; ++iter) {
-    fill(C, kCElements, 0.0f);
+    if (!MATMUL_TILING_TIMED_REGION_KERNEL_ONLY) {
+      fill(C, kCElements, 0.0f);
+    }
     matmul_tiling(kM, kN, kK0, kK1, A, B, C);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);

@@ -6,6 +6,10 @@ import scair.ir.*
 import scair.parse.*
 import scair.print.AssemblyPrinter
 import scair.print.ErrorPrinter
+import scair.passes.context_band_tiling.DependentContextBandTileWithTail
+import scair.passes.context_band_tiling.OrdinaryAffineContextBandTileWithTail
+import scair.passes.dependent_natmul_tiling.OrdinaryAffineProductTileWithTail
+import scair.passes.dependent_natmul_tiling.OrdinaryAffineProductLoopTileWithTail
 import scair.tools.ScairToolBase
 import scair.utils.*
 import scair.verify.Verifier
@@ -162,7 +166,44 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
               case OK(op) =>
                 // apply the specified passes
                 parsedArgs.passes.foldLeft(module)((module, parsedPass) =>
-                  val pass = ctx.passContext.get(parsedPass) match
+                  val ordinaryAffinePrefix = "ordinary-affine-product-tile-with-tail:"
+                  val ordinaryAffineAnyLoopPrefix = "ordinary-affine-product-loop-tile-with-tail:"
+                  val ordinaryContextPrefix = "ordinary-affine-context-band-tile-with-tail:"
+                  val dependentContextPrefix = "dependent-context-band-tile-with-tail:"
+                  def parsePositiveTileSize(passName: String, tileSizeText: String): BigInt =
+                    if !tileSizeText.matches("[1-9][0-9]*") then
+                      Console.err.println(
+                        s"error: $passName expects a positive integer tile size, got '$tileSizeText'."
+                      )
+                      sys.exit(1)
+                    BigInt(tileSizeText)
+
+                  val pass =
+                    if parsedPass.startsWith(ordinaryAffineAnyLoopPrefix) then
+                      val tileSizeText = parsedPass.stripPrefix(ordinaryAffineAnyLoopPrefix)
+                      OrdinaryAffineProductLoopTileWithTail(
+                        ctx,
+                        parsePositiveTileSize("ordinary-affine-product-loop-tile-with-tail", tileSizeText),
+                      )
+                    else if parsedPass.startsWith(ordinaryAffinePrefix) then
+                      val tileSizeText = parsedPass.stripPrefix(ordinaryAffinePrefix)
+                      OrdinaryAffineProductTileWithTail(
+                        ctx,
+                        parsePositiveTileSize("ordinary-affine-product-tile-with-tail", tileSizeText),
+                      )
+                    else if parsedPass.startsWith(ordinaryContextPrefix) then
+                      val tileSizeText = parsedPass.stripPrefix(ordinaryContextPrefix)
+                      OrdinaryAffineContextBandTileWithTail(
+                        ctx,
+                        parsePositiveTileSize("ordinary-affine-context-band-tile-with-tail", tileSizeText),
+                      )
+                    else if parsedPass.startsWith(dependentContextPrefix) then
+                      val tileSizeText = parsedPass.stripPrefix(dependentContextPrefix)
+                      DependentContextBandTileWithTail(
+                        ctx,
+                        parsePositiveTileSize("dependent-context-band-tile-with-tail", tileSizeText),
+                      )
+                    else ctx.passContext.get(parsedPass) match
                     case Some(pass) => pass
                     case None       =>
                       Console.err.println(

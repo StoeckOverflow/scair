@@ -3,12 +3,12 @@ builtin.module {
     %m_nat : !dtensor.nat,
     %n_nat : !dtensor.nat,
     %k0_nat : !dtensor.nat,
-    %k1_nat : !dtensor.nat,
+    %k1_nat : !dtensor.posnat,
     %Aflat : !d_memref.memref<[], f32>,
     %Bflat : !d_memref.memref<[], f32>,
     %Cflat : !d_memref.memref<[], f32>
   ) attributes {scair.emit_bare_interface = true} {
-    %k_nat = "dtensor.nat.mul"(%k0_nat, %k1_nat) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+    %k_nat = "dtensor.nat.mul"(%k0_nat, %k1_nat) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
 
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %c1 = "arith.constant"() <{value = 1 : index}> : () -> index

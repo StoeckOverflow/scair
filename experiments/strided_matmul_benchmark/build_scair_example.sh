@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-$HOME/dev/llvm-source/build}"
+LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-$HOME/dev/llvm-clean-build}"
 BIN_DIR="$LLVM_BUILD_DIR/bin"
 CC="${CC:-$BIN_DIR/clang}"
 ITERATIONS="${ITERATIONS:-1}"
@@ -13,8 +13,8 @@ EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCAIR_ROOT/experiments/common_metrics.sh"
 
 SCAIR_OPT="${SCAIR_ROOT}/out/tools/opt/launcher.dest/run"
-MLIR_OPT="$BIN_DIR/mlir-opt"
-MLIR_TRANSLATE="$BIN_DIR/mlir-translate"
+MLIR_OPT="${MLIR_OPT:-$BIN_DIR/mlir-opt}"
+MLIR_TRANSLATE="${MLIR_TRANSLATE:-$BIN_DIR/mlir-translate}"
 COMPILE_TIME_BENCH="$SCAIR_ROOT/experiments/compile_time_benchmark.sh"
 
 MLIR_SRC="${MLIR_SRC:-$EXAMPLE_DIR/matmul_kernel_mlir_baseline.mlir}"

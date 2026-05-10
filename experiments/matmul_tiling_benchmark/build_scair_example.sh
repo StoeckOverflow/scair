@@ -14,8 +14,8 @@ MATMUL_TILING_CACHE_SWEEP_SIZE_SET="${MATMUL_TILING_CACHE_SWEEP_SIZE_SET:-$MATMU
 MATMUL_TILING_SIZE_SET="${MATMUL_TILING_SIZE_SET:-}"
 MATMUL_TILING_TILE_SIZE_SET="${MATMUL_TILING_TILE_SIZE_SET:-}"
 MATMUL_TILING_TILE_POLICY_ENV="${MATMUL_TILING_TILE_POLICY:-}"
-MATMUL_TILING_TILE_POLICY="${MATMUL_TILING_TILE_POLICY:-fixed32}"
-MATMUL_TILING_ROUTES="${MATMUL_TILING_ROUTES:-mlir_baseline,scair_baseline,value_dependent}"
+MATMUL_TILING_TILE_POLICY="${MATMUL_TILING_TILE_POLICY:-inner_factor}"
+MATMUL_TILING_ROUTES="${MATMUL_TILING_ROUTES:-mlir_baseline,scair_baseline,value_dependent,value_dependent_guarded_tile_tail_simplified}"
 if [[ -z "$MATMUL_TILING_SIZE_SET" ]]; then
   case "$MATMUL_TILING_PROFILE" in
     default)
@@ -171,7 +171,7 @@ tail_handling_present() {
     echo "NA"
     return
   fi
-  if rg -q ' to min |affine\.min|d_affine\.min|remainder| mod|cleanup' "$path"; then
+  if rg -q 'arith\.min(si|ui)| to min |affine\.min|d_affine\.min|remainder| mod|cleanup' "$path"; then
     echo "yes"
   else
     echo "no"
@@ -195,7 +195,7 @@ tail_free_factorized() {
     echo "NA"
     return
   fi
-  if rg -q 'step 1 : i32' "$path" && ! rg -q ' to min |affine\.min|d_affine\.min|remainder| mod|cleanup' "$path"; then
+  if rg -q 'step 1 : i32' "$path" && ! rg -q 'arith\.min(si|ui)| to min |affine\.min|d_affine\.min|remainder| mod|cleanup' "$path"; then
     echo "yes"
   else
     echo "no"
@@ -515,8 +515,8 @@ for dims in "${MATMUL_TILING_SIZES[@]}"; do
     build_scair_variant \
       "value_dependent" \
       "$VALUE_DEP_SRC" \
-      "dtensor-to-dmemref-shape-preserving,canonicalize,cse,dce,attention-factorization-aware-dependent-tiling,lower-dmemref-to-llvm" \
-      "dtensor-to-dmemref-shape-preserving,canonicalize,cse,dce,attention-factorization-aware-dependent-tiling" \
+      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,dependent-natmul-loop-factorization,validate-d-affine-dynamic-steps,lower-dmemref-to-llvm" \
+      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,dependent-natmul-loop-factorization,validate-d-affine-dynamic-steps" \
       "$VALUE_DEP_DRIVER_SRC" \
       "$artifact_tag" \
       "$m" \
@@ -534,6 +534,43 @@ for dims in "${MATMUL_TILING_SIZES[@]}"; do
       "$OUT_DIR/${artifact_tag}_value_dependent.output.txt" \
       "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;cache_sweep=$([[ "$MATMUL_TILING_PROFILE" == "cache_sweep" ]] && echo yes || echo no);tile_policy=factorization_aware;tile_size=dependent_factorized;mlir_tile_args=NA;mlir_tile_scope=NA;factorization=K0*K1;claim_scope=dependent_natmul_guides_tail_free_reduction_tiling_in_tested_case;timed_region=output_reset+kernel;tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/${artifact_tag}_value_dependent.tiled.mlir")" \
       "$([[ "$MATMUL_TILING_PROFILE" == "cache_sweep" ]] && size_descriptor "$m" "$n" "$k0" "$k1" "dependent_factorized" || echo "$row_size_descriptor")"
+  fi
+
+  if route_enabled "value_dependent_guarded_tile_tail_simplified"; then
+    echo "==> Building value-dependent guarded-tail-simplified matmul kernel for $row_size_descriptor"
+    guarded_ir="$OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.guarded.mlir"
+    run_scair_opt -s "$VALUE_DEP_SRC" --passes "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps,canonicalize,cse,dce" > "$guarded_ir"
+    if [[ "$(tail_handling_present "$guarded_ir")" != "yes" ]]; then
+      echo "error: guarded-tail-simplified matmul route did not emit a tail guard before simplification: $guarded_ir" >&2
+      exit 1
+    fi
+
+    build_scair_variant \
+      "value_dependent_guarded_tile_tail_simplified" \
+      "$VALUE_DEP_SRC" \
+      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,lower-dmemref-to-llvm" \
+      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
+      "$VALUE_DEP_DRIVER_SRC" \
+      "$artifact_tag" \
+      "$m" \
+      "$n" \
+      "$k0" \
+      "$k1"
+    if [[ "$(tail_handling_present "$OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.tiled.mlir")" != "no" ]]; then
+      echo "error: guarded-tail-simplified matmul route kept a tail guard after simplification: $OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.tiled.mlir" >&2
+      exit 1
+    fi
+
+    append_row \
+      "$METRICS_CSV" \
+      "$SUMMARY_MD" \
+      "value_dependent_guarded_tile_tail_simplified" \
+      "$OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.input.mlir" \
+      "$OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.llvm.mlir" \
+      "$OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.ll" \
+      "$OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.output.txt" \
+      "benchmark_class=structural_codegen_supporting_runtime;profile=$MATMUL_TILING_PROFILE;cache_sweep=$([[ "$MATMUL_TILING_PROFILE" == "cache_sweep" ]] && echo yes || echo no);tile_policy=guarded_then_proof_simplified;tile_size=dependent_factorized;mlir_tile_args=NA;mlir_tile_scope=NA;factorization=K0*K1;claim_scope=same_guarded_tiling_shape_tail_removed_by_dependent_natmul_proof;timed_region=output_reset+kernel;guarded_tail_handling_present=$(tail_handling_present "$guarded_ir");tail_handling_present=$(tail_handling_present "$OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.tiled.mlir")" \
+      "$([[ "$MATMUL_TILING_PROFILE" == "cache_sweep" ]] && size_descriptor "$m" "$n" "$k0" "$k1" "guarded_tail_simplified" || echo "$row_size_descriptor")"
   fi
 done
 

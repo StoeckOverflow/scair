@@ -4,7 +4,7 @@ set -euo pipefail
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Thesis-facing final-run defaults
-export LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-/home/dominic/dev/llvm-clean-build}"
+export LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-$HOME/dev/llvm-clean-build}"
 export BENCH_CPU_PIN="${BENCH_CPU_PIN:-8}"
 export BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-10}"
 export BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-30}"

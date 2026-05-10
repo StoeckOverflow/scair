@@ -86,7 +86,7 @@ def main() -> int:
     out_path = Path(sys.argv[1])
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    llvm_build_dir = os.environ.get("LLVM_BUILD_DIR", str(Path.home() / "dev/llvm-source/build"))
+    llvm_build_dir = os.environ.get("LLVM_BUILD_DIR", str(Path.home() / "dev/llvm-clean-build"))
     cpu_affinity = command_output(["bash", "-lc", "taskset -pc $$ | cut -d: -f2- | sed 's/^ //'"])
     bench_cpu_pin = os.environ.get("BENCH_CPU_PIN", "NA")
     cache_cpu = first_cpu_from_list(bench_cpu_pin if bench_cpu_pin != "NA" else cpu_affinity)

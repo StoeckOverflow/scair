@@ -5,8 +5,8 @@ builtin.module {
   func.func @attention_mha(
     %batch_nat : !dtensor.nat,
     %seq_nat : !dtensor.nat,
-    %heads_nat : !dtensor.nat,
-    %head_dim_nat : !dtensor.nat,
+    %heads_nat : !dtensor.posnat,
+    %head_dim_nat : !dtensor.posnat,
     %Qflat : !d_memref.memref<[], f32>,
     %Kflat : !d_memref.memref<[], f32>,
     %Vflat : !d_memref.memref<[], f32>,
@@ -15,7 +15,7 @@ builtin.module {
     %tmpOutFlat : !d_memref.memref<[], f32>,
     %outFlat : !d_memref.memref<[], f32>
   ) attributes {scair.emit_bare_interface = true} {
-    %hidden_nat = "dtensor.nat.mul"(%heads_nat, %head_dim_nat) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+    %hidden_nat = "dtensor.nat.mul"(%heads_nat, %head_dim_nat) : (!dtensor.posnat, !dtensor.posnat) -> !dtensor.posnat
 
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
@@ -24,9 +24,9 @@ builtin.module {
 
     %batch = "dtensor.shape.to_index"(%batch_nat) : (!dtensor.nat) -> index
     %seq = "dtensor.shape.to_index"(%seq_nat) : (!dtensor.nat) -> index
-    %heads = "dtensor.shape.to_index"(%heads_nat) : (!dtensor.nat) -> index
-    %head_dim = "dtensor.shape.to_index"(%head_dim_nat) : (!dtensor.nat) -> index
-    %hidden = "dtensor.shape.to_index"(%hidden_nat) : (!dtensor.nat) -> index
+    %heads = "dtensor.shape.to_index"(%heads_nat) : (!dtensor.posnat) -> index
+    %head_dim = "dtensor.shape.to_index"(%head_dim_nat) : (!dtensor.posnat) -> index
+    %hidden = "dtensor.shape.to_index"(%hidden_nat) : (!dtensor.posnat) -> index
     %seq_hidden = "arith.muli"(%seq, %hidden) : (index, index) -> index
     %seq_seq = "arith.muli"(%seq, %seq) : (index, index) -> index
     %heads_seq_seq = "arith.muli"(%heads, %seq_seq) : (index, index) -> index

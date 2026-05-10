@@ -141,7 +141,7 @@ mlir_opt_for_metrics() {
     return
   fi
 
-  local llvm_build="${LLVM_BUILD_DIR:-$HOME/dev/llvm-source/build}"
+  local llvm_build="${LLVM_BUILD_DIR:-$HOME/dev/llvm-clean-build}"
   local candidate="$llvm_build/bin/mlir-opt"
   if [[ -x "$candidate" ]]; then
     echo "$candidate"
@@ -379,6 +379,57 @@ count_llvm_calls() {
   local count
   count=$(rg -o ' call ' "$path" | wc -l | tr -d ' ')
   echo "${count:-0}"
+}
+
+count_dtensor_nat_ops() {
+  count_matches 'dtensor\.nat\.[A-Za-z_]+' "$1"
+}
+
+count_d_affine_for_ops() {
+  count_matches 'd_affine\.for' "$1"
+}
+
+count_affine_for_ops() {
+  count_matches '(^|[^A-Za-z0-9_])affine\.for' "$1"
+}
+
+count_arith_minsi_ops() {
+  count_matches 'arith\.min(si|ui)' "$1"
+}
+
+count_affine_min_ops() {
+  count_matches 'affine\.min| to min ' "$1"
+}
+
+count_d_affine_min_ops() {
+  count_matches 'd_affine\.min' "$1"
+}
+
+count_min_ops() {
+  sum_numeric_or_na \
+    "$(count_arith_minsi_ops "$1")" \
+    "$(count_affine_min_ops "$1")" \
+    "$(count_d_affine_min_ops "$1")"
+}
+
+count_dynamic_step_ops() {
+  count_matches 'step %[A-Za-z0-9_]+' "$1"
+}
+
+count_static_step_ops() {
+  count_matches 'step [0-9]+' "$1"
+}
+
+count_cf_assert_ops() {
+  count_matches 'cf\.assert' "$1"
+}
+
+count_llvm_cond_br_ops() {
+  count_matches 'llvm\.cond_br' "$1"
+}
+
+count_abort_calls() {
+  count_matches 'llvm\.call @abort|callee = @abort' "$1"
 }
 
 metric_field() {

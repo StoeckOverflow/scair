@@ -1,62 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-$HOME/dev/llvm-source/build}"
-BIN_DIR="$LLVM_BUILD_DIR/bin"
-CC="${CC:-$BIN_DIR/clang}"
-ITERATIONS="${ITERATIONS:-2000000}"
-
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCAIR_ROOT/experiments/common_metrics.sh"
 
-SCAIR_OPT="${SCAIR_ROOT}/out/tools/opt/launcher.dest/run"
-MLIR_OPT="${BIN_DIR}/mlir-opt"
-MLIR_TRANSLATE="$BIN_DIR/mlir-translate"
-DRIVER_TEMPLATE="${EXAMPLE_DIR}/driver_template.c"
+SCAIR_OPT="${SCAIR_OPT:-$SCAIR_ROOT/out/tools/opt/launcher.dest/run}"
 OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
-
-BENCHMARKS=(
-  "shared_polymorphic_identity_multitype"
-  "shared_polymorphic_kernel_bank_multitype"
-)
 
 mkdir -p "$OUT_DIR"
 ENV_PATH="$(ensure_env_snapshot "$OUT_DIR")"
 GIT_COMMIT="$(git_commit_for_metrics)"
 RUN_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 MACHINE_ID="$(machine_id_for_metrics)"
-COMPILER_FLAGS="-O2"
 
 require_bin "$SCAIR_OPT"
-require_bin "$MLIR_OPT"
-require_bin "$MLIR_TRANSLATE"
-require_bin "$CC"
-require_file "$DRIVER_TEMPLATE"
 
-safe_name() {
-  local bench="$1"
-  local variant="$2"
-  echo "${bench}_${variant}"
+mono_pipeline_for_variant() {
+  case "$1" in
+    debruijn) echo "monomorphize-tlam-de-bruijn" ;;
+    value_dependent) echo "monomorphize" ;;
+    *)
+      echo "error: unknown variant: $1" >&2
+      exit 1
+      ;;
+  esac
 }
 
-source_path() {
-  local bench="$1"
-  local variant="$2"
-  echo "$EXAMPLE_DIR/${variant}_${bench}.mlir"
-}
-
-pipeline_for_variant() {
-  local variant="$1"
-  case "$variant" in
-    baseline_de_bruijn)
-      echo "monomorphize-tlam-de-bruijn,beta-reduce-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func"
+full_pipeline_for_variant() {
+  case "$1" in
+    debruijn)
+      echo "monomorphize-tlam-de-bruijn,beta-reduce-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,reconcile-unrealized-casts,canonicalize"
       ;;
     value_dependent)
-      echo "monomorphize,beta-reduce-tlam,erase-tlam,lower-tlam-to-func"
+      echo "monomorphize,beta-reduce-tlam,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize"
       ;;
     *)
-      echo "error: unknown variant: $variant" >&2
+      echo "error: unknown variant: $1" >&2
       exit 1
       ;;
   esac
@@ -64,9 +44,8 @@ pipeline_for_variant() {
 
 representation_group_for_variant() {
   case "$1" in
-    baseline_de_bruijn) echo "scair_baseline" ;;
+    debruijn) echo "scair_baseline" ;;
     value_dependent) echo "value_dependent" ;;
-    mlir_baseline) echo "mlir_baseline" ;;
     *)
       echo "error: unknown variant: $1" >&2
       exit 1
@@ -74,193 +53,135 @@ representation_group_for_variant() {
   esac
 }
 
-report_variant_name() {
-  case "$1" in
-    baseline_de_bruijn) echo "debruijn" ;;
-    value_dependent) echo "value_dependent" ;;
-    mlir_baseline) echo "mlir_baseline" ;;
-    *)
-      echo "error: unknown variant: $1" >&2
-      exit 1
-      ;;
-  esac
-}
-
-expected_result_for_bench() {
-  case "$1" in
-    shared_polymorphic_identity_multitype) echo "29" ;;
-    shared_polymorphic_kernel_bank_multitype) echo "3090" ;;
-    *)
-      echo "error: unknown benchmark: $1" >&2
-      exit 1
-      ;;
-  esac
-}
-
-build_scair_program() {
+source_for_case() {
   local bench="$1"
   local variant="$2"
-  local src="$3"
-  local poly_pipeline="$4"
-  local prefix
-  prefix="$(safe_name "$bench" "$variant")"
+  case "$bench:$variant" in
+    polymorphic_identity_specialization:debruijn)
+      echo "$EXAMPLE_DIR/baseline_de_bruijn_polymorphic_identity_specialization.mlir"
+      ;;
+    polymorphic_identity_specialization:value_dependent)
+      echo "$EXAMPLE_DIR/value_dependent_polymorphic_identity_specialization.mlir"
+      ;;
+    tensor_shape_identity:value_dependent)
+      echo "$EXAMPLE_DIR/value_dependent_tensor_shape_identity.mlir"
+      ;;
+    *)
+      echo "error: unknown benchmark/variant: $bench/$variant" >&2
+      exit 1
+      ;;
+  esac
+}
 
-  local lowered_func="$OUT_DIR/${prefix}_lowered_func.mlir"
-  local lowered_llvm="$OUT_DIR/${prefix}_llvm.mlir"
-  local llvm_ir="$OUT_DIR/${prefix}.ll"
-  local opt_llvm_ir="$OUT_DIR/${prefix}.opt.ll"
-  local obj="$OUT_DIR/${prefix}.o"
-  local exe="$OUT_DIR/${prefix}_exec"
-  local output_txt="$OUT_DIR/${prefix}_output.txt"
-  local build_log="$OUT_DIR/${prefix}_build.log"
+case_notes() {
+  local bench="$1"
+  local variant="$2"
+  case "$bench:$variant" in
+    polymorphic_identity_specialization:debruijn)
+      echo "de_bruijn_identity_two_specializations"
+      ;;
+    polymorphic_identity_specialization:value_dependent)
+      echo "ssa_in_types_identity_two_specializations"
+      ;;
+    tensor_shape_identity:value_dependent)
+      echo "tensor_shaped_type_argument_single_specialization"
+      ;;
+    *)
+      echo "NA"
+      ;;
+  esac
+}
 
-  local start_ns
-  local end_ns
+count_leftover_polymorphic_ops() {
+  local path="$1"
+  if [[ ! -f "$path" ]]; then
+    echo "NA"
+    return
+  fi
+  count_matches '"tlam(_dbi)?\.(tlambda|tapply|treturn)"|!tlam(_dbi)?\.(forall|bvar)|!value<%' "$path"
+}
+
+count_leftover_tlam_ops() {
+  local path="$1"
+  if [[ ! -f "$path" ]]; then
+    echo "NA"
+    return
+  fi
+  count_matches '"tlam(_dbi)?\.[A-Za-z_]+"' "$path"
+}
+
+count_generated_specializations() {
+  local path="$1"
+  if [[ ! -f "$path" ]]; then
+    echo "NA"
+    return
+  fi
+  count_matches '"tlam(_dbi)?\.vlambda"' "$path"
+}
+
+run_pipeline() {
+  local src="$1"
+  local passes="$2"
+  local out="$3"
+  local log="$4"
+  local start_ns="$5"
   local status=0
-  start_ns=$(now_ns)
 
   set +e
-  "$SCAIR_OPT" "$src" --allow-unregistered-dialect \
-    --passes "$poly_pipeline,canonicalize,cse" \
-    | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\\[[0-9.]+s\\]\\[warning\\]\\[perf,memops\\] Cannot use file /tmp/hsperfdata_)' \
-    > "$lowered_func" 2> "$build_log"
+  "$SCAIR_OPT" "$src" --allow-unregistered-dialect --passes "$passes" \
+    > "$out" 2> "$log"
   status=$?
-  if [[ $status -eq 0 ]]; then
-    "$MLIR_OPT" "$lowered_func" \
-      --pass-pipeline="builtin.module(func.func(convert-arith-to-llvm),convert-func-to-llvm,reconcile-unrealized-casts)" \
-      > "$lowered_llvm" 2>> "$build_log"
-    status=$?
-  fi
-  if [[ $status -eq 0 ]]; then
-    "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_llvm" > "$llvm_ir" 2>> "$build_log"
-    status=$?
-  fi
-  if [[ $status -eq 0 ]]; then
-    "$CC" -O2 -S -emit-llvm -x ir "$llvm_ir" -o "$opt_llvm_ir" 2>> "$build_log"
-    status=$?
-  fi
-  if [[ $status -eq 0 ]]; then
-    "$CC" -O2 -c -x ir "$llvm_ir" -o "$obj" 2>> "$build_log"
-    status=$?
-  fi
-  if [[ $status -eq 0 ]]; then
-    "$CC" -O2 \
-      -DBENCH_FN="$bench" \
-      -DBENCH_LABEL="\"$bench\"" \
-      -DVARIANT_LABEL="\"$(report_variant_name "$variant")\"" \
-      -DEXPECTED_RESULT="$(expected_result_for_bench "$bench")" \
-      "$DRIVER_TEMPLATE" "$obj" \
-      -o "$exe" 2>> "$build_log"
-    status=$?
-  fi
   set -e
 
-  end_ns=$(now_ns)
-  if [[ $status -eq 0 ]]; then
-    run_benchmark_repeated "$output_txt" "$exe" "$ITERATIONS"
-    {
-      echo "build_status=ok"
-      printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
-    } >> "$output_txt"
-  else
-    {
-      echo "benchmark=$bench"
-      echo "variant=$(report_variant_name "$variant")"
-      echo "build_status=unsupported"
-      echo "run_status=NA"
-      printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
-      echo "result=NA"
-      echo "expected_result=$(expected_result_for_bench "$bench")"
-      echo "runtime_ns_per_iter=NA"
-      echo "ns_per_iter=NA"
-    } > "$output_txt"
+  if [[ $status -ne 0 ]]; then
+    printf 'pass_status=fail\n' >> "$log"
   fi
+  printf '%s\n' "$status"
 }
 
-build_mlir_program() {
-  local bench="$1"
-  local src="$2"
-  local prefix
-  prefix="$(safe_name "$bench" "mlir_baseline")"
-
-  local lowered_func="$OUT_DIR/${prefix}_lowered_func.mlir"
-  local lowered_llvm="$OUT_DIR/${prefix}_llvm.mlir"
-  local llvm_ir="$OUT_DIR/${prefix}.ll"
-  local opt_llvm_ir="$OUT_DIR/${prefix}.opt.ll"
-  local obj="$OUT_DIR/${prefix}.o"
-  local exe="$OUT_DIR/${prefix}_exec"
-  local output_txt="$OUT_DIR/${prefix}_output.txt"
-
-  local start_ns
-  local end_ns
-  start_ns=$(now_ns)
-
-  cp "$src" "$lowered_func"
-  "$MLIR_OPT" "$src" \
-    --pass-pipeline="builtin.module(func.func(convert-arith-to-llvm),convert-func-to-llvm,reconcile-unrealized-casts)" \
-    > "$lowered_llvm"
-  "$MLIR_TRANSLATE" --mlir-to-llvmir "$lowered_llvm" > "$llvm_ir"
-  "$CC" -O2 -S -emit-llvm -x ir "$llvm_ir" -o "$opt_llvm_ir"
-  "$CC" -O2 -c -x ir "$llvm_ir" -o "$obj"
-  "$CC" -O2 \
-    -DBENCH_FN="$bench" \
-    -DBENCH_LABEL="\"$bench\"" \
-    -DVARIANT_LABEL="\"mlir_baseline\"" \
-    -DEXPECTED_RESULT="$(expected_result_for_bench "$bench")" \
-    "$DRIVER_TEMPLATE" "$obj" \
-    -o "$exe"
-
-  end_ns=$(now_ns)
-  run_benchmark_repeated "$output_txt" "$exe" "$ITERATIONS"
-  {
-    echo "build_status=ok"
-    printf 'compile_ms=%s\n' "$(format_ms "$start_ns" "$end_ns")"
-  } >> "$output_txt"
+write_design_header() {
+  local path="$1"
+  printf '%s\n' "benchmark,variant,input_op_count,output_op_count,generated_specializations,leftover_polymorphic_ops,leftover_tlam_ops,input_ir_lines,output_ir_lines,pass_status,compile_ms,artifact,notes" > "$path"
 }
 
-append_row() {
+append_design_row() {
+  local path="$1"
+  shift
+  local sanitized=()
+  local value
+  for value in "$@"; do
+    value="${value//$'\n'/ }"
+    value="${value//$'\r'/ }"
+    value="${value//,/;}"
+    sanitized+=("$value")
+  done
+  printf '%s\n' "$(IFS=,; echo "${sanitized[*]}")" >> "$path"
+}
+
+append_common_row() {
   local metrics_csv="$1"
   local summary_md="$2"
   local bench="$3"
   local variant="$4"
   local src="$5"
-  local lowered_func="$6"
-  local llvm_ir="$7"
-  local opt_llvm_ir="$8"
-  local output_txt="$9"
-  local notes="${10}"
-  local size_descriptor="benchmark=${bench};polymorphism=type_level"
-
+  local final_ir="$6"
+  local compile_ms="$7"
+  local pass_status="$8"
+  local generated_specializations="$9"
+  local leftover_poly="${10}"
+  local leftover_tlam="${11}"
+  local notes="${12}"
   local representation
   representation="$(representation_group_for_variant "$variant")"
-  local report_variant
-  report_variant="$(report_variant_name "$variant")"
-  local source_helpers
-  local bvar_refs
-  local value_refs
-
-  if [[ "$variant" == "baseline_de_bruijn" ]]; then
-    source_helpers="$(count_source_helpers "$src")"
-    bvar_refs="$(count_matches 'bvar<' "$src")"
-    value_refs="0"
-  elif [[ "$variant" == "value_dependent" ]]; then
-    source_helpers="$(count_source_helpers "$src")"
-    bvar_refs="0"
-    value_refs="$(count_matches 'value<%' "$src")"
-  else
-    source_helpers="$(count_source_helpers "$src")"
-    bvar_refs="0"
-    value_refs="0"
-  fi
 
   append_metrics_csv_row \
     "$metrics_csv" \
     "type_polymorphism" \
     "$bench" \
-    "$report_variant" \
+    "$variant" \
     "$representation" \
-    "$(metric_field build_status "$output_txt")" \
-    "$(metric_field run_status "$output_txt")" \
+    "$pass_status" \
+    "NA" \
     "$(file_metric bytes "$src")" \
     "$(file_metric lines "$src")" \
     "$(count_ops "$src")" \
@@ -275,124 +196,176 @@ append_row() {
     "$(count_source_memref_store_ops "$src")" \
     "$(count_source_dmemref_load_ops "$src")" \
     "$(count_source_dmemref_store_ops "$src")" \
-    "$(count_func_defs "$lowered_func")" \
-    "$(count_ops "$lowered_func")" \
-    "$(count_ops_structural "$lowered_func")" \
-    "$(file_metric lines "$lowered_func")" \
-    "$(file_metric lines "$llvm_ir")" \
-    "$(count_llvm_calls "$llvm_ir")" \
-    "$(metric_field compile_ms "$output_txt")" \
-    "$(metric_field result "$output_txt")" \
-    "$(metric_field expected_result "$output_txt")" \
-    "$(metric_field ns_per_iter "$output_txt")" \
-    "$notes" \
-    "$source_helpers" \
-    "$bvar_refs" \
-    "$value_refs" \
-    "$(file_metric lines "$opt_llvm_ir")" \
-    "$(count_llvm_calls "$opt_llvm_ir")" \
+    "$(count_func_defs "$final_ir")" \
+    "$(count_ops "$final_ir")" \
+    "$(count_ops_structural "$final_ir")" \
+    "$(file_metric lines "$final_ir")" \
+    "NA" \
+    "NA" \
+    "$compile_ms" \
+    "NA" \
+    "NA" \
+    "NA" \
+    "$notes;specializations=$generated_specializations;leftover_polymorphic_ops=$leftover_poly;leftover_tlam_ops=$leftover_tlam" \
+    "$(count_source_helpers "$src")" \
+    "$(count_matches 'bvar<' "$src")" \
+    "$(count_matches 'value<%' "$src")" \
+    "NA" \
+    "NA" \
     "type_polymorphism" \
-    "$size_descriptor" \
-    "$report_variant" \
+    "benchmark=${bench};role=design_infrastructure" \
+    "$variant" \
     "NA" \
     "NA" \
     "NA" \
-    "$(metric_field compile_ms "$output_txt")" \
-    "$(metric_field ns_per_iter "$output_txt")" \
-    "$(metric_field runtime_iqr_ns_per_iter "$output_txt")" \
-    "$(metric_field benchmark_repetitions "$output_txt")" \
-    "$(metric_field result "$output_txt")" \
-    "$(metric_field run_status "$output_txt")" \
-    "$COMPILER_FLAGS" \
+    "$compile_ms" \
+    "NA" \
+    "NA" \
+    "NA" \
+    "NA" \
+    "$pass_status" \
+    "NA" \
     "$GIT_COMMIT" \
     "$RUN_DATE" \
     "$MACHINE_ID" \
     "$ENV_PATH" \
-    "$(metric_field raw_timings_path "$output_txt")"
+    "NA"
 
   append_summary_row \
     "$summary_md" \
     "$bench" \
-    "$report_variant" \
-    "" \
-    "$(metric_field build_status "$output_txt")" \
-    "$(metric_field run_status "$output_txt")" \
+    "$variant" \
+    "$representation" \
+    "$pass_status" \
+    "NA" \
     "$(count_ops_structural "$src")" \
     "$(count_func_defs "$src")" \
     "$(count_block_args "$src")" \
-    "$(file_metric lines "$lowered_func")" \
-    "$(file_metric lines "$llvm_ir")" \
-    "$(metric_field compile_ms "$output_txt")" \
-    "$(metric_field result "$output_txt")" \
-    "$(metric_field expected_result "$output_txt")" \
-    "$(metric_field ns_per_iter "$output_txt")"
+    "$(file_metric lines "$final_ir")" \
+    "NA" \
+    "$compile_ms" \
+    "NA" \
+    "NA" \
+    "NA"
 }
 
-for bench in "${BENCHMARKS[@]}"; do
-  echo "==> Building $bench de Bruijn baseline"
-  baseline_src="$(source_path "$bench" "baseline_de_bruijn")"
-  require_file "$baseline_src"
-  build_scair_program "$bench" "baseline_de_bruijn" "$baseline_src" "$(pipeline_for_variant "baseline_de_bruijn")"
-
-  echo "==> Building $bench value-dependent variant"
-  value_src="$(source_path "$bench" "value_dependent")"
-  require_file "$value_src"
-  build_scair_program "$bench" "value_dependent" "$value_src" "$(pipeline_for_variant "value_dependent")"
-
-  echo "==> Building $bench upstream MLIR baseline"
-  mlir_src="$(source_path "$bench" "mlir_baseline")"
-  require_file "$mlir_src"
-  build_mlir_program "$bench" "$mlir_src"
-done
+CASES=(
+  "polymorphic_identity_specialization|value_dependent"
+  "polymorphic_identity_specialization|debruijn"
+  "tensor_shape_identity|value_dependent"
+)
 
 SUMMARY_MD="$OUT_DIR/summary.md"
 SUMMARY_CSV="$OUT_DIR/metrics.csv"
+DESIGN_CSV="$OUT_DIR/design_metrics.csv"
+METRICS_JSON="$OUT_DIR/metrics.json"
+
 write_summary_header "$SUMMARY_MD" "Type Polymorphism Design Benchmark Summary"
 write_metrics_csv_header "$SUMMARY_CSV"
+write_design_header "$DESIGN_CSV"
 
-for bench in "${BENCHMARKS[@]}"; do
-  append_row \
+for case_spec in "${CASES[@]}"; do
+  IFS='|' read -r bench variant <<< "$case_spec"
+  src="$(source_for_case "$bench" "$variant")"
+  require_file "$src"
+
+  prefix="${bench}_${variant}"
+  mono_ir="$OUT_DIR/${prefix}.monomorphized.mlir"
+  final_ir="$OUT_DIR/${prefix}.erased_lowered.mlir"
+  mono_log="$OUT_DIR/${prefix}.monomorphized.log"
+  final_log="$OUT_DIR/${prefix}.erased_lowered.log"
+
+  echo "==> Running $bench ($variant)"
+  start_ns="$(now_ns)"
+  mono_status="$(run_pipeline "$src" "$(mono_pipeline_for_variant "$variant")" "$mono_ir" "$mono_log" "$start_ns")"
+  final_status=1
+  if [[ "$mono_status" == "0" ]]; then
+    final_status="$(run_pipeline "$src" "$(full_pipeline_for_variant "$variant")" "$final_ir" "$final_log" "$start_ns")"
+  else
+    : > "$final_ir"
+  fi
+  end_ns="$(now_ns)"
+  compile_ms="$(format_ms "$start_ns" "$end_ns")"
+
+  if [[ "$mono_status" == "0" && "$final_status" == "0" ]]; then
+    pass_status="ok"
+  else
+    pass_status="fail"
+  fi
+
+  generated_specializations="$(count_generated_specializations "$mono_ir")"
+  leftover_poly="$(count_leftover_polymorphic_ops "$final_ir")"
+  leftover_tlam="$(count_leftover_tlam_ops "$final_ir")"
+  notes="$(case_notes "$bench" "$variant")"
+
+  append_design_row \
+    "$DESIGN_CSV" \
+    "$bench" \
+    "$variant" \
+    "$(count_ops_structural "$src")" \
+    "$(count_ops_structural "$final_ir")" \
+    "$generated_specializations" \
+    "$leftover_poly" \
+    "$leftover_tlam" \
+    "$(file_metric lines "$src")" \
+    "$(file_metric lines "$final_ir")" \
+    "$pass_status" \
+    "$compile_ms" \
+    "$final_ir" \
+    "$notes"
+
+  append_common_row \
     "$SUMMARY_CSV" \
     "$SUMMARY_MD" \
     "$bench" \
-    "baseline_de_bruijn" \
-    "$(source_path "$bench" "baseline_de_bruijn")" \
-    "$OUT_DIR/${bench}_baseline_de_bruijn_lowered_func.mlir" \
-    "$OUT_DIR/${bench}_baseline_de_bruijn.ll" \
-    "$OUT_DIR/${bench}_baseline_de_bruijn.opt.ll" \
-    "$OUT_DIR/${bench}_baseline_de_bruijn_output.txt" \
-    "de_bruijn baseline"
-  append_row \
-    "$SUMMARY_CSV" \
-    "$SUMMARY_MD" \
-    "$bench" \
-    "value_dependent" \
-    "$(source_path "$bench" "value_dependent")" \
-    "$OUT_DIR/${bench}_value_dependent_lowered_func.mlir" \
-    "$OUT_DIR/${bench}_value_dependent.ll" \
-    "$OUT_DIR/${bench}_value_dependent.opt.ll" \
-    "$OUT_DIR/${bench}_value_dependent_output.txt" \
-    "value-dependent polymorphism"
-  append_row \
-    "$SUMMARY_CSV" \
-    "$SUMMARY_MD" \
-    "$bench" \
-    "mlir_baseline" \
-    "$(source_path "$bench" "mlir_baseline")" \
-    "$OUT_DIR/${bench}_mlir_baseline_lowered_func.mlir" \
-    "$OUT_DIR/${bench}_mlir_baseline.ll" \
-    "$OUT_DIR/${bench}_mlir_baseline.opt.ll" \
-    "$OUT_DIR/${bench}_mlir_baseline_output.txt" \
-    "monomorphic MLIR baseline"
+    "$variant" \
+    "$src" \
+    "$final_ir" \
+    "$compile_ms" \
+    "$pass_status" \
+    "$generated_specializations" \
+    "$leftover_poly" \
+    "$leftover_tlam" \
+    "$notes"
 done
+
+python3 - "$DESIGN_CSV" "$METRICS_JSON" <<'PY'
+import csv
+import json
+import sys
+
+csv_path, json_path = sys.argv[1], sys.argv[2]
+rows = []
+with open(csv_path, newline="", encoding="utf-8") as f:
+    for row in csv.DictReader(f):
+        rows.append(row)
+
+payload = {
+    "benchmark_family": "type_polymorphism",
+    "benchmark_role": "design_infrastructure",
+    "runtime_performance_benchmark": False,
+    "rows": rows,
+}
+
+with open(json_path, "w", encoding="utf-8") as f:
+    json.dump(payload, f, indent=2, sort_keys=True)
+    f.write("\n")
+PY
+
+cat >> "$SUMMARY_MD" <<'EOF'
+
+## Design Metrics
+
+This is a design/infrastructure benchmark. The thesis-facing checks are the
+generated specialization count, the absence of leftover polymorphic/type-level
+TLam constructs after erasure/lowering, and small IR size. It is not a central
+runtime or performance benchmark.
+EOF
 
 echo
-echo "Type polymorphism design benchmark build complete."
+echo "Type polymorphism design benchmark complete."
 echo "Produced:"
-for bench in "${BENCHMARKS[@]}"; do
-  echo "  $OUT_DIR/${bench}_baseline_de_bruijn_exec"
-  echo "  $OUT_DIR/${bench}_value_dependent_exec"
-  echo "  $OUT_DIR/${bench}_mlir_baseline_exec"
-done
-echo "  $OUT_DIR/summary.md"
-echo "  $OUT_DIR/metrics.csv"
+echo "  $SUMMARY_MD"
+echo "  $SUMMARY_CSV"
+echo "  $DESIGN_CSV"
+echo "  $METRICS_JSON"

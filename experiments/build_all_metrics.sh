@@ -16,15 +16,15 @@ export BENCH_CPU_PIN
 
 # Family-specific iteration defaults balance reproducibility against practical
 # end-to-end runtime for the full aggregate suite.
-TYPE_POLYMORPHISM_ITERATIONS_DEFAULT="${TYPE_POLYMORPHISM_ITERATIONS:-10000000}"
 SEMI_AFFINE_ITERATIONS_DEFAULT="${SEMI_AFFINE_ITERATIONS:-1000}"
 STRIDED_MATMUL_ITERATIONS_DEFAULT="${STRIDED_MATMUL_ITERATIONS:-200}"
 CONVOLUTION_ITERATIONS_DEFAULT="${CONVOLUTION_ITERATIONS:-50}"
 ATTENTION_MHA_ITERATIONS_DEFAULT="${ATTENTION_MHA_ITERATIONS:-100}"
 MATMUL_TILING_ITERATIONS_DEFAULT="${MATMUL_TILING_ITERATIONS:-100}"
 MATMUL_TILING_PROFILE_DEFAULT="${MATMUL_TILING_PROFILE:-default}"
-MATMUL_TILING_TILE_POLICY_DEFAULT="${MATMUL_TILING_TILE_POLICY:-fixed32}"
+MATMUL_TILING_TILE_POLICY_DEFAULT="${MATMUL_TILING_TILE_POLICY:-inner_factor}"
 MATMUL_TILING_TILE_SIZE_SET_DEFAULT="${MATMUL_TILING_TILE_SIZE_SET:-}"
+AFFINE_TILING_SIZE_SET_DEFAULT="${AFFINE_TILING_SIZE_SET:-16x3}"
 MATMUL_TILING_DEFAULT_SIZE_SET="128x128x12x64,128x128x16x32,256x128x12x64"
 MATMUL_TILING_CACHE_CONTROL_SIZE_SET="8x8x4096x3,8x8x4096x5,8x8x4096x7,8x8x4096x8,16x16x2048x3,16x16x2048x5,16x16x2048x7,16x16x1024x16,32x16x1024x8"
 MATMUL_TILING_CACHE_SWEEP_SIZE_SET="${MATMUL_TILING_CACHE_SWEEP_SIZE_SET:-$MATMUL_TILING_CACHE_CONTROL_SIZE_SET}"
@@ -53,6 +53,10 @@ SCRIPTS=(
   "$SCAIR_ROOT/experiments/strided_matmul_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/attention_mha_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/affine_tiling_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/conv_tiling_benchmark/build_conv_tiling_example.sh"
+  "$SCAIR_ROOT/experiments/shape_reification_benchmark/build_shape_reification_example.sh"
+  "$SCAIR_ROOT/experiments/tail_min_simplifier_benchmark/build_tail_min_simplifier_example.sh"
   "$SCAIR_ROOT/experiments/matmul_tiling_benchmark/build_scair_example.sh"
 )
 
@@ -62,7 +66,17 @@ METRIC_FILES=(
   "$SCAIR_ROOT/experiments/strided_matmul_benchmark/out/metrics.csv"
   "$SCAIR_ROOT/experiments/convolution_benchmark/out/metrics.csv"
   "$SCAIR_ROOT/experiments/attention_mha_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/affine_tiling_benchmark/out/metrics.csv"
   "$SCAIR_ROOT/experiments/matmul_tiling_benchmark/out/metrics.csv"
+)
+
+# Structural validation families intentionally keep family-specific schemas.
+# Run them with the aggregate suite, but archive their outputs separately from
+# the common-schema runtime CSV.
+STRUCTURAL_FAMILIES=(
+  "conv_tiling_benchmark"
+  "shape_reification_benchmark"
+  "tail_min_simplifier_benchmark"
 )
 
 run_benchmark_script() {
@@ -79,9 +93,6 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
     echo "==> Running $(basename "$(dirname "$script")") metrics build"
     case "$(basename "$(dirname "$script")")" in
       type_polymorphism)
-        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-        ITERATIONS="$TYPE_POLYMORPHISM_ITERATIONS_DEFAULT" \
         run_benchmark_script "$script"
         ;;
       semi_affine_indexing_benchmark)
@@ -106,6 +117,19 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
         BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
         BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
         ITERATIONS="$ATTENTION_MHA_ITERATIONS_DEFAULT" \
+        run_benchmark_script "$script"
+        ;;
+      affine_tiling_benchmark)
+        AFFINE_TILING_SIZE_SET="$AFFINE_TILING_SIZE_SET_DEFAULT" \
+        run_benchmark_script "$script"
+        ;;
+      conv_tiling_benchmark)
+        run_benchmark_script "$script"
+        ;;
+      shape_reification_benchmark)
+        run_benchmark_script "$script"
+        ;;
+      tail_min_simplifier_benchmark)
         run_benchmark_script "$script"
         ;;
       matmul_tiling_benchmark)
@@ -152,8 +176,64 @@ capture_env_snapshot "$ENV_JSON"
 SUMMARY_MD="$OUT_DIR/summary.md"
 python3 "$SCAIR_ROOT/experiments/summarize_results.py" "$ALL_CSV" "$SUMMARY_MD"
 
+STRUCTURAL_OUT_DIR="$OUT_DIR/structural"
+STRUCTURAL_MANIFEST="$OUT_DIR/structural_metrics_manifest.json"
+mkdir -p "$STRUCTURAL_OUT_DIR"
+
+{
+  printf '[\n'
+  for idx in "${!STRUCTURAL_FAMILIES[@]}"; do
+    family="${STRUCTURAL_FAMILIES[$idx]}"
+    family_out="$SCAIR_ROOT/experiments/$family/out"
+    metrics_csv="$family_out/metrics.csv"
+    metrics_json="$family_out/metrics.json"
+    summary_md="$family_out/summary.md"
+    route_manifest_md="$family_out/route_manifest.md"
+    route_manifest_json="$family_out/route_manifest.json"
+
+    require_file "$metrics_csv"
+    require_file "$summary_md"
+
+    cp "$metrics_csv" "$STRUCTURAL_OUT_DIR/$family.metrics.csv"
+    cp "$summary_md" "$STRUCTURAL_OUT_DIR/$family.summary.md"
+
+    metrics_json_ref="null"
+    if [[ -f "$metrics_json" ]]; then
+      cp "$metrics_json" "$STRUCTURAL_OUT_DIR/$family.metrics.json"
+      metrics_json_ref="\"structural/$family.metrics.json\""
+    fi
+
+    route_manifest_md_ref="null"
+    if [[ -f "$route_manifest_md" ]]; then
+      cp "$route_manifest_md" "$STRUCTURAL_OUT_DIR/$family.route_manifest.md"
+      route_manifest_md_ref="\"structural/$family.route_manifest.md\""
+    fi
+
+    route_manifest_json_ref="null"
+    if [[ -f "$route_manifest_json" ]]; then
+      cp "$route_manifest_json" "$STRUCTURAL_OUT_DIR/$family.route_manifest.json"
+      route_manifest_json_ref="\"structural/$family.route_manifest.json\""
+    fi
+
+    if [[ "$idx" -gt 0 ]]; then
+      printf ',\n'
+    fi
+    printf '  {\n'
+    printf '    "family": "%s",\n' "$family"
+    printf '    "metrics_csv": "structural/%s.metrics.csv",\n' "$family"
+    printf '    "metrics_json": %s,\n' "$metrics_json_ref"
+    printf '    "summary_md": "structural/%s.summary.md",\n' "$family"
+    printf '    "route_manifest_md": %s,\n' "$route_manifest_md_ref"
+    printf '    "route_manifest_json": %s\n' "$route_manifest_json_ref"
+    printf '  }'
+  done
+  printf '\n]\n'
+} > "$STRUCTURAL_MANIFEST"
+
 echo
 echo "Aggregated metrics complete."
 echo "Produced:"
 echo "  $ALL_CSV"
 echo "  $SUMMARY_MD"
+echo "  $STRUCTURAL_MANIFEST"
+echo "  $STRUCTURAL_OUT_DIR/"

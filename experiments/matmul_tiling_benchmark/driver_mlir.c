@@ -11,6 +11,10 @@
 #define VARIANT_LABEL "mlir_baseline"
 #endif
 
+#ifndef MATMUL_TILING_TIMED_REGION_KERNEL_ONLY
+#define MATMUL_TILING_TIMED_REGION_KERNEL_ONLY 0
+#endif
+
 enum {
 #ifndef MATMUL_TILING_M
 #define MATMUL_TILING_M 128
@@ -134,9 +138,14 @@ int main(int argc, char **argv) {
 
   struct timespec start;
   struct timespec end;
+  if (MATMUL_TILING_TIMED_REGION_KERNEL_ONLY) {
+    fill(C, kCElements, 0.0f);
+  }
   clock_gettime(CLOCK_MONOTONIC, &start);
   for (int64_t iter = 0; iter < iterations; ++iter) {
-    fill(C, kCElements, 0.0f);
+    if (!MATMUL_TILING_TIMED_REGION_KERNEL_ONLY) {
+      fill(C, kCElements, 0.0f);
+    }
     _mlir_ciface_matmul_tiling(kM, kN, kK0, kK1, &Aref, &Bref, &Cref);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
