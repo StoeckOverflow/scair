@@ -80,6 +80,18 @@ private final class Builder(val funcOp: func.Func):
         )
         valueMap(mul.result) = lowered.res
         Seq(lowered)
+      case min: arith.MinSI =>
+        val lhs = asLLVMIndex(remap(min.lhs))
+        val rhs = asLLVMIndex(remap(min.rhs))
+        val cmp = llvm.ICmp(lhs, rhs, Result(I1), llvm.ICmpPredicate.slt)
+        val select = llvm.Select(
+          cmp.res,
+          lhs.asInstanceOf[Operand[Attribute]],
+          rhs.asInstanceOf[Operand[Attribute]],
+          Result(convertLLVMIntegerType(min.result.typ)),
+        )
+        valueMap(min.result) = select.res
+        Seq(cmp, select)
       case add: arith.AddF =>
         val lowered = llvm.FAdd(
           asFloat(remap(add.lhs)),
@@ -143,8 +155,8 @@ private final class Builder(val funcOp: func.Func):
 
 private val LowerFunc = pattern {
   case op: func.Func if op.body.blocks.exists(_.operations.exists {
-        case _: arith.Constant | _: arith.AddI | _: arith.MulI | _: arith.AddF |
-            _: arith.MulF =>
+        case _: arith.Constant | _: arith.AddI | _: arith.MulI | _: arith.MinSI |
+            _: arith.AddF | _: arith.MulF =>
           true
         case _ => false
       }) =>
