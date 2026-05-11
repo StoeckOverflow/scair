@@ -5,10 +5,6 @@ evidence for the matmul affine bridge, not a separate runtime benchmark.
 
 ## Variants
 
-The script accepts canonical aliases from
-[`../tiling_benchmark_routes.md`](../tiling_benchmark_routes.md), and emits the
-accepted route map to `out/route_manifest.md` for each run.
-
 - `mlir_runtime_product`: ordinary stock affine/MLIR product bound, tiled with a
   static tile size, expected to keep a min/tail bound.
 - `mlir_static_factor_reference`: stock affine static-factor reference with no

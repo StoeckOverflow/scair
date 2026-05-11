@@ -9,13 +9,6 @@ experiments are intentionally split into:
 - **Exploratory/future work**: useful context, but not a headline thesis claim.
 - **Generated artifacts**: reproducible outputs from scripts, not source inputs.
 
-For the focused thesis story, start with
-[`thesis_evaluation_summary.md`](thesis_evaluation_summary.md).
-For stable tiling route names and claim boundaries, see
-[`tiling_benchmark_routes.md`](tiling_benchmark_routes.md). The pass-level
-compiler invariants are documented in
-[`../passes/docs/tiling_invariants.md`](../passes/docs/tiling_invariants.md).
-
 ## Global Requirements
 
 - Build ScaIR first, or let `./mill -i filechecks.run` build the opt launcher.
