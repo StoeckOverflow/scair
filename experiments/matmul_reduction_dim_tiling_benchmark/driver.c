@@ -4,41 +4,41 @@
 #include <time.h>
 
 #ifndef BENCH_LABEL
-#define BENCH_LABEL "matmul_tiling"
+#define BENCH_LABEL "matmul_reduction_dim_tiling"
 #endif
 
 #ifndef VARIANT_LABEL
 #define VARIANT_LABEL "value_dependent"
 #endif
 
-#ifndef MATMUL_TILING_TIMED_REGION_KERNEL_ONLY
-#define MATMUL_TILING_TIMED_REGION_KERNEL_ONLY 0
+#ifndef MATMUL_REDUCTION_DIM_TILING_TIMED_REGION_KERNEL_ONLY
+#define MATMUL_REDUCTION_DIM_TILING_TIMED_REGION_KERNEL_ONLY 0
 #endif
 
 enum {
-#ifndef MATMUL_TILING_M
-#define MATMUL_TILING_M 128
+#ifndef MATMUL_REDUCTION_DIM_TILING_M
+#define MATMUL_REDUCTION_DIM_TILING_M 128
 #endif
-#ifndef MATMUL_TILING_N
-#define MATMUL_TILING_N 128
+#ifndef MATMUL_REDUCTION_DIM_TILING_N
+#define MATMUL_REDUCTION_DIM_TILING_N 128
 #endif
-#ifndef MATMUL_TILING_K0
-#define MATMUL_TILING_K0 12
+#ifndef MATMUL_REDUCTION_DIM_TILING_K0
+#define MATMUL_REDUCTION_DIM_TILING_K0 12
 #endif
-#ifndef MATMUL_TILING_K1
-#define MATMUL_TILING_K1 64
+#ifndef MATMUL_REDUCTION_DIM_TILING_K1
+#define MATMUL_REDUCTION_DIM_TILING_K1 64
 #endif
-  kM = MATMUL_TILING_M,
-  kN = MATMUL_TILING_N,
-  kK0 = MATMUL_TILING_K0,
-  kK1 = MATMUL_TILING_K1,
+  kM = MATMUL_REDUCTION_DIM_TILING_M,
+  kN = MATMUL_REDUCTION_DIM_TILING_N,
+  kK0 = MATMUL_REDUCTION_DIM_TILING_K0,
+  kK1 = MATMUL_REDUCTION_DIM_TILING_K1,
   kK = kK0 * kK1,
   kAElements = kM * kK,
   kBElements = kK * kN,
   kCElements = kM * kN,
 };
 
-extern void matmul_tiling(
+extern void matmul_reduction_dim_tiling(
     int64_t m_nat, int64_t n_nat, int64_t k0_nat, int64_t k1_nat,
     float *A, float *B, float *C);
 
@@ -115,15 +115,15 @@ int main(int argc, char **argv) {
 
   struct timespec start;
   struct timespec end;
-  if (MATMUL_TILING_TIMED_REGION_KERNEL_ONLY) {
+  if (MATMUL_REDUCTION_DIM_TILING_TIMED_REGION_KERNEL_ONLY) {
     fill(C, kCElements, 0.0f);
   }
   clock_gettime(CLOCK_MONOTONIC, &start);
   for (int64_t iter = 0; iter < iterations; ++iter) {
-    if (!MATMUL_TILING_TIMED_REGION_KERNEL_ONLY) {
+    if (!MATMUL_REDUCTION_DIM_TILING_TIMED_REGION_KERNEL_ONLY) {
       fill(C, kCElements, 0.0f);
     }
-    matmul_tiling(kM, kN, kK0, kK1, A, B, C);
+    matmul_reduction_dim_tiling(kM, kN, kK0, kK1, A, B, C);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
 

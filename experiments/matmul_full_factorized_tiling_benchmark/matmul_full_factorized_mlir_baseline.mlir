@@ -1,7 +1,9 @@
 module {
-  func.func @matmul_tiling(
-      %m : index,
-      %n : index,
+  func.func @matmul_full_factorized_tiling(
+      %m0 : index,
+      %m1 : index,
+      %n0 : index,
+      %n1 : index,
       %k0 : index,
       %k1 : index,
       %Aflat : memref<?xf32>,
@@ -10,6 +12,8 @@ module {
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
     %f0 = arith.constant 0.0 : f32
+    %m = arith.muli %m0, %m1 : index
+    %n = arith.muli %n0, %n1 : index
     %k = arith.muli %k0, %k1 : index
 
     %A = memref.reinterpret_cast %Aflat to

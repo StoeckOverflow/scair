@@ -4,34 +4,34 @@
 #include <time.h>
 
 #ifndef BENCH_LABEL
-#define BENCH_LABEL "matmul_tiling"
+#define BENCH_LABEL "matmul_reduction_dim_tiling"
 #endif
 
 #ifndef VARIANT_LABEL
 #define VARIANT_LABEL "mlir_baseline"
 #endif
 
-#ifndef MATMUL_TILING_TIMED_REGION_KERNEL_ONLY
-#define MATMUL_TILING_TIMED_REGION_KERNEL_ONLY 0
+#ifndef MATMUL_REDUCTION_DIM_TILING_TIMED_REGION_KERNEL_ONLY
+#define MATMUL_REDUCTION_DIM_TILING_TIMED_REGION_KERNEL_ONLY 0
 #endif
 
 enum {
-#ifndef MATMUL_TILING_M
-#define MATMUL_TILING_M 128
+#ifndef MATMUL_REDUCTION_DIM_TILING_M
+#define MATMUL_REDUCTION_DIM_TILING_M 128
 #endif
-#ifndef MATMUL_TILING_N
-#define MATMUL_TILING_N 128
+#ifndef MATMUL_REDUCTION_DIM_TILING_N
+#define MATMUL_REDUCTION_DIM_TILING_N 128
 #endif
-#ifndef MATMUL_TILING_K0
-#define MATMUL_TILING_K0 12
+#ifndef MATMUL_REDUCTION_DIM_TILING_K0
+#define MATMUL_REDUCTION_DIM_TILING_K0 12
 #endif
-#ifndef MATMUL_TILING_K1
-#define MATMUL_TILING_K1 64
+#ifndef MATMUL_REDUCTION_DIM_TILING_K1
+#define MATMUL_REDUCTION_DIM_TILING_K1 64
 #endif
-  kM = MATMUL_TILING_M,
-  kN = MATMUL_TILING_N,
-  kK0 = MATMUL_TILING_K0,
-  kK1 = MATMUL_TILING_K1,
+  kM = MATMUL_REDUCTION_DIM_TILING_M,
+  kN = MATMUL_REDUCTION_DIM_TILING_N,
+  kK0 = MATMUL_REDUCTION_DIM_TILING_K0,
+  kK1 = MATMUL_REDUCTION_DIM_TILING_K1,
   kK = kK0 * kK1,
   kAElements = kM * kK,
   kBElements = kK * kN,
@@ -46,7 +46,7 @@ typedef struct {
   int64_t strides[1];
 } MemRef1D_f32;
 
-extern void _mlir_ciface_matmul_tiling(
+extern void _mlir_ciface_matmul_reduction_dim_tiling(
     int64_t m, int64_t n, int64_t k0, int64_t k1,
     MemRef1D_f32 *A, MemRef1D_f32 *B, MemRef1D_f32 *C);
 
@@ -138,15 +138,15 @@ int main(int argc, char **argv) {
 
   struct timespec start;
   struct timespec end;
-  if (MATMUL_TILING_TIMED_REGION_KERNEL_ONLY) {
+  if (MATMUL_REDUCTION_DIM_TILING_TIMED_REGION_KERNEL_ONLY) {
     fill(C, kCElements, 0.0f);
   }
   clock_gettime(CLOCK_MONOTONIC, &start);
   for (int64_t iter = 0; iter < iterations; ++iter) {
-    if (!MATMUL_TILING_TIMED_REGION_KERNEL_ONLY) {
+    if (!MATMUL_REDUCTION_DIM_TILING_TIMED_REGION_KERNEL_ONLY) {
       fill(C, kCElements, 0.0f);
     }
-    _mlir_ciface_matmul_tiling(kM, kN, kK0, kK1, &Aref, &Bref, &Cref);
+    _mlir_ciface_matmul_reduction_dim_tiling(kM, kN, kK0, kK1, &Aref, &Bref, &Cref);
   }
   clock_gettime(CLOCK_MONOTONIC, &end);
 

@@ -1,5 +1,5 @@
 builtin.module {
-  func.func @matmul_tiling(
+  func.func @matmul_reduction_dim_tiling(
     %m_nat : !dtensor.nat,
     %n_nat : !dtensor.nat,
     %k0_nat : !dtensor.nat,
