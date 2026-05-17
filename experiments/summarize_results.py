@@ -11,9 +11,8 @@ FAMILY_ORDER = {
     "convolution_benchmark": 1,
     "matmul_reduction_dim_tiling_benchmark": 2,
     "broadcast_affine_2d_benchmark": 3,
-    "attention_mha_benchmark": 4,
-    "semi_affine_indexing_benchmark": 5,
-    "type_polymorphism": 6,
+    "semi_affine_indexing_benchmark": 4,
+    "type_polymorphism": 5,
 }
 
 
@@ -61,7 +60,6 @@ def main() -> int:
         out.write("- `compile_total_ms` falls back to legacy `compile_ms` when a family has not yet been upgraded to split compile timing.\n")
         out.write("- `runtime_median_ns_per_iter` falls back to legacy `runtime_ns_per_iter` for older rows.\n")
         out.write("- Weak structural-only families may still emit `NA` for checksum and compile sub-stages.\n")
-        out.write("- `attention_mha_benchmark` remains supporting-only and should not be used for broad attention-performance claims.\n")
         out.write("- `Commit` and `Env` identify the source revision and captured machine metadata for each row.\n")
     return 0
 

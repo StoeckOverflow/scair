@@ -19,7 +19,6 @@ export BENCH_CPU_PIN
 SEMI_AFFINE_ITERATIONS_DEFAULT="${SEMI_AFFINE_ITERATIONS:-1000}"
 STRIDED_MATMUL_ITERATIONS_DEFAULT="${STRIDED_MATMUL_ITERATIONS:-200}"
 CONVOLUTION_ITERATIONS_DEFAULT="${CONVOLUTION_ITERATIONS:-50}"
-ATTENTION_MHA_ITERATIONS_DEFAULT="${ATTENTION_MHA_ITERATIONS:-100}"
 MATMUL_REDUCTION_DIM_TILING_ITERATIONS_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_ITERATIONS:-100}"
 MATMUL_REDUCTION_DIM_TILING_PROFILE_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_PROFILE:-default}"
 MATMUL_REDUCTION_DIM_TILING_TILE_POLICY_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_TILE_POLICY:-inner_factor}"
@@ -50,43 +49,52 @@ SKIP_BUILD="${SKIP_BUILD:-0}"
 # the shared core columns in COMMON_METRICS_HEADER.
 
 SCRIPTS=(
-  "$SCAIR_ROOT/experiments/type_polymorphism/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/strided_matmul_benchmark/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/convolution_benchmark/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/attention_mha_benchmark/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/affine_tiling_benchmark/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/conv2d_output_dim_tiling_benchmark/build_conv2d_output_dim_tiling_example.sh"
-  "$SCAIR_ROOT/experiments/conv2d_reduction_dim_tiling_benchmark/build_conv2d_reduction_dim_tiling_example.sh"
-  "$SCAIR_ROOT/experiments/conv2d_full_factorized_tiling_benchmark/build_conv2d_full_factorized_tiling_example.sh"
-  "$SCAIR_ROOT/experiments/shape_reification_benchmark/build_shape_reification_example.sh"
-  "$SCAIR_ROOT/experiments/tail_min_simplifier_benchmark/build_tail_min_simplifier_example.sh"
-  "$SCAIR_ROOT/experiments/matmul_outer_dim_tiling_benchmark/build_matmul_outer_dim_tiling_example.sh"
-  "$SCAIR_ROOT/experiments/matmul_reduction_dim_tiling_benchmark/build_matmul_reduction_dim_tiling_example.sh"
-  "$SCAIR_ROOT/experiments/matmul_full_factorized_tiling_benchmark/build_matmul_full_factorized_tiling_example.sh"
+  "$SCAIR_ROOT/experiments/design_benchmarks/type_polymorphism/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/structural_benchmarks/semi_affine_indexing_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/structural_benchmarks/strided_matmul_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/structural_benchmarks/convolution_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/affine_tiling_benchmark/build_scair_example.sh"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/conv2d_output_dim_tiling_benchmark/build_conv2d_output_dim_tiling_example.sh"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/conv2d_reduction_dim_tiling_benchmark/build_conv2d_reduction_dim_tiling_example.sh"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/conv2d_full_factorized_tiling_benchmark/build_conv2d_full_factorized_tiling_example.sh"
+  "$SCAIR_ROOT/experiments/design_benchmarks/shape_reification_benchmark/build_shape_reification_example.sh"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/tail_min_simplifier_benchmark/build_tail_min_simplifier_example.sh"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/tiling_correctness_matrix/build_tiling_correctness_matrix.sh"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/matmul_outer_dim_tiling_benchmark/build_matmul_outer_dim_tiling_example.sh"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/matmul_reduction_dim_tiling_benchmark/build_matmul_reduction_dim_tiling_example.sh"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/matmul_full_factorized_tiling_benchmark/build_matmul_full_factorized_tiling_example.sh"
 )
 
 METRIC_FILES=(
-  "$SCAIR_ROOT/experiments/type_polymorphism/out/metrics.csv"
-  "$SCAIR_ROOT/experiments/semi_affine_indexing_benchmark/out/metrics.csv"
-  "$SCAIR_ROOT/experiments/strided_matmul_benchmark/out/metrics.csv"
-  "$SCAIR_ROOT/experiments/convolution_benchmark/out/metrics.csv"
-  "$SCAIR_ROOT/experiments/attention_mha_benchmark/out/metrics.csv"
-  "$SCAIR_ROOT/experiments/affine_tiling_benchmark/out/metrics.csv"
-  "$SCAIR_ROOT/experiments/matmul_reduction_dim_tiling_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/design_benchmarks/type_polymorphism/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/structural_benchmarks/semi_affine_indexing_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/structural_benchmarks/strided_matmul_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/structural_benchmarks/convolution_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/affine_tiling_benchmark/out/metrics.csv"
+  "$SCAIR_ROOT/experiments/tiling_benchmarks/matmul_reduction_dim_tiling_benchmark/out/metrics.csv"
+)
+
+COMMON_FAMILIES=(
+  "design_benchmarks/type_polymorphism"
+  "structural_benchmarks/semi_affine_indexing_benchmark"
+  "structural_benchmarks/strided_matmul_benchmark"
+  "structural_benchmarks/convolution_benchmark"
+  "tiling_benchmarks/affine_tiling_benchmark"
+  "tiling_benchmarks/matmul_reduction_dim_tiling_benchmark"
 )
 
 # Structural validation families intentionally keep family-specific schemas.
 # Run them with the aggregate suite, but archive their outputs separately from
 # the common-schema runtime CSV.
 STRUCTURAL_FAMILIES=(
-  "conv2d_output_dim_tiling_benchmark"
-  "conv2d_reduction_dim_tiling_benchmark"
-  "conv2d_full_factorized_tiling_benchmark"
-  "shape_reification_benchmark"
-  "tail_min_simplifier_benchmark"
-  "matmul_outer_dim_tiling_benchmark"
-  "matmul_full_factorized_tiling_benchmark"
+  "tiling_benchmarks/conv2d_output_dim_tiling_benchmark"
+  "tiling_benchmarks/conv2d_reduction_dim_tiling_benchmark"
+  "tiling_benchmarks/conv2d_full_factorized_tiling_benchmark"
+  "design_benchmarks/shape_reification_benchmark"
+  "tiling_benchmarks/tail_min_simplifier_benchmark"
+  "tiling_benchmarks/tiling_correctness_matrix"
+  "tiling_benchmarks/matmul_outer_dim_tiling_benchmark"
+  "tiling_benchmarks/matmul_full_factorized_tiling_benchmark"
 )
 
 run_benchmark_script() {
@@ -121,12 +129,6 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
         BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
         BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
         ITERATIONS="$CONVOLUTION_ITERATIONS_DEFAULT" \
-        run_benchmark_script "$script"
-        ;;
-      attention_mha_benchmark)
-        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-        ITERATIONS="$ATTENTION_MHA_ITERATIONS_DEFAULT" \
         run_benchmark_script "$script"
         ;;
       affine_tiling_benchmark)
@@ -200,9 +202,19 @@ capture_env_snapshot "$ENV_JSON"
 SUMMARY_MD="$OUT_DIR/summary.md"
 python3 "$SCAIR_ROOT/experiments/summarize_results.py" "$ALL_CSV" "$SUMMARY_MD"
 
-STRUCTURAL_OUT_DIR="$OUT_DIR/structural"
+for family in "${COMMON_FAMILIES[@]}"; do
+  family_out="$SCAIR_ROOT/experiments/$family/out"
+  family_archive_dir="$OUT_DIR/$(dirname "$family")"
+  family_name="$(basename "$family")"
+  mkdir -p "$family_archive_dir"
+  cp "$family_out/metrics.csv" "$family_archive_dir/$family_name.metrics.csv"
+  if [[ -f "$family_out/summary.md" ]]; then
+    cp "$family_out/summary.md" "$family_archive_dir/$family_name.summary.md"
+  fi
+done
+
+STRUCTURAL_OUT_DIR="$OUT_DIR"
 STRUCTURAL_MANIFEST="$OUT_DIR/structural_metrics_manifest.json"
-mkdir -p "$STRUCTURAL_OUT_DIR"
 
 {
   printf '[\n'
@@ -218,25 +230,29 @@ mkdir -p "$STRUCTURAL_OUT_DIR"
     require_file "$metrics_csv"
     require_file "$summary_md"
 
-    cp "$metrics_csv" "$STRUCTURAL_OUT_DIR/$family.metrics.csv"
-    cp "$summary_md" "$STRUCTURAL_OUT_DIR/$family.summary.md"
+    family_archive_dir="$STRUCTURAL_OUT_DIR/$(dirname "$family")"
+    family_name="$(basename "$family")"
+    mkdir -p "$family_archive_dir"
+
+    cp "$metrics_csv" "$family_archive_dir/$family_name.metrics.csv"
+    cp "$summary_md" "$family_archive_dir/$family_name.summary.md"
 
     metrics_json_ref="null"
     if [[ -f "$metrics_json" ]]; then
-      cp "$metrics_json" "$STRUCTURAL_OUT_DIR/$family.metrics.json"
-      metrics_json_ref="\"structural/$family.metrics.json\""
+      cp "$metrics_json" "$family_archive_dir/$family_name.metrics.json"
+      metrics_json_ref="\"$family.metrics.json\""
     fi
 
     route_manifest_md_ref="null"
     if [[ -f "$route_manifest_md" ]]; then
-      cp "$route_manifest_md" "$STRUCTURAL_OUT_DIR/$family.route_manifest.md"
-      route_manifest_md_ref="\"structural/$family.route_manifest.md\""
+      cp "$route_manifest_md" "$family_archive_dir/$family_name.route_manifest.md"
+      route_manifest_md_ref="\"$family.route_manifest.md\""
     fi
 
     route_manifest_json_ref="null"
     if [[ -f "$route_manifest_json" ]]; then
-      cp "$route_manifest_json" "$STRUCTURAL_OUT_DIR/$family.route_manifest.json"
-      route_manifest_json_ref="\"structural/$family.route_manifest.json\""
+      cp "$route_manifest_json" "$family_archive_dir/$family_name.route_manifest.json"
+      route_manifest_json_ref="\"$family.route_manifest.json\""
     fi
 
     if [[ "$idx" -gt 0 ]]; then
@@ -244,9 +260,9 @@ mkdir -p "$STRUCTURAL_OUT_DIR"
     fi
     printf '  {\n'
     printf '    "family": "%s",\n' "$family"
-    printf '    "metrics_csv": "structural/%s.metrics.csv",\n' "$family"
+    printf '    "metrics_csv": "%s.metrics.csv",\n' "$family"
     printf '    "metrics_json": %s,\n' "$metrics_json_ref"
-    printf '    "summary_md": "structural/%s.summary.md",\n' "$family"
+    printf '    "summary_md": "%s.summary.md",\n' "$family"
     printf '    "route_manifest_md": %s,\n' "$route_manifest_md_ref"
     printf '    "route_manifest_json": %s\n' "$route_manifest_json_ref"
     printf '  }'

@@ -1,4 +1,4 @@
-// RUN: mlir-opt %S/../../../experiments/shape_reification_benchmark/ordinary_dynamic_shape_same_shape_different_ssa.mlir --canonicalize --cse --symbol-dce | filecheck %s
+// RUN: mlir-opt %S/../../../experiments/design_benchmarks/shape_reification_benchmark/ordinary_dynamic_shape_same_shape_different_ssa.mlir --canonicalize --cse --symbol-dce | filecheck %s
 
 // CHECK-LABEL: func.func @ordinary_same_shape_different_ssa
 // CHECK: tensor.dim %arg0
