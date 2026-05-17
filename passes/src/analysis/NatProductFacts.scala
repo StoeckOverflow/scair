@@ -5,6 +5,17 @@ import scair.ir.*
 import scair.passes.NatProvenance
 
 object NatProductFacts:
+  enum FactorSelectionPolicy:
+    case RightmostPositive
+    case LeftmostPositive
+    case FactorIndex(index: Int)
+
+    def label: String =
+      this match
+        case RightmostPositive => "rightmost-positive"
+        case LeftmostPositive  => "leftmost-positive"
+        case FactorIndex(idx)  => s"factor-index=$idx"
+
   enum FactorKey:
     case Const(value: BigInt)
     case Atom(value: Value[Attribute])
@@ -49,6 +60,18 @@ object NatProductFacts:
     def rightmostPositiveFactor: Option[Factor] =
       if factors.exists(_.constValue.contains(BigInt(0))) then None
       else factors.reverse.find(_.isPositive)
+
+    def leftmostPositiveFactor: Option[Factor] =
+      if factors.exists(_.constValue.contains(BigInt(0))) then None
+      else factors.find(_.isPositive)
+
+    def selectFactor(policy: FactorSelectionPolicy): Option[Factor] =
+      if factors.exists(_.constValue.contains(BigInt(0))) then None
+      else
+        policy match
+          case FactorSelectionPolicy.RightmostPositive => factors.reverse.find(_.isPositive)
+          case FactorSelectionPolicy.LeftmostPositive  => factors.find(_.isPositive)
+          case FactorSelectionPolicy.FactorIndex(idx)  => factors.lift(idx).filter(_.isPositive)
 
     def keys: Seq[FactorKey] =
       factors.map(_.key)
@@ -108,6 +131,14 @@ object NatProductFacts:
   def rightmostPositiveFactor(fullBound: Value[Attribute]): Option[Factor] =
     flattenProduct(fullBound).flatMap { product =>
       if product.factors.size < 2 then None else product.rightmostPositiveFactor
+    }
+
+  def selectFactor(
+      fullBound: Value[Attribute],
+      policy: FactorSelectionPolicy,
+  ): Option[Factor] =
+    flattenProduct(fullBound).flatMap { product =>
+      if product.factors.size < 2 then None else product.selectFactor(policy)
     }
 
   def buildExplicitProduct(factors: Seq[Factor]): Option[(Seq[Operation], Value[Attribute])] =

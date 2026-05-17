@@ -5,6 +5,7 @@ import scair.dialects.affine
 import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.ir.*
+import scair.passes.NatProvenance
 import scair.transformations.ModulePass
 import scair.transformations.RewriteMethods
 
@@ -118,10 +119,6 @@ private object OrdinaryAffineProductTileWithTailTransform:
       body = body,
     )
 
-  private def hasTileMarker(loop: affine.For): Boolean =
-    loop.attributes.contains("scair.ordinary_affine_product_tile_with_tail.mode") ||
-      loop.attributes.contains("scair.ordinary_affine_product_tile_with_tail.generated")
-
   private def isStaticUnitStep(loop: affine.For): Boolean =
     loop.step.value.value == 1
 
@@ -133,12 +130,12 @@ private object OrdinaryAffineProductTileWithTailTransform:
         case _                   => None
 
   private def tryTile(loop: affine.For, tileSize: BigInt, requireReductionLoop: Boolean): Boolean =
-    if hasTileMarker(loop) then false
-    else if loop.body.blocks.size != 1 then false
+    if loop.body.blocks.size != 1 then false
     else if requireReductionLoop && (loop.inits.isEmpty || loop.res.isEmpty) then false
     else if !isStaticUnitStep(loop) then false
     else if loop.lowerBoundOperands.size != 1 || loop.upperBoundOperands.size != 1 then false
     else if !isIdentityProjection(loop.lowerBoundMap) || !isIdentityProjection(loop.upperBoundMap) then false
+    else if NatProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then false
     else
       chooseProductUpperBound(loop) match
         case None => false
@@ -181,17 +178,8 @@ private object OrdinaryAffineProductTileWithTailTransform:
               given mutable.Map[Value[Attribute], Value[Attribute]] = valueMapper
               oldBlock.operations.map(_.deepCopy).toSeq
             }
-            innerLoop.attributes.addOne(
-              "scair.ordinary_affine_product_tile_with_tail.generated" -> StringData("inner")
-            )
-
             Seq(innerLoop, affine.Yield(innerLoop.results.map(_.asInstanceOf[Operand[Attribute]])))
           }
-
-          outerLoop.attributes.addOne("scair.ordinary_affine_product_tile_with_tail.mode" -> StringData("static_step_tail_guarded"))
-          outerLoop.attributes.addOne("scair.ordinary_affine_product_tile_with_tail.tail_free" -> StringData("false"))
-          outerLoop.attributes.addOne("scair.ordinary_affine_product_tile_with_tail.proof" -> StringData("none"))
-          outerLoop.attributes.addOne("scair.ordinary_affine_product_tile_with_tail.generated" -> StringData("outer"))
 
           RewriteMethods.replaceOp(
             loop,

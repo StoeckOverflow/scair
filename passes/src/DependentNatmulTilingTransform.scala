@@ -7,6 +7,7 @@ import scair.dialects.d_affine
 import scair.ir.*
 import scair.passes.NatProvenance
 import scair.passes.analysis.NatProductFacts
+import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
 import scair.transformations.RewriteMethods
 
 import scala.collection.mutable
@@ -19,36 +20,24 @@ private[dependent_natmul_tiling] enum ProductLoopKind:
   case ReductionOnly
   case AnyProductLoop
 
-private[dependent_natmul_tiling] final case class DependentNatmulTilingAttributes(
-    modeKey: String,
-    mode: String,
-    generatedKey: String,
-    tailFreeKey: String,
-    tailFree: String,
-    proofKey: String,
-    proof: String,
-)
-
 private[dependent_natmul_tiling] object DependentNatmulTilingTransform:
   def transform(
       op: Operation,
       tailPolicy: TailPolicy,
-      attributes: DependentNatmulTilingAttributes,
+      factorPolicy: FactorSelectionPolicy = FactorSelectionPolicy.RightmostPositive,
       loopKind: ProductLoopKind = ProductLoopKind.ReductionOnly,
   ): Operation =
-    transformWithPlan(op, tailPolicy, attributes, chooseNatmulPlan, loopKind)
+    transformWithPlan(op, tailPolicy, chooseNatmulPlan(factorPolicy), loopKind)
 
   def transformOrdinaryIndexProduct(
       op: Operation,
-      attributes: DependentNatmulTilingAttributes,
       loopKind: ProductLoopKind = ProductLoopKind.ReductionOnly,
   ): Operation =
-    transformWithPlan(op, TailPolicy.Guarded, attributes, chooseOrdinaryIndexProductPlan, loopKind)
+    transformWithPlan(op, TailPolicy.Guarded, chooseOrdinaryIndexProductPlan, loopKind)
 
   private def transformWithPlan(
       op: Operation,
       tailPolicy: TailPolicy,
-      attributes: DependentNatmulTilingAttributes,
       choosePlan: d_affine.For => Option[TilePlan],
       loopKind: ProductLoopKind,
   ): Operation =
@@ -57,7 +46,7 @@ private[dependent_natmul_tiling] object DependentNatmulTilingTransform:
       changed = false
       collectLoopsInnermostFirst(op).foreach {
         case loop: d_affine.For =>
-          if loop.containerBlock.nonEmpty && tryTile(loop, tailPolicy, attributes, choosePlan, loopKind) then
+          if loop.containerBlock.nonEmpty && tryTile(loop, tailPolicy, choosePlan, loopKind) then
             changed = true
       }
     op
@@ -131,10 +120,12 @@ private[dependent_natmul_tiling] object DependentNatmulTilingTransform:
       tileSize: Value[Attribute],
   )
 
-  private def chooseNatmulPlan(loop: d_affine.For): Option[TilePlan] =
+  private def chooseNatmulPlan(
+      factorPolicy: FactorSelectionPolicy
+  )(loop: d_affine.For): Option[TilePlan] =
     if loop.upperBoundOperands.size != 1 then None
     else
-      NatProductFacts.rightmostPositiveFactor(loop.upperBoundOperands.head).map { factor =>
+      NatProductFacts.selectFactor(loop.upperBoundOperands.head, factorPolicy).map { factor =>
         val tileSize = toIndex(factor.value)
         TilePlan(
           prelude = Seq(tileSize),
@@ -188,30 +179,16 @@ private[dependent_natmul_tiling] object DependentNatmulTilingTransform:
       body = body,
     )
 
-  private def hasTileMarker(loop: d_affine.For): Boolean =
-    loop.attributes.contains("scair.dependent_exact_tile.mode") ||
-      loop.attributes.contains("scair.dependent_exact_tile.generated") ||
-      loop.attributes.contains("scair.dependent_product_loop_exact_tile.mode") ||
-      loop.attributes.contains("scair.dependent_product_loop_exact_tile.generated") ||
-      loop.attributes.contains("scair.dependent_tile_with_tail_control.mode") ||
-      loop.attributes.contains("scair.dependent_tile_with_tail_control.generated") ||
-      loop.attributes.contains("scair.ordinary_product_tile_with_tail.mode") ||
-      loop.attributes.contains("scair.ordinary_product_tile_with_tail.generated") ||
-      loop.attributes.contains("scair.attention.tile.mode") ||
-      loop.attributes.contains("scair.attention.tile.generated")
-
   private def isStaticUnitStep(loop: d_affine.For): Boolean =
     loop.stepOperands.isEmpty && loop.step.value.value == 1
 
   private def tryTile(
       loop: d_affine.For,
       tailPolicy: TailPolicy,
-      attributes: DependentNatmulTilingAttributes,
       choosePlan: d_affine.For => Option[TilePlan],
       loopKind: ProductLoopKind,
   ): Boolean =
-    if hasTileMarker(loop) then false
-    else if loop.body.blocks.size != 1 then false
+    if loop.body.blocks.size != 1 then false
     else if loopKind == ProductLoopKind.ReductionOnly && (loop.inits.isEmpty || loop.res.isEmpty) then false
     else if !isStaticUnitStep(loop) then false
     else if loop.lowerBoundOperands.size != 1 || loop.upperBoundOperands.size != 1 then false
@@ -297,19 +274,11 @@ private[dependent_natmul_tiling] object DependentNatmulTilingTransform:
               given mutable.Map[Value[Attribute], Value[Attribute]] = valueMapper
               oldBlock.operations.map(_.deepCopy).toSeq
             }
-            innerLoop.attributes.addOne(attributes.generatedKey -> StringData("inner"))
-
             tileEndPrelude ++ boundPrelude ++ Seq(
               innerLoop,
               d_affine.Yield(innerLoop.results.map(_.asInstanceOf[Operand[Attribute]])),
             )
           }
-
-          outerLoop.attributes.addOne(attributes.modeKey -> StringData(attributes.mode))
-          outerLoop.attributes.addOne(attributes.tailFreeKey -> StringData(attributes.tailFree))
-          outerLoop.attributes.addOne(attributes.proofKey -> StringData(attributes.proof))
-          outerLoop.attributes.addOne(attributes.generatedKey -> StringData("outer"))
-
           RewriteMethods.replaceOp(
             loop,
             zero +: (plan.prelude :+ outerLoop),

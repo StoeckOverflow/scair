@@ -7,7 +7,9 @@ import scair.dialects.builtin.*
 import scair.dialects.dTensor
 import scair.dialects.d_affine
 import scair.ir.*
+import scair.passes.NatProvenance
 import scair.passes.analysis.NatProductFacts
+import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
 import scair.transformations.ModulePass
 import scair.transformations.RewriteMethods
 
@@ -27,24 +29,25 @@ final class DependentContextBandTileWithTail(ctx: MLContext, tileSize: BigInt)
   override def transform(op: Operation): Operation =
     ContextBandTileWithTailTransform.transformDAffine(op, tileSize)
 
-final class DependentContextBandExactTile(ctx: MLContext) extends ModulePass(ctx):
+final class DependentContextBandExactTile(
+    ctx: MLContext,
+    factorPolicy: FactorSelectionPolicy = FactorSelectionPolicy.RightmostPositive,
+) extends ModulePass(ctx):
   override val name: String = "dependent-context-band-exact-tile"
 
   override def transform(op: Operation): Operation =
-    ContextBandTileWithTailTransform.transformDAffineExactNatmul(op)
+    ContextBandTileWithTailTransform.transformDAffineExactNatmul(op, factorPolicy)
 
-final class DependentContextBandFactorTileWithTail(ctx: MLContext) extends ModulePass(ctx):
+final class DependentContextBandFactorTileWithTail(
+    ctx: MLContext,
+    factorPolicy: FactorSelectionPolicy = FactorSelectionPolicy.RightmostPositive,
+) extends ModulePass(ctx):
   override val name: String = "dependent-context-band-factor-tile-with-tail"
 
   override def transform(op: Operation): Operation =
-    ContextBandTileWithTailTransform.transformDAffineFactorGuardedNatmul(op)
+    ContextBandTileWithTailTransform.transformDAffineFactorGuardedNatmul(op, factorPolicy)
 
 private object ContextBandTileWithTailTransform:
-  private val ordinaryMarker = "scair.context_band_tile_with_tail.generated"
-  private val ordinaryMode = "scair.context_band_tile_with_tail.mode"
-  private val dependentMarker = "scair.dependent_context_band_tile_with_tail.generated"
-  private val dependentMode = "scair.dependent_context_band_tile_with_tail.mode"
-
   private def asIndex(v: Value[Attribute]): Operand[IndexType] =
     v.asInstanceOf[Operand[IndexType]]
 
@@ -87,31 +90,6 @@ private object ContextBandTileWithTailTransform:
       map.affineMap.symbols.isEmpty &&
       map.affineMap.affineExprs == Seq(AffineDimExpr(map.affineMap.dimensions.head))
 
-  private def hasAnyTilingMarker(op: Operation): Boolean =
-    op.attributes.contains(ordinaryMarker) ||
-      op.attributes.contains(ordinaryMode) ||
-      op.attributes.contains(dependentMarker) ||
-      op.attributes.contains(dependentMode) ||
-      hasProductTilingMarker(op)
-
-  private def hasProductTilingMarker(op: Operation): Boolean =
-    op.attributes.contains("scair.ordinary_affine_product_tile_with_tail.generated") ||
-      op.attributes.contains("scair.ordinary_affine_product_tile_with_tail.mode") ||
-      op.attributes.contains("scair.dependent_exact_tile.generated") ||
-      op.attributes.contains("scair.dependent_exact_tile.mode") ||
-      op.attributes.contains("scair.dependent_tile_with_tail_control.generated") ||
-      op.attributes.contains("scair.dependent_tile_with_tail_control.mode") ||
-      op.attributes.contains("scair.ordinary_product_tile_with_tail.generated") ||
-      op.attributes.contains("scair.ordinary_product_tile_with_tail.mode") ||
-      op.attributes.contains("scair.dependent_natmul_factorization.generated") ||
-      op.attributes.contains("scair.dependent_natmul_factorization.mode")
-
-  private def hasProductMarkedAncestor(op: Operation): Boolean =
-    op.containerBlock
-      .flatMap(_.containerRegion)
-      .flatMap(_.containerOperation)
-      .exists(parent => hasProductTilingMarker(parent) || hasProductMarkedAncestor(parent))
-
   private def collectAffineLoopsOutermostFirst(op: Operation): Seq[affine.For] =
     val loops = mutable.ArrayBuffer.empty[affine.For]
 
@@ -137,21 +115,18 @@ private object ContextBandTileWithTailTransform:
     loops.toSeq
 
   private def eligibleAffine(loop: affine.For): Boolean =
-    !hasAnyTilingMarker(loop) &&
-      !hasProductMarkedAncestor(loop) &&
-      loop.inits.isEmpty &&
+    loop.inits.isEmpty &&
       loop.res.isEmpty &&
       loop.step.value.value == 1 &&
       loop.body.blocks.size == 1 &&
       loop.lowerBoundOperands.size == 1 &&
       loop.upperBoundOperands.size == 1 &&
       isIdentityProjection(loop.lowerBoundMap) &&
-      isIdentityProjection(loop.upperBoundMap)
+      isIdentityProjection(loop.upperBoundMap) &&
+      NatProvenance.exactConst(loop.lowerBoundOperands.head) == Some(0)
 
   private def eligibleDAffine(loop: d_affine.For): Boolean =
-    !hasAnyTilingMarker(loop) &&
-      !hasProductMarkedAncestor(loop) &&
-      loop.inits.isEmpty &&
+    loop.inits.isEmpty &&
       loop.res.isEmpty &&
       loop.stepOperands.isEmpty &&
       loop.step.value.value == 1 &&
@@ -159,7 +134,8 @@ private object ContextBandTileWithTailTransform:
       loop.lowerBoundOperands.size == 1 &&
       loop.upperBoundOperands.size == 1 &&
       isIdentityProjection(loop.lowerBoundMap) &&
-      isIdentityProjection(loop.upperBoundMap)
+      isIdentityProjection(loop.upperBoundMap) &&
+      NatProvenance.exactConst(loop.lowerBoundOperands.head) == Some(0)
 
   private def buildAffineLoop(
       lowerBound: Value[Attribute],
@@ -295,12 +271,8 @@ private object ContextBandTileWithTailTransform:
         ) { innerIv =>
           cloneAffineBody(oldBlock, oldIv, innerIv)
         }
-        innerLoop.attributes.addOne(ordinaryMarker -> StringData("inner"))
         Seq(innerLoop, affine.Yield(Seq.empty))
       }
-
-      outerLoop.attributes.addOne(ordinaryMode -> StringData("static_step_tail_guarded_context"))
-      outerLoop.attributes.addOne(ordinaryMarker -> StringData("outer"))
 
       RewriteMethods.replaceOp(loop, Seq(outerLoop), None)
       true
@@ -334,7 +306,6 @@ private object ContextBandTileWithTailTransform:
         ) { innerIv =>
           cloneAffineBody(oldBlock, oldIv, innerIv)
         }
-        innerLoop.attributes.addOne(dependentMarker -> StringData("inner"))
         Seq(
           tileEnd,
           clampedTileEnd,
@@ -342,22 +313,24 @@ private object ContextBandTileWithTailTransform:
           d_affine.Yield(Seq.empty),
         )
       }
-
-      outerLoop.attributes.addOne(dependentMode -> StringData("static_step_tail_guarded_context"))
-      outerLoop.attributes.addOne(dependentMarker -> StringData("outer"))
-
       RewriteMethods.replaceOp(loop, Seq(tileSizeConst, outerLoop), None)
       true
 
-  private def natmulRhsTileSize(loop: d_affine.For): Option[Value[Attribute]] =
+  private def natmulTileSize(
+      loop: d_affine.For,
+      factorPolicy: FactorSelectionPolicy,
+  ): Option[Value[Attribute]] =
     if loop.upperBoundOperands.size != 1 then None
     else
-      NatProductFacts.rightmostPositiveFactor(loop.upperBoundOperands.head).map(_.value)
+      NatProductFacts.selectFactor(loop.upperBoundOperands.head, factorPolicy).map(_.value)
 
-  private def tryTileDAffineExactNatmul(loop: d_affine.For): Boolean =
+  private def tryTileDAffineExactNatmul(
+      loop: d_affine.For,
+      factorPolicy: FactorSelectionPolicy,
+  ): Boolean =
     if !eligibleDAffine(loop) then false
     else
-      natmulRhsTileSize(loop) match
+      natmulTileSize(loop, factorPolicy) match
         case None => false
         case Some(tileNat) =>
           val oldBlock = loop.body.blocks.head
@@ -384,24 +357,22 @@ private object ContextBandTileWithTailTransform:
             ) { innerIv =>
               cloneAffineBody(oldBlock, oldIv, innerIv)
             }
-            innerLoop.attributes.addOne(dependentMarker -> StringData("inner_exact"))
             Seq(
               tileEnd,
               innerLoop,
               d_affine.Yield(Seq.empty),
             )
           }
-
-          outerLoop.attributes.addOne(dependentMode -> StringData("dynamic_step_tail_free_exact_context"))
-          outerLoop.attributes.addOne(dependentMarker -> StringData("outer_exact"))
-
           RewriteMethods.replaceOp(loop, Seq(zero, tileSize, outerLoop), None)
           true
 
-  private def tryTileDAffineFactorGuardedNatmul(loop: d_affine.For): Boolean =
+  private def tryTileDAffineFactorGuardedNatmul(
+      loop: d_affine.For,
+      factorPolicy: FactorSelectionPolicy,
+  ): Boolean =
     if !eligibleDAffine(loop) then false
     else
-      natmulRhsTileSize(loop) match
+      natmulTileSize(loop, factorPolicy) match
         case None => false
         case Some(tileNat) =>
           val oldBlock = loop.body.blocks.head
@@ -433,7 +404,6 @@ private object ContextBandTileWithTailTransform:
             ) { innerIv =>
               cloneAffineBody(oldBlock, oldIv, innerIv)
             }
-            innerLoop.attributes.addOne(dependentMarker -> StringData("inner_factor_guarded"))
             Seq(
               tileEnd,
               clampedTileEnd,
@@ -441,10 +411,6 @@ private object ContextBandTileWithTailTransform:
               d_affine.Yield(Seq.empty),
             )
           }
-
-          outerLoop.attributes.addOne(dependentMode -> StringData("dynamic_step_tail_guarded_context"))
-          outerLoop.attributes.addOne(dependentMarker -> StringData("outer_factor_guarded"))
-
           RewriteMethods.replaceOp(loop, Seq(zero, tileSize, outerLoop), None)
           true
 
@@ -468,20 +434,26 @@ private object ContextBandTileWithTailTransform:
       }
     op
 
-  def transformDAffineExactNatmul(op: Operation): Operation =
+  def transformDAffineExactNatmul(
+      op: Operation,
+      factorPolicy: FactorSelectionPolicy,
+  ): Operation =
     var changed = true
     while changed do
       changed = false
       collectDAffineLoopsOutermostFirst(op).foreach { loop =>
-        if loop.containerBlock.nonEmpty && tryTileDAffineExactNatmul(loop) then changed = true
+        if loop.containerBlock.nonEmpty && tryTileDAffineExactNatmul(loop, factorPolicy) then changed = true
       }
     op
 
-  def transformDAffineFactorGuardedNatmul(op: Operation): Operation =
+  def transformDAffineFactorGuardedNatmul(
+      op: Operation,
+      factorPolicy: FactorSelectionPolicy,
+  ): Operation =
     var changed = true
     while changed do
       changed = false
       collectDAffineLoopsOutermostFirst(op).foreach { loop =>
-        if loop.containerBlock.nonEmpty && tryTileDAffineFactorGuardedNatmul(loop) then changed = true
+        if loop.containerBlock.nonEmpty && tryTileDAffineFactorGuardedNatmul(loop, factorPolicy) then changed = true
       }
     op

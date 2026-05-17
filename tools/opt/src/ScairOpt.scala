@@ -6,8 +6,15 @@ import scair.ir.*
 import scair.parse.*
 import scair.print.AssemblyPrinter
 import scair.print.ErrorPrinter
+import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
+import scair.passes.context_band_tiling.DependentContextBandExactTile
+import scair.passes.context_band_tiling.DependentContextBandFactorTileWithTail
 import scair.passes.context_band_tiling.DependentContextBandTileWithTail
 import scair.passes.context_band_tiling.OrdinaryAffineContextBandTileWithTail
+import scair.passes.dependent_natmul_loop_factorization.DependentNatmulLoopFactorization
+import scair.passes.dependent_natmul_tiling.DependentExactTile
+import scair.passes.dependent_natmul_tiling.DependentProductLoopExactTile
+import scair.passes.dependent_natmul_tiling.DependentTileWithTailControl
 import scair.passes.dependent_natmul_tiling.OrdinaryAffineProductTileWithTail
 import scair.passes.dependent_natmul_tiling.OrdinaryAffineProductLoopTileWithTail
 import scair.tools.ScairToolBase
@@ -170,6 +177,12 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
                   val ordinaryAffineAnyLoopPrefix = "ordinary-affine-product-loop-tile-with-tail:"
                   val ordinaryContextPrefix = "ordinary-affine-context-band-tile-with-tail:"
                   val dependentContextPrefix = "dependent-context-band-tile-with-tail:"
+                  val dependentContextFactorPrefix = "dependent-context-band-factor-tile-with-tail:"
+                  val dependentContextExactPrefix = "dependent-context-band-exact-tile:"
+                  val dependentTileWithTailPrefix = "dependent-tile-with-tail-control:"
+                  val dependentProductExactPrefix = "dependent-product-loop-exact-tile:"
+                  val dependentExactPrefix = "dependent-exact-tile:"
+                  val dependentFactorizationPrefix = "dependent-natmul-loop-factorization:"
                   def parsePositiveTileSize(passName: String, tileSizeText: String): BigInt =
                     if !tileSizeText.matches("[1-9][0-9]*") then
                       Console.err.println(
@@ -177,6 +190,23 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
                       )
                       sys.exit(1)
                     BigInt(tileSizeText)
+
+                  def parseFactorPolicy(passName: String, policyText: String): FactorSelectionPolicy =
+                    if policyText == "rightmost-positive" then FactorSelectionPolicy.RightmostPositive
+                    else if policyText == "leftmost-positive" then FactorSelectionPolicy.LeftmostPositive
+                    else if policyText.startsWith("factor-index=") then
+                      val indexText = policyText.stripPrefix("factor-index=")
+                      if !indexText.matches("[0-9]+") then
+                        Console.err.println(
+                          s"error: $passName expects factor-index=N with non-negative integer N, got '$policyText'."
+                        )
+                        sys.exit(1)
+                      FactorSelectionPolicy.FactorIndex(indexText.toInt)
+                    else
+                      Console.err.println(
+                        s"error: $passName expects factor policy rightmost-positive, leftmost-positive, or factor-index=N, got '$policyText'."
+                      )
+                      sys.exit(1)
 
                   val pass =
                     if parsedPass.startsWith(ordinaryAffineAnyLoopPrefix) then
@@ -202,6 +232,42 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
                       DependentContextBandTileWithTail(
                         ctx,
                         parsePositiveTileSize("dependent-context-band-tile-with-tail", tileSizeText),
+                      )
+                    else if parsedPass.startsWith(dependentContextFactorPrefix) then
+                      val policyText = parsedPass.stripPrefix(dependentContextFactorPrefix)
+                      DependentContextBandFactorTileWithTail(
+                        ctx,
+                        parseFactorPolicy("dependent-context-band-factor-tile-with-tail", policyText),
+                      )
+                    else if parsedPass.startsWith(dependentContextExactPrefix) then
+                      val policyText = parsedPass.stripPrefix(dependentContextExactPrefix)
+                      DependentContextBandExactTile(
+                        ctx,
+                        parseFactorPolicy("dependent-context-band-exact-tile", policyText),
+                      )
+                    else if parsedPass.startsWith(dependentTileWithTailPrefix) then
+                      val policyText = parsedPass.stripPrefix(dependentTileWithTailPrefix)
+                      DependentTileWithTailControl(
+                        ctx,
+                        parseFactorPolicy("dependent-tile-with-tail-control", policyText),
+                      )
+                    else if parsedPass.startsWith(dependentProductExactPrefix) then
+                      val policyText = parsedPass.stripPrefix(dependentProductExactPrefix)
+                      DependentProductLoopExactTile(
+                        ctx,
+                        parseFactorPolicy("dependent-product-loop-exact-tile", policyText),
+                      )
+                    else if parsedPass.startsWith(dependentExactPrefix) then
+                      val policyText = parsedPass.stripPrefix(dependentExactPrefix)
+                      DependentExactTile(
+                        ctx,
+                        parseFactorPolicy("dependent-exact-tile", policyText),
+                      )
+                    else if parsedPass.startsWith(dependentFactorizationPrefix) then
+                      val policyText = parsedPass.stripPrefix(dependentFactorizationPrefix)
+                      DependentNatmulLoopFactorization(
+                        ctx,
+                        parseFactorPolicy("dependent-natmul-loop-factorization", policyText),
                       )
                     else ctx.passContext.get(parsedPass) match
                     case Some(pass) => pass

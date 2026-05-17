@@ -8,6 +8,7 @@ import scair.dialects.d_affine
 import scair.ir.*
 import scair.passes.NatProvenance
 import scair.passes.analysis.NatProductFacts
+import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
 import scair.transformations.ModulePass
 import scair.transformations.RewriteMethods
 
@@ -67,12 +68,15 @@ private final case class FactorizationPlan(
     innerUpperBound: Value[Attribute],
 )
 
-private def choosePlan(loop: d_affine.For): Option[FactorizationPlan] =
+private def choosePlan(
+    loop: d_affine.For,
+    factorPolicy: FactorSelectionPolicy,
+): Option[FactorizationPlan] =
   if loop.upperBoundOperands.size != 1 then None
   else
     for
       product <- NatProductFacts.flattenProduct(loop.upperBoundOperands.head)
-      innerFactor <- product.rightmostPositiveFactor
+      innerFactor <- product.selectFactor(factorPolicy)
       residualFactors <- NatProductFacts.residualAfterRemovingFactorProduct(
         loop.upperBoundOperands.head,
         innerFactor.value,
@@ -116,20 +120,16 @@ private def buildLoop(
     body = body,
   )
 
-private def hasFactorizationMarker(loop: d_affine.For): Boolean =
-  loop.attributes.contains("scair.dependent_natmul_factorization.mode") ||
-    loop.attributes.contains("scair.dependent_natmul_factorization.generated") ||
-    loop.attributes.contains("scair.attention.tile.mode") ||
-    loop.attributes.contains("scair.attention.tile.generated")
-
-private def tryFactorize(loop: d_affine.For): Boolean =
-  if hasFactorizationMarker(loop) then false
-  else if loop.body.blocks.size != 1 then false
+private def tryFactorize(
+    loop: d_affine.For,
+    factorPolicy: FactorSelectionPolicy,
+): Boolean =
+  if loop.body.blocks.size != 1 then false
   else if loop.lowerBoundOperands.size != 1 || loop.upperBoundOperands.size != 1 then false
   else if !isIdentityProjection(loop.lowerBoundMap) || !isIdentityProjection(loop.upperBoundMap) then false
   else if NatProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then false
   else
-    choosePlan(loop) match
+    choosePlan(loop, factorPolicy) match
       case None => false
       case Some(plan) =>
         if loop.stepOperands.isEmpty && loop.step.value.value == 1 then
@@ -192,17 +192,11 @@ private def tryFactorizeUnitProductLoop(loop: d_affine.For, plan: FactorizationP
       given mutable.Map[Value[Attribute], Value[Attribute]] = valueMapper
       Seq(mul, add) ++ oldBlock.operations.map(_.deepCopy).toSeq
     }
-    innerLoop.attributes.addOne(
-      "scair.dependent_natmul_factorization.generated" -> StringData("inner")
-    )
-
     Seq(
       innerLoop,
       d_affine.Yield(innerLoop.results.map(_.asInstanceOf[Operand[Attribute]])),
     )
   }
-
-  markOuterLoop(outerLoop, "factorized_tail_free")
 
   RewriteMethods.replaceOp(
     loop,
@@ -244,8 +238,6 @@ private def tryFactorizeTiledProductLoop(loop: d_affine.For, plan: Factorization
     Seq(tileStart) ++ oldBlock.operations.map(_.deepCopy).toSeq
   }
 
-  markOuterLoop(outerLoop, "factorized_exact_tile_outer")
-
   RewriteMethods.replaceOp(
     loop,
     zero +: (plan.prelude :+ outerLoop),
@@ -253,18 +245,10 @@ private def tryFactorizeTiledProductLoop(loop: d_affine.For, plan: Factorization
   )
   true
 
-private def markOuterLoop(loop: d_affine.For, mode: String): Unit =
-  loop.attributes.addOne(
-    "scair.dependent_natmul_factorization.mode" -> StringData(mode)
-  )
-  loop.attributes.addOne(
-    "scair.dependent_natmul_factorization.tail_free" -> StringData("true")
-  )
-  loop.attributes.addOne(
-    "scair.dependent_natmul_factorization.generated" -> StringData("outer")
-  )
-
-final class DependentNatmulLoopFactorization(ctx: MLContext) extends ModulePass(ctx):
+final class DependentNatmulLoopFactorization(
+    ctx: MLContext,
+    factorPolicy: FactorSelectionPolicy = FactorSelectionPolicy.RightmostPositive,
+) extends ModulePass(ctx):
   override val name: String = "dependent-natmul-loop-factorization"
 
   override def transform(op: Operation): Operation =
@@ -272,6 +256,6 @@ final class DependentNatmulLoopFactorization(ctx: MLContext) extends ModulePass(
     while changed do
       changed = false
       collectLoopsInnermostFirst(op).foreach { loop =>
-        if loop.containerBlock.nonEmpty && tryFactorize(loop) then changed = true
+        if loop.containerBlock.nonEmpty && tryFactorize(loop, factorPolicy) then changed = true
       }
     op
