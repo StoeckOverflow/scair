@@ -117,11 +117,9 @@ write_route_manifest() {
 
 | Route | Role |
 |---|---|
-| `ordinary_d_affine_guarded_tile` | Ordinary `d_affine` no-proof control: the proof-consuming simplifier has no dependent fact to consume, and this route does not create a tail/min guard. |
-| `dependent_guarded_tile_no_simplify` | Shows guarded dependent tiling before proof-consuming tail cleanup. |
-| `dependent_guarded_tile_simplified` | Consumes explicit `dtensor.nat.mul` facts to remove the min tail guard. |
-| `dependent_exact_tile_reference` | Exact tiling route that never emits the tail guard. |
-| `stock_affine_guarded_tile` | Real min-retaining negative control: upstream affine cleanup keeps the `affine.for ... to min` tail guard for an ordinary product. |
+| `stock_affine_guarded_tile` | Stock affine negative control: upstream affine cleanup keeps the `affine.for ... to min` tail guard for an ordinary product. |
+| `ordinary_d_affine_guarded_tile` | Congruent ordinary `d_affine` dynamic-step control: a known-positive RHS permits guarded tiling, but there is no dependent product fact to consume, so the `arith.minsi` tail guard remains. |
+| `dependent_guarded_tile_simplified` | Congruent dependent `d_affine` route: explicit `dtensor.nat.mul` facts let `dependent-tail-min-simplify` remove the `arith.minsi` tail guard. |
 
 The simplifier is conservative. Missing a non-standard tail form is an
 optimization miss; removing a min without a dependent product proof is invalid.
@@ -130,34 +128,22 @@ MD
   cat > "$json_path" <<'JSON'
 [
   {
-    "route": "ordinary_d_affine_guarded_tile",
-    "claim_role": "ordinary_d_affine_no_proof_control",
-    "expected_tail": "none",
+    "route": "stock_affine_guarded_tile",
+    "claim_role": "upstream_negative_control",
+    "expected_tail": "affine_min",
     "product_representation": "arith.muli"
   },
   {
-    "route": "dependent_guarded_tile_no_simplify",
-    "claim_role": "pre_cleanup_control",
+    "route": "ordinary_d_affine_guarded_tile",
+    "claim_role": "ordinary_d_affine_positive_step_no_product_proof_control",
     "expected_tail": "arith_minsi",
-    "product_representation": "dtensor.nat.mul"
+    "product_representation": "arith.muli"
   },
   {
     "route": "dependent_guarded_tile_simplified",
     "claim_role": "proof_consuming_tail_cleanup",
     "expected_tail": "none",
     "product_representation": "dtensor.nat.mul"
-  },
-  {
-    "route": "dependent_exact_tile_reference",
-    "claim_role": "exact_reference",
-    "expected_tail": "none",
-    "product_representation": "dtensor.nat.mul"
-  },
-  {
-    "route": "stock_affine_guarded_tile",
-    "claim_role": "upstream_negative_control",
-    "expected_tail": "affine_min",
-    "product_representation": "arith.muli"
   }
 ]
 JSON
@@ -174,41 +160,26 @@ cat > "$METRICS" <<'CSV'
 variant,stage,toolchain,status,artifact,affine_min_count,arith_minsi_count,d_affine_min_count,tail_guard_count,dynamic_step_count,static_step_count,dtensor_nat_mul_count,dtensor_shape_to_index_count,d_affine_for_count,affine_for_count,total_op_count,mlir_loc,removed_op_delta,notes
 CSV
 
-ordinary_guarded="$OUT_DIR/ordinary_d_affine_guarded_tile.mlir"
-ordinary_cleanup="$OUT_DIR/ordinary_d_affine_guarded_tile_cleanup.mlir"
-run_scair_pipeline "$ORDINARY_SOURCE" "$ordinary_guarded" "ordinary-product-tile-with-tail"
-ordinary_guarded_ops="$(total_op_count "$ordinary_guarded")"
-run_scair_pipeline "$ORDINARY_SOURCE" "$ordinary_cleanup" "ordinary-product-tile-with-tail,dependent-tail-min-simplify,canonicalize,cse,dce"
-metric_row "ordinary_d_affine_guarded_tile" "after_guarded_tiling" "scair" "ok" "$ordinary_guarded" "NA" "ordinary_arith_muli_product_no_dependent_proof"
-metric_row "ordinary_d_affine_guarded_tile" "after_tail_min_simplify_cleanup" "scair" "ok" "$ordinary_cleanup" "$ordinary_guarded_ops" "no_tail_min_emitted_without_dependent_tiling_proof"
-
-dependent_guarded="$OUT_DIR/dependent_guarded_tile.mlir"
-dependent_no_simplify="$OUT_DIR/dependent_guarded_tile_cleanup_no_simplify.mlir"
 dependent_simplified="$OUT_DIR/dependent_guarded_tile_tail_min_simplified.mlir"
-dependent_exact="$OUT_DIR/dependent_exact_tile_reference.mlir"
-run_scair_pipeline "$DEPENDENT_SOURCE" "$dependent_guarded" "canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps"
-dependent_guarded_ops="$(total_op_count "$dependent_guarded")"
-run_scair_pipeline "$DEPENDENT_SOURCE" "$dependent_no_simplify" "canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
+ordinary_cleanup="$OUT_DIR/ordinary_d_affine_guarded_tile_cleanup.mlir"
+run_scair_pipeline "$ORDINARY_SOURCE" "$ordinary_cleanup" "ordinary-product-tile-with-tail,canonicalize,cse,dce"
 run_scair_pipeline "$DEPENDENT_SOURCE" "$dependent_simplified" "canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
-run_scair_pipeline "$DEPENDENT_SOURCE" "$dependent_exact" "canonicalize-dtensor-nat-products,dependent-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
-metric_row "dependent_guarded_tile_no_simplify" "after_guarded_tiling" "scair" "ok" "$dependent_guarded" "NA" "guarded_tiler_conservatively_emits_tail_min"
-metric_row "dependent_guarded_tile_no_simplify" "after_cleanup_no_simplify" "scair" "ok" "$dependent_no_simplify" "$dependent_guarded_ops" "min_retained_when_proof_not_consumed"
-metric_row "dependent_guarded_tile_simplified" "after_tail_min_simplify_cleanup" "scair" "ok" "$dependent_simplified" "$dependent_guarded_ops" "dtensor_nat_mul_rhs_proves_tile_end_within_full_bound"
-metric_row "dependent_exact_tile_reference" "after_exact_tiling_cleanup" "scair" "ok" "$dependent_exact" "NA" "reference_route_emits_no_tail_min_initially"
 
 if [[ -x "$MLIR_OPT" ]]; then
-  stock_guarded="$OUT_DIR/stock_affine_guarded_tile.mlir"
+  stock_guarded="$(mktemp "$OUT_DIR/stock_affine_guarded_tile.XXXXXX.tmp.mlir")"
   stock_cleanup="$OUT_DIR/stock_affine_guarded_tile_upstream_cleanup.mlir"
   run_scair_pipeline "$STOCK_AFFINE_SOURCE" "$stock_guarded" "ordinary-affine-product-tile-with-tail:4"
-  stock_guarded_ops="$(total_op_count "$stock_guarded")"
   run_mlir_pipeline "$stock_guarded" "$stock_cleanup" --pass-pipeline='builtin.module(func.func(affine-simplify-min-max),canonicalize,cse,symbol-dce)'
-  metric_row "stock_affine_guarded_tile" "after_scair_guarded_tiling" "scair" "ok" "$stock_guarded" "NA" "stock_affine_control_contains_affine_min_tail"
-  metric_row "stock_affine_guarded_tile" "after_upstream_canonicalize_cse_affine_simplify_minmax" "upstream_mlir" "ok" "$stock_cleanup" "$stock_guarded_ops" "upstream_cannot_see_dtensor_nat_mul_proof_in_ordinary_arith_muli_product"
+  rm -f "$stock_guarded"
+  metric_row "stock_affine_guarded_tile" "after_upstream_canonicalize_cse_affine_simplify_minmax" "upstream_mlir" "ok" "$stock_cleanup" "NA" "stock_affine_to_min_retained_after_upstream_cleanup"
 else
   skipped="$OUT_DIR/stock_affine_guarded_tile_upstream_cleanup.skipped.mlir"
   cp "$STOCK_AFFINE_SOURCE" "$skipped"
   metric_row "stock_affine_guarded_tile" "after_upstream_canonicalize_cse_affine_simplify_minmax" "upstream_mlir" "skipped" "$skipped" "NA" "mlir-opt_not_found"
 fi
+
+metric_row "ordinary_d_affine_guarded_tile" "after_cleanup_no_simplifier" "scair" "ok" "$ordinary_cleanup" "NA" "ordinary_arith_muli_product_tail_min_retained_without_dependent_product_proof"
+metric_row "dependent_guarded_tile_simplified" "after_tail_min_simplify_cleanup" "scair" "ok" "$dependent_simplified" "NA" "dtensor_nat_mul_rhs_proves_tile_end_within_full_bound"
 
 {
   echo "# Tail/Min Simplifier Benchmark Summary"
@@ -222,10 +193,9 @@ fi
   done
   echo
   echo "Key comparison:"
-  echo "- \`ordinary_d_affine_guarded_tile\` is a no-proof/no-transform control: it uses ordinary \`arith.muli\` provenance and does not emit a tail/min guard in the generated IR."
-  echo "- \`dependent_guarded_tile_no_simplify\` shows the same conservative guarded shape even though a \`dtensor.nat.mul\` proof is present."
-  echo "- \`dependent_guarded_tile_simplified\` consumes that proof and rewrites the min upper bound to \`tile + tileSize\`, leaving no tail/min guard."
-  echo "- \`stock_affine_guarded_tile\` is the real min-retaining negative control: upstream \`affine-simplify-min-max\` keeps the \`affine.for ... to min\` tail because it cannot recover the dependent divisibility fact from ordinary SSA arithmetic."
+  echo "- \`stock_affine_guarded_tile\` is the stock affine negative control: upstream \`affine-simplify-min-max\` keeps the \`affine.for ... to min\` tail because it cannot recover the dependent divisibility fact from ordinary SSA arithmetic."
+  echo "- \`ordinary_d_affine_guarded_tile\` is the congruent ordinary dynamic-step control: it uses ordinary \`arith.muli\` provenance, emits a tail/min guard, and retains that guard because there is no dependent product proof to consume."
+  echo "- \`dependent_guarded_tile_simplified\` is the congruent dependent route: it consumes \`dtensor.nat.mul\` provenance and rewrites the min upper bound to \`tile + tileSize\`, leaving no tail/min guard."
 } > "$SUMMARY"
 
 echo "Tail/min simplifier benchmark complete."

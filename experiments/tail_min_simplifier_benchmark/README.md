@@ -16,24 +16,18 @@ provenance proves exact divisibility.
 
 ## Variants
 
-- `ordinary_d_affine_guarded_tile`: uses ordinary `arith.muli` product
-  structure. The `dependent-tail-min-simplify` pass runs, but there is no
-  dependent proof to consume; this route is a no-proof/no-transform control and
-  does not create a tail/min guard in the generated IR.
-- `dependent_guarded_tile_no_simplify`: uses `dtensor.nat.mul` but does not run
-  the simplifier. This shows the conservative guarded form before proof
-  consumption.
-- `dependent_guarded_tile_simplified`: runs
-  `dependent-tile-with-tail-control,dependent-tail-min-simplify,canonicalize,cse,dce`.
-  The `arith.minsi` guard is removed.
-- `dependent_exact_tile_reference`: runs the direct exact tiler. This is only a
-  reference endpoint; the benchmark’s main claim is the post-hoc simplifier.
 - `stock_affine_guarded_tile`: emits stock `affine.for ... to min` from an
   ordinary product loop and then runs upstream
-  `canonicalize,cse,affine-simplify-min-max`. This control illustrates that
-  upstream affine cleanup keeps the `to min` tail because it does not see
-  ScaIR’s dependent nat proof when the product is represented only as ordinary
-  SSA arithmetic. This is the real min-retaining negative control.
+  `canonicalize,cse,affine-simplify-min-max`. The `to min` tail remains because
+  the product is represented only as ordinary SSA arithmetic.
+- `ordinary_d_affine_guarded_tile`: uses an ordinary `arith.muli` product with
+  the same known-positive dynamic RHS used as the tile step. Cleanup runs, but
+  `dependent-tail-min-simplify` does not; the generated `arith.minsi` tail guard
+  remains.
+- `dependent_guarded_tile_simplified`: uses the congruent dependent
+  `dtensor.nat.mul` product and runs
+  `dependent-tile-with-tail-control,dependent-tail-min-simplify,canonicalize,cse,dce`.
+  The `arith.minsi` guard is removed.
 
 ## Metrics
 
