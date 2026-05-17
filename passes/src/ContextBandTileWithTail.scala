@@ -33,6 +33,12 @@ final class DependentContextBandExactTile(ctx: MLContext) extends ModulePass(ctx
   override def transform(op: Operation): Operation =
     ContextBandTileWithTailTransform.transformDAffineExactNatmul(op)
 
+final class DependentContextBandFactorTileWithTail(ctx: MLContext) extends ModulePass(ctx):
+  override val name: String = "dependent-context-band-factor-tile-with-tail"
+
+  override def transform(op: Operation): Operation =
+    ContextBandTileWithTailTransform.transformDAffineFactorGuardedNatmul(op)
+
 private object ContextBandTileWithTailTransform:
   private val ordinaryMarker = "scair.context_band_tile_with_tail.generated"
   private val ordinaryMode = "scair.context_band_tile_with_tail.mode"
@@ -392,6 +398,56 @@ private object ContextBandTileWithTailTransform:
           RewriteMethods.replaceOp(loop, Seq(zero, tileSize, outerLoop), None)
           true
 
+  private def tryTileDAffineFactorGuardedNatmul(loop: d_affine.For): Boolean =
+    if !eligibleDAffine(loop) then false
+    else
+      natmulRhsTileSize(loop) match
+        case None => false
+        case Some(tileNat) =>
+          val oldBlock = loop.body.blocks.head
+          val oldIv = oldBlock.arguments.head
+          val zero = idxConst(0)
+          val tileSize = toIndex(tileNat)
+          val staticOne = BigInt(1)
+
+          val outerLoop = buildDAffineLoop(
+            zero.result,
+            loop.upperBoundOperands.head,
+            staticOne,
+            stepOperands = Seq(asIndex(tileSize.res)),
+          ) { tileIv =>
+            val tileEnd = arith.AddI(
+              tileIv.asInstanceOf[Operand[arith.AnyIntegerType]],
+              tileSize.res.asInstanceOf[Operand[arith.AnyIntegerType]],
+              Result(IndexType()),
+            )
+            val clampedTileEnd = arith.MinSI(
+              tileEnd.result.asInstanceOf[Operand[arith.AnyIntegerType]],
+              loop.upperBoundOperands.head.asInstanceOf[Operand[arith.AnyIntegerType]],
+              Result(IndexType()),
+            )
+            val innerLoop = buildDAffineLoop(
+              tileIv,
+              clampedTileEnd.result,
+              staticOne,
+            ) { innerIv =>
+              cloneAffineBody(oldBlock, oldIv, innerIv)
+            }
+            innerLoop.attributes.addOne(dependentMarker -> StringData("inner_factor_guarded"))
+            Seq(
+              tileEnd,
+              clampedTileEnd,
+              innerLoop,
+              d_affine.Yield(Seq.empty),
+            )
+          }
+
+          outerLoop.attributes.addOne(dependentMode -> StringData("dynamic_step_tail_guarded_context"))
+          outerLoop.attributes.addOne(dependentMarker -> StringData("outer_factor_guarded"))
+
+          RewriteMethods.replaceOp(loop, Seq(zero, tileSize, outerLoop), None)
+          true
+
   def transformAffine(op: Operation, tileSize: BigInt): Operation =
     require(tileSize > 0, s"context tile size must be positive, got $tileSize")
     var changed = true
@@ -418,5 +474,14 @@ private object ContextBandTileWithTailTransform:
       changed = false
       collectDAffineLoopsOutermostFirst(op).foreach { loop =>
         if loop.containerBlock.nonEmpty && tryTileDAffineExactNatmul(loop) then changed = true
+      }
+    op
+
+  def transformDAffineFactorGuardedNatmul(op: Operation): Operation =
+    var changed = true
+    while changed do
+      changed = false
+      collectDAffineLoopsOutermostFirst(op).foreach { loop =>
+        if loop.containerBlock.nonEmpty && tryTileDAffineFactorGuardedNatmul(loop) then changed = true
       }
     op

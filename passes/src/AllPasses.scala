@@ -14,6 +14,7 @@ import scair.passes.convert_arith_to_llvm.ConvertArithToLLVM
 import scair.passes.convert_func_to_llvm.ConvertFuncToLLVM
 import scair.passes.convert_llvm_export_abi.ConvertLLVMExportABI
 import scair.passes.context_band_tiling.DependentContextBandExactTile
+import scair.passes.context_band_tiling.DependentContextBandFactorTileWithTail
 import scair.passes.context_band_tiling.DependentContextBandTileWithTail
 import scair.passes.context_band_tiling.OrdinaryAffineContextBandTileWithTail
 import scair.passes.dce.DeadCodeElimination
@@ -98,6 +99,7 @@ val allPasses: Seq[MLContext => ModulePass] =
     OrdinaryAffineProductLoopTileWithTail(_, BigInt(1)),
     OrdinaryAffineContextBandTileWithTail(_, BigInt(1)),
     DependentContextBandExactTile(_),
+    DependentContextBandFactorTileWithTail(_),
     DependentContextBandTileWithTail(_, BigInt(1)),
     DependentExactTile(_),
     DependentProductLoopExactTile(_),

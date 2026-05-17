@@ -9,7 +9,7 @@ from pathlib import Path
 FAMILY_ORDER = {
     "strided_matmul_benchmark": 0,
     "convolution_benchmark": 1,
-    "matmul_tiling_benchmark": 2,
+    "matmul_reduction_dim_tiling_benchmark": 2,
     "broadcast_affine_2d_benchmark": 3,
     "attention_mha_benchmark": 4,
     "semi_affine_indexing_benchmark": 5,
