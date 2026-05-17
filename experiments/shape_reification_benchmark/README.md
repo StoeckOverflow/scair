@@ -29,10 +29,11 @@ SSA case, but it cannot merge dims or size arithmetic across unrelated
   contains different `tensor<?x?xf32>` SSA values. Upstream CSE cannot merge
   these dim queries or the repeated `m*n` arithmetic because the equality is not
   represented.
-- `dependent_shape_no_elim`: ScaIR dependent tensor route with shared `%m/%n`
-  provenance in the tensor types, but without the provenance-aware dim-query
-  elimination pass.
-- `dependent_shape_dim_elim`: ScaIR dependent tensor route with
+- `dependent_shape_no_elim`: ScaIR dependent tensor route using the same
+  six-argument fanout shape as `ordinary_dynamic_shape_same_shape_different_ssa`,
+  but with shared `%m/%n` provenance in the tensor argument types. This variant
+  omits the provenance-aware dim-query elimination pass.
+- `dependent_shape_dim_elim`: the congruent ScaIR dependent tensor route with
   `dependent-dim-query-elim`, followed by
   `reconcile-unrealized-casts,canonicalize,cse,dce`.
 
