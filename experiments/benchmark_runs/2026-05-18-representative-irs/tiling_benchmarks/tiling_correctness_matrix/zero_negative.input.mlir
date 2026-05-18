@@ -1,0 +1,17 @@
+builtin.module {
+  func.func @zero_negative(%out: memref<?xf32>) {
+    %k0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+    %k1 = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
+    %k = "dtensor.nat.mul"(%k0, %k1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+    %ub = "dtensor.shape.to_index"(%k) : (!dtensor.nat) -> index
+    %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
+
+    d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%ub) step 1 : index {
+      "memref.store"(%cst, %out, %p) : (f32, memref<?xf32>, index) -> ()
+      d_affine.yield
+    }
+
+    "func.return"() : () -> ()
+  }
+}
