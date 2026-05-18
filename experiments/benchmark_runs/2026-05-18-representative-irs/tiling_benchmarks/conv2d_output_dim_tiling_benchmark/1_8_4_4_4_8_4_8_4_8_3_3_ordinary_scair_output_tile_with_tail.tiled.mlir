@@ -16,19 +16,19 @@ builtin.module {
     %27 = "arith.muli"(%21, %22) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
     %28 = "arith.muli"(%20, %27) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
     %29 = memref.reinterpret_cast %13 to
-offset: [%16],
-sizes: [%19, %2, %21, %22, %7, %8],
-strides: [%24, %23, %4, %17, %4, %17]
+      offset: [%16],
+      sizes: [%19, %2, %21, %22, %7, %8],
+      strides: [%24, %23, %4, %17, %4, %17]
     : memref<?xf32> to memref<?x?x?x?x?x?xf32, strided<[?, ?, ?, ?, ?, ?], offset: ?>>
     %30 = memref.reinterpret_cast %14 to
-offset: [%16],
-sizes: [%20, %2, %7, %8],
-strides: [%26, %25, %8, %17]
+      offset: [%16],
+      sizes: [%20, %2, %7, %8],
+      strides: [%26, %25, %8, %17]
     : memref<?xf32> to memref<?x?x?x?xf32, strided<[?, ?, ?, ?], offset: ?>>
     %31 = memref.reinterpret_cast %15 to
-offset: [%16],
-sizes: [%19, %20, %21, %22],
-strides: [%28, %27, %22, %17]
+      offset: [%16],
+      sizes: [%19, %20, %21, %22],
+      strides: [%28, %27, %22, %17]
     : memref<?xf32> to memref<?x?x?x?xf32, strided<[?, ?, ?, ?], offset: ?>>
     affine.for %32 = #map(%16) to #map(%19) step 8 {
       affine.for %33 = #map(%32) to min #map1(%32)[%19] step 1 {

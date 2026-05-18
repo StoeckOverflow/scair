@@ -10,19 +10,19 @@ builtin.module {
     %13 = "arith.muli"(%2, %3) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
     %14 = "arith.muli"(%4, %5) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
     %15 = memref.reinterpret_cast %6 to
-offset: [%9],
-sizes: [%12, %14],
-strides: [%14, %10]
+      offset: [%9],
+      sizes: [%12, %14],
+      strides: [%14, %10]
     : memref<?xf32> to memref<?x?xf32, strided<[?, ?], offset: ?>>
     %16 = memref.reinterpret_cast %7 to
-offset: [%9],
-sizes: [%14, %13],
-strides: [%13, %10]
+      offset: [%9],
+      sizes: [%14, %13],
+      strides: [%13, %10]
     : memref<?xf32> to memref<?x?xf32, strided<[?, ?], offset: ?>>
     %17 = memref.reinterpret_cast %8 to
-offset: [%9],
-sizes: [%12, %13],
-strides: [%13, %10]
+      offset: [%9],
+      sizes: [%12, %13],
+      strides: [%13, %10]
     : memref<?xf32> to memref<?x?xf32, strided<[?, ?], offset: ?>>
     affine.for %18 = #map(%9) to #map(%12) step 64 {
       affine.for %19 = #map(%18) to min #map1(%18)[%12] step 1 {
