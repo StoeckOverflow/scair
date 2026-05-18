@@ -166,16 +166,3 @@ Saved files:
 
 Decision: this benchmark demonstrates semi-affine dynamic indexing and
 lowering viability. Source and lowered MLIR are the meaningful phases.
-
-## Archive
-
-### `archive/attention_mha_benchmark`
-
-Saved files:
-- MLIR baseline, ordinary ScaIR, and value-dependent source kernels
-- representative `.input.mlir` and `.tiled.mlir` outputs for the three active
-  archived routes
-
-Decision: attention is archived, not active thesis evidence. The saved files
-are enough to revive or inspect the hidden-dimension exact-tiling story without
-preserving performance results.
