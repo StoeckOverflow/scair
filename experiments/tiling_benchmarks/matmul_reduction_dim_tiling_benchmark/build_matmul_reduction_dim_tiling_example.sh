@@ -49,6 +49,8 @@ fi
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCAIR_ROOT/experiments/common_metrics.sh"
+MATMUL_REDUCTION_DIM_TILING_SIZE_SET="$(limit_csv_entries "$MATMUL_REDUCTION_DIM_TILING_SIZE_SET")"
+MATMUL_REDUCTION_DIM_TILING_TILE_SIZE_SET="$(limit_csv_entries "$MATMUL_REDUCTION_DIM_TILING_TILE_SIZE_SET" "${TILING_BENCHMARK_MAX_TILE_SIZES:-$TILING_BENCHMARK_MAX_SHAPES}")"
 
 SCAIR_OPT="${SCAIR_ROOT}/out/tools/opt/launcher.dest/run"
 MLIR_OPT="$BIN_DIR/mlir-opt"

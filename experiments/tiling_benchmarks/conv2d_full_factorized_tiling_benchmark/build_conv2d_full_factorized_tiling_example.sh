@@ -7,11 +7,13 @@ OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
 SCAIR_OPT="${SCAIR_OPT:-$ROOT/out/tools/opt/launcher.dest/run}"
 LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-$HOME/dev/llvm-source/build}"
 MLIR_OPT="${MLIR_OPT:-$LLVM_BUILD_DIR/bin/mlir-opt}"
+MLIR_TRANSLATE="${MLIR_TRANSLATE:-$LLVM_BUILD_DIR/bin/mlir-translate}"
 CONV2D_FULL_FACTORIZED_TILING_SIZE_SET="${CONV2D_FULL_FACTORIZED_TILING_SIZE_SET:-1x8x4x4x4x8x4x8x4x8x3x3}"
 CONV2D_FULL_FACTORIZED_OUTPUT_TILE_SIZE="${CONV2D_FULL_FACTORIZED_OUTPUT_TILE_SIZE:-8}"
 CONV2D_FULL_FACTORIZED_ROUTES="${CONV2D_FULL_FACTORIZED_ROUTES:-mlir_baseline_full_tile,ordinary_scair_full_tile_with_tail,dependent_full_guarded_tail_simplified,dependent_full_exact_tile}"
 
 source "$ROOT/experiments/common_metrics.sh"
+CONV2D_FULL_FACTORIZED_TILING_SIZE_SET="$(limit_csv_entries "$CONV2D_FULL_FACTORIZED_TILING_SIZE_SET")"
 mkdir -p "$OUT_DIR"
 require_bin "$SCAIR_OPT"
 require_bin "$MLIR_OPT"
@@ -69,6 +71,10 @@ append_row() {
     "$product" "$tail" "$affine_min" "$arith_minsi" "$d_affine_for" "$affine_for" "$dynamic_steps" "$loc" "$notes" >> "$METRICS_CSV"
   printf '| `%s` | `%s` | %s | `%s` | `%s` | %s | %s | %s | %s | %s | `%s` |\n' \
     "$variant" "$size" "$CONV2D_FULL_FACTORIZED_OUTPUT_TILE_SIZE" "$red_tile" "$tail" "$affine_min" "$arith_minsi" "$d_affine_for" "$affine_for" "$dynamic_steps" "$(basename "$tiled")" >> "$SUMMARY_MD"
+  if [[ "${CONV2D_EMIT_LLVM:-0}" == "1" ]]; then
+    local prefix="${tiled%.tiled.mlir}"
+    try_lower_dmemref_to_llvm_artifacts "$tiled" "$prefix.llvm.mlir" "$prefix.ll" "$prefix.llvm_status.txt"
+  fi
 }
 
 IFS=',' read -r -a sizes <<<"$CONV2D_FULL_FACTORIZED_TILING_SIZE_SET"
@@ -84,7 +90,7 @@ for dims in "${sizes[@]}"; do
     out="$OUT_DIR/${tag}_mlir_baseline_full_tile.tiled.mlir"
     cp "$MLIR_SRC" "$OUT_DIR/${tag}_mlir_baseline_full_tile.input.mlir"
     "$MLIR_OPT" "$MLIR_SRC" --affine-loop-tile=tile-size="$CONV2D_FULL_FACTORIZED_OUTPUT_TILE_SIZE" > "$out"
-    append_row "mlir_baseline_full_tile" "$dims" "$red_tile" "$MLIR_SRC" "$out" "mlir-opt --affine-loop-tile=tile-size=$CONV2D_FULL_FACTORIZED_OUTPUT_TILE_SIZE" "arith.muli_index" "upstream_reference_may_tile_only_legal_outer_bands"
+    append_row "mlir_baseline_full_tile" "$dims" "$red_tile" "$MLIR_SRC" "$out" "mlir-opt --affine-loop-tile=tile-size=$CONV2D_FULL_FACTORIZED_OUTPUT_TILE_SIZE" "arith.muli_index" "tiling_decision=guarded;proof_source=none;upstream_reference_may_tile_only_legal_outer_bands"
   fi
   if route_enabled "ordinary_scair_full_tile_with_tail"; then
     out="$OUT_DIR/${tag}_ordinary_scair_full_tile_with_tail.tiled.mlir"
@@ -92,7 +98,7 @@ for dims in "${sizes[@]}"; do
     pipeline="canonicalize,cse,dce,ordinary-affine-context-band-tile-with-tail:$CONV2D_FULL_FACTORIZED_OUTPUT_TILE_SIZE,ordinary-affine-product-loop-tile-with-tail:$red_tile,canonicalize,cse,dce"
     run_scair "$ORDINARY_SRC" "$pipeline" "$out"
     require_pat "$out" ' to min |affine\.min' "ordinary full route should keep tail/min"
-    append_row "ordinary_scair_full_tile_with_tail" "$dims" "$red_tile" "$ORDINARY_SRC" "$out" "$pipeline" "arith.muli_index" "ordinary_output_and_reduction_tiling_keeps_guards"
+    append_row "ordinary_scair_full_tile_with_tail" "$dims" "$red_tile" "$ORDINARY_SRC" "$out" "$pipeline" "arith.muli_index" "tiling_decision=guarded;proof_source=none;ordinary_output_and_reduction_tiling_keeps_guards"
   fi
   if route_enabled "dependent_full_guarded_tail_simplified"; then
     guarded="$OUT_DIR/${tag}_dependent_full_guarded_tail_simplified.guarded.mlir"
@@ -104,7 +110,7 @@ for dims in "${sizes[@]}"; do
     require_pat "$guarded" 'arith\.minsi' "guarded dependent full route should emit min before simplification"
     run_scair "$DEPENDENT_SRC" "$pipeline" "$out"
     reject_tail "$out"
-    append_row "dependent_full_guarded_tail_simplified" "$dims" "dynamic_Cin1KhKw" "$DEPENDENT_SRC" "$out" "$pipeline" "dtensor.nat.mul" "guarded_artifact=$(basename "$guarded");proof_removes_output_and_reduction_tails"
+    append_row "dependent_full_guarded_tail_simplified" "$dims" "dynamic_Cin1KhKw" "$DEPENDENT_SRC" "$out" "$pipeline" "dtensor.nat.mul" "tiling_decision=guarded_then_exact_after_simplify;proof_source=natmul;guarded_artifact=$(basename "$guarded");proof_removes_output_and_reduction_tails"
   fi
   if route_enabled "dependent_full_exact_tile"; then
     out="$OUT_DIR/${tag}_dependent_full_exact_tile.tiled.mlir"
@@ -112,7 +118,7 @@ for dims in "${sizes[@]}"; do
     pipeline="canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-exact-tile,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
     run_scair "$DEPENDENT_SRC" "$pipeline" "$out"
     reject_tail "$out"
-    append_row "dependent_full_exact_tile" "$dims" "dynamic_Cin1KhKw" "$DEPENDENT_SRC" "$out" "$pipeline" "dtensor.nat.mul" "diagnostic_direct_exact_full_factorized_tiling"
+    append_row "dependent_full_exact_tile" "$dims" "dynamic_Cin1KhKw" "$DEPENDENT_SRC" "$out" "$pipeline" "dtensor.nat.mul" "tiling_decision=exact;proof_source=natmul;diagnostic_direct_exact_full_factorized_tiling"
   fi
 done
 

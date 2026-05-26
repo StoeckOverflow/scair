@@ -14,6 +14,7 @@ MATMUL_FULL_FACTORIZED_ROUTES="${MATMUL_FULL_FACTORIZED_ROUTES:-mlir_baseline_fu
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCAIR_ROOT/experiments/common_metrics.sh"
+MATMUL_FULL_FACTORIZED_TILING_SIZE_SET="$(limit_csv_entries "$MATMUL_FULL_FACTORIZED_TILING_SIZE_SET")"
 
 SCAIR_OPT="${SCAIR_OPT:-$SCAIR_ROOT/out/tools/opt/launcher.dest/run}"
 OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"

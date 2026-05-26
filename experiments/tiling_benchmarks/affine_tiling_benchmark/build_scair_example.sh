@@ -7,6 +7,7 @@ BIN_DIR="$LLVM_BUILD_DIR/bin"
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCAIR_ROOT/experiments/common_metrics.sh"
+AFFINE_TILING_SIZE_SET="$(limit_csv_entries "$AFFINE_TILING_SIZE_SET")"
 
 SCAIR_OPT="${SCAIR_ROOT}/out/tools/opt/launcher.dest/run"
 MLIR_OPT="${MLIR_OPT:-$BIN_DIR/mlir-opt}"

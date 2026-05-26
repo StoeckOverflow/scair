@@ -28,9 +28,16 @@
 #   op.memref.alloc=...
 COMMON_METRICS_HEADER="experiment_family,benchmark,variant,representation_group,build_status,run_status,source_bytes,source_loc,source_ops,source_ops_structural,source_func_defs,source_block_args,source_alloc_ops,source_reinterpret_cast_ops,source_subview_ops,source_extract_strided_metadata_ops,source_memref_load_ops,source_memref_store_ops,source_dmemref_load_ops,source_dmemref_store_ops,lowered_func_defs,lowered_ops,lowered_ops_structural,lowered_mlir_lines,llvm_ir_lines,llvm_call_count,compile_ms,result,expected_result,runtime_ns_per_iter,notes,source_helper_defs,bvar_refs,value_ssa_refs,opt_llvm_lines,opt_llvm_call_count,kernel,size,route,parse_time_ms,verification_time_ms,lowering_time_ms,compile_total_ms,runtime_median_ns_per_iter,runtime_iqr_ns_per_iter,benchmark_repetitions,checksum,checksum_status,compiler_flags,git_commit,date,machine_id,env_path,raw_timings_path"
 
-BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-5}"
-BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-15}"
+if [[ "${TILING_BENCHMARK_QUICK:-0}" == "1" ]]; then
+  BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-1}"
+  BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-1}"
+  TILING_BENCHMARK_MAX_SHAPES="${TILING_BENCHMARK_MAX_SHAPES:-1}"
+else
+  BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-5}"
+  BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-15}"
+fi
 BENCH_PROGRESS="${BENCH_PROGRESS:-1}"
+TILING_BENCHMARK_MAX_SHAPES="${TILING_BENCHMARK_MAX_SHAPES:-0}"
 
 require_file() {
   local path="$1"
@@ -45,6 +52,52 @@ require_bin() {
   if [[ ! -x "$path" ]]; then
     echo "error: missing executable: $path" >&2
     exit 1
+  fi
+}
+
+limit_csv_entries() {
+  local csv="$1"
+  local limit="${2:-$TILING_BENCHMARK_MAX_SHAPES}"
+  if [[ -z "$csv" ]]; then
+    printf '\n'
+    return
+  fi
+  if [[ -z "$limit" || "$limit" == "0" ]]; then
+    printf '%s\n' "$csv"
+    return
+  fi
+  awk -v limit="$limit" 'BEGIN { RS=","; ORS=""; count=0 } count < limit { if (count > 0) printf ","; printf "%s", $0; count++ }' <<<"$csv"
+}
+
+try_lower_dmemref_to_llvm_artifacts() {
+  local input_mlir="$1"
+  local llvm_mlir="$2"
+  local llvm_ir="$3"
+  local status_path="$4"
+  local scair_opt="${SCAIR_OPT:-}"
+  local mlir_translate="${MLIR_TRANSLATE:-}"
+
+  if [[ -z "$scair_opt" || ! -x "$scair_opt" ]]; then
+    echo "status=unsupported" > "$status_path"
+    echo "reason=missing_scair_opt" >> "$status_path"
+    return 0
+  fi
+
+  if "$scair_opt" -s "$input_mlir" --passes "canonicalize,cse,dce,lower-dmemref-to-llvm" > "$llvm_mlir" 2> "${status_path}.log"; then
+    if [[ -n "$mlir_translate" && -x "$mlir_translate" ]] &&
+       "$mlir_translate" --mlir-to-llvmir "$llvm_mlir" > "$llvm_ir" 2>> "${status_path}.log"; then
+      echo "status=ok" > "$status_path"
+      echo "llvm_mlir=$(basename "$llvm_mlir")" >> "$status_path"
+      echo "llvm_ir=$(basename "$llvm_ir")" >> "$status_path"
+    else
+      echo "status=llvm_mlir_only" > "$status_path"
+      echo "llvm_mlir=$(basename "$llvm_mlir")" >> "$status_path"
+      echo "reason=mlir_translate_failed_or_missing" >> "$status_path"
+    fi
+  else
+    rm -f "$llvm_mlir" "$llvm_ir"
+    echo "status=unsupported" > "$status_path"
+    echo "reason=lower_dmemref_to_llvm_failed" >> "$status_path"
   fi
 }
 

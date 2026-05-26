@@ -14,6 +14,7 @@ MATMUL_OUTER_DIM_ROUTES="${MATMUL_OUTER_DIM_ROUTES:-mlir_baseline_mn_tile,ordina
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCAIR_ROOT/experiments/common_metrics.sh"
+MATMUL_OUTER_DIM_SIZE_SET="$(limit_csv_entries "$MATMUL_OUTER_DIM_SIZE_SET")"
 
 SCAIR_OPT="${SCAIR_OPT:-$SCAIR_ROOT/out/tools/opt/launcher.dest/run}"
 OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
@@ -163,7 +164,7 @@ build_mlir_route() {
   local start_ns
   local end_ns
   start_ns="$(now_ns)"
-  "$MLIR_OPT" "$MLIR_SRC" --affine-loop-tile=tile-size="$MATMUL_OUTER_DIM_TILE_SIZE" > "$prefix.tiled.mlir"
+  "$MLIR_OPT" "$MLIR_SRC" --affine-loop-tile=tile-size="$MATMUL_OUTER_DIM_TILE_SIZE separate" > "$prefix.tiled.mlir"
   "$MLIR_OPT" "$MLIR_SRC" \
     --affine-loop-tile=tile-size="$MATMUL_OUTER_DIM_TILE_SIZE" \
     --lower-affine \
