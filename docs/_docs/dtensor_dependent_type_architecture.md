@@ -333,7 +333,9 @@ Representative consumers include:
   deep RAUW to update embedded dims;
 - `dependent-dim-query-elim`, which rewrites `dtensor.dim` to type-carried
   provenance;
-- exact tiling passes that consume `dtensor.nat.mul` product facts;
+- tiling fact providers that consume `dtensor.nat.mul` product facts and refined
+  positivity, and that expose representable affine full-tile guards before the
+  shared tiling planner chooses exact, guarded, or separable tiling;
 - `dependent-tail-min-simplify`, which removes generated tail/min guards when a
   matching nat-product proof is still available;
 - `canonicalize-dtensor-nat-products`, which normalizes explicit product facts;
@@ -381,4 +383,3 @@ shape refs are primarily carried by operation result and operand types. They are
 important for future designs involving persistent loop-carried dependent tensor
 refinements, stronger function-boundary contracts, or more MLIR-like scoped
 replacement APIs.
-
