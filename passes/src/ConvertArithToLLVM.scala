@@ -47,6 +47,25 @@ private final class Builder(val funcOp: func.Func):
   private def remap(v: Value[Attribute]): Value[Attribute] =
     valueMap.getOrElse(v, v)
 
+  private def lowerIntegerBinary(
+      lhs: Value[Attribute],
+      rhs: Value[Attribute],
+      result: Result[Attribute],
+  )(
+      build: (
+          Operand[IntegerType | IndexType],
+          Operand[IntegerType | IndexType],
+          Result[IntegerType | IndexType],
+      ) => Operation
+  ): Seq[Operation] =
+    val lowered = build(
+      asLLVMIndex(remap(lhs)),
+      asLLVMIndex(remap(rhs)),
+      Result(convertLLVMIntegerType(result.typ)),
+    )
+    valueMap(result) = lowered.results.head
+    Seq(lowered)
+
   private def lowerConstant(op: arith.Constant, block: Block): Operation =
     val lowered = llvm.Constant(
       convertLLVMConstantAttr(op.value),
@@ -80,6 +99,14 @@ private final class Builder(val funcOp: func.Func):
         )
         valueMap(mul.result) = lowered.res
         Seq(lowered)
+      case div: arith.DivUI =>
+        lowerIntegerBinary(div.lhs, div.rhs, div.result)(llvm.UDiv.apply)
+      case div: arith.DivSI =>
+        lowerIntegerBinary(div.lhs, div.rhs, div.result)(llvm.SDiv.apply)
+      case rem: arith.RemUI =>
+        lowerIntegerBinary(rem.lhs, rem.rhs, rem.result)(llvm.URem.apply)
+      case rem: arith.RemSI =>
+        lowerIntegerBinary(rem.lhs, rem.rhs, rem.result)(llvm.SRem.apply)
       case min: arith.MinSI =>
         val lhs = asLLVMIndex(remap(min.lhs))
         val rhs = asLLVMIndex(remap(min.rhs))
@@ -156,6 +183,7 @@ private final class Builder(val funcOp: func.Func):
 private val LowerFunc = pattern {
   case op: func.Func if op.body.blocks.exists(_.operations.exists {
         case _: arith.Constant | _: arith.AddI | _: arith.MulI | _: arith.MinSI |
+            _: arith.DivUI | _: arith.DivSI | _: arith.RemUI | _: arith.RemSI |
             _: arith.AddF | _: arith.MulF =>
           true
         case _ => false

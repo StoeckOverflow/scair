@@ -100,6 +100,30 @@ case class Mul(
     overflowFlags: Option[ArrayAttribute[StringData]] = None,
 ) extends DerivedOperation["llvm.mul"] derives OpDefs
 
+case class UDiv(
+    lhs: Operand[IntegerType | IndexType],
+    rhs: Operand[IntegerType | IndexType],
+    res: Result[IntegerType | IndexType],
+) extends DerivedOperation["llvm.udiv"] derives OpDefs
+
+case class SDiv(
+    lhs: Operand[IntegerType | IndexType],
+    rhs: Operand[IntegerType | IndexType],
+    res: Result[IntegerType | IndexType],
+) extends DerivedOperation["llvm.sdiv"] derives OpDefs
+
+case class URem(
+    lhs: Operand[IntegerType | IndexType],
+    rhs: Operand[IntegerType | IndexType],
+    res: Result[IntegerType | IndexType],
+) extends DerivedOperation["llvm.urem"] derives OpDefs
+
+case class SRem(
+    lhs: Operand[IntegerType | IndexType],
+    rhs: Operand[IntegerType | IndexType],
+    res: Result[IntegerType | IndexType],
+) extends DerivedOperation["llvm.srem"] derives OpDefs
+
 case class FAdd(
     lhs: Operand[FloatType],
     rhs: Operand[FloatType],

@@ -24,3 +24,25 @@ builtin.module {
 // CHECK-NEXT:     func.return %6, %8, %10 : i32, i32, f32
 // CHECK-NEXT:   }
 // CHECK-NEXT: }
+
+// -----
+
+builtin.module {
+  func.func @divrem(%a: i32, %b: i32, %p: index, %khkw: index) {
+    %udiv = "arith.divui"(%a, %b) : (i32, i32) -> i32
+    %urem = "arith.remui"(%a, %b) : (i32, i32) -> i32
+    %sdiv = "arith.divsi"(%a, %b) : (i32, i32) -> i32
+    %srem = "arith.remsi"(%a, %b) : (i32, i32) -> i32
+    %idx_div = "arith.divui"(%p, %khkw) : (index, index) -> index
+    %idx_rem = "arith.remui"(%p, %khkw) : (index, index) -> index
+    func.return
+  }
+}
+
+// CHECK-LABEL: func.func @divrem
+// CHECK: "llvm.udiv"(%{{[0-9]+}}, %{{[0-9]+}}) : (i32, i32) -> i32
+// CHECK: "llvm.urem"(%{{[0-9]+}}, %{{[0-9]+}}) : (i32, i32) -> i32
+// CHECK: "llvm.sdiv"(%{{[0-9]+}}, %{{[0-9]+}}) : (i32, i32) -> i32
+// CHECK: "llvm.srem"(%{{[0-9]+}}, %{{[0-9]+}}) : (i32, i32) -> i32
+// CHECK: "llvm.udiv"(%{{[0-9]+}}, %{{[0-9]+}}) : (index, index) -> i64
+// CHECK: "llvm.urem"(%{{[0-9]+}}, %{{[0-9]+}}) : (index, index) -> i64
