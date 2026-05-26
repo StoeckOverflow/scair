@@ -18,3 +18,16 @@ final class DependentProductLoopExactTile(
       factorPolicy,
       ProductLoopKind.AnyProductLoop,
     )
+
+final class DependentProductLoopSeparableTile(
+    ctx: MLContext,
+    factorPolicy: FactorSelectionPolicy = FactorSelectionPolicy.RightmostPositive,
+) extends ModulePass(ctx):
+  override val name: String = "dependent-product-loop-separable-tile"
+
+  override def transform(op: Operation): Operation =
+    DependentNatmulTilingTransform.transformSeparableWhenNotExact(
+      op,
+      factorPolicy,
+      ProductLoopKind.AnyProductLoop,
+    )

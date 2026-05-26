@@ -68,6 +68,9 @@ private final case class FactorizationPlan(
     innerUpperBound: Value[Attribute],
 )
 
+// Structural product-loop factorization infrastructure. This pass deliberately
+// rewrites flat product loops into nested loops; the generic tiling emitter lives
+// in ValueDependentTiling.
 private def choosePlan(
     loop: d_affine.For,
     factorPolicy: FactorSelectionPolicy,

@@ -15,6 +15,7 @@ import scair.passes.convert_func_to_llvm.ConvertFuncToLLVM
 import scair.passes.convert_llvm_export_abi.ConvertLLVMExportABI
 import scair.passes.context_band_tiling.DependentContextBandExactTile
 import scair.passes.context_band_tiling.DependentContextBandFactorTileWithTail
+import scair.passes.context_band_tiling.DependentContextBandSeparableTile
 import scair.passes.context_band_tiling.DependentContextBandTileWithTail
 import scair.passes.context_band_tiling.OrdinaryAffineContextBandTileWithTail
 import scair.passes.dce.DeadCodeElimination
@@ -26,6 +27,7 @@ import scair.passes.d_affine_loop_invariant_code_motion.DAffineLoopInvariantCode
 import scair.passes.dependent_natmul_loop_factorization.DependentNatmulLoopFactorization
 import scair.passes.dependent_natmul_tiling.DependentExactTile
 import scair.passes.dependent_natmul_tiling.DependentProductLoopExactTile
+import scair.passes.dependent_natmul_tiling.DependentProductLoopSeparableTile
 import scair.passes.dependent_natmul_tiling.DependentTileWithTailControl
 import scair.passes.dependent_dim_query_elim.DependentDimQueryElim
 import scair.passes.dependent_tail_min_simplify.DependentTailMinSimplify
@@ -100,9 +102,11 @@ val allPasses: Seq[MLContext => ModulePass] =
     OrdinaryAffineContextBandTileWithTail(_, BigInt(1)),
     DependentContextBandExactTile(_),
     DependentContextBandFactorTileWithTail(_),
+    DependentContextBandSeparableTile(_),
     DependentContextBandTileWithTail(_, BigInt(1)),
     DependentExactTile(_),
     DependentProductLoopExactTile(_),
+    DependentProductLoopSeparableTile(_),
     DependentTileWithTailControl(_),
     DependentDimQueryElim(_),
     DependentTailMinSimplify(_),
