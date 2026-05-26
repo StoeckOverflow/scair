@@ -340,10 +340,26 @@ final case class Yield(
               )
             case None =>
               OK(this)
+      case Some(ifOp: If) =>
+        if args.size != ifOp.res.size then
+          Err(
+            s"d_affine.yield: expected ${ifOp.res.size} operands to match parent results, got ${args.size}"
+          )
+        else
+          val mismatch = args.zip(ifOp.res).zipWithIndex.collectFirst {
+            case ((arg, r), idx) if arg.typ != r.typ => (idx, r.typ, arg.typ)
+          }
+          mismatch match
+            case Some((idx, expected, got)) =>
+              Err(
+                s"d_affine.yield: operand type mismatch at position $idx; expected $expected, got $got"
+              )
+            case None =>
+              OK(this)
       case Some(other)  =>
-        Err(s"d_affine.yield: expected parent op d_affine.for, got `${other.name}`")
+        Err(s"d_affine.yield: expected parent op d_affine.for or d_affine.if, got `${other.name}`")
       case None         =>
-        Err("d_affine.yield: expected to be nested in d_affine.for body")
+        Err("d_affine.yield: expected to be nested in d_affine.for or d_affine.if body")
 
   override def customPrint(printer: Printer): Unit =
     if args.isEmpty then
