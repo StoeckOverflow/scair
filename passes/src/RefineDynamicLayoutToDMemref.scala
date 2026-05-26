@@ -222,13 +222,11 @@ private def lowerRegion(
     outerMapper: mutable.Map[Value[Attribute], Value[Attribute]],
 ): Region =
   val oldBlock = region.blocks.head
-  Region(
-    Block(oldBlock.arguments.map(_.typ), newArgs =>
-      val localMapper = mutable.Map.from(outerMapper)
-      localMapper.addAll(oldBlock.arguments.zip(newArgs))
-      lowerOps(oldBlock.operations, localMapper)
-    )
-  )
+  val localMapper = mutable.Map.from(outerMapper)
+  val block =
+    Block.cloneArgumentTypes(oldBlock.arguments, Seq.empty)(using localMapper)
+  block.addOps(lowerOps(oldBlock.operations, localMapper))
+  Region(block)
 
 private def lowerRegionWithArgTypes(
     region: Region,

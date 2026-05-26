@@ -127,14 +127,9 @@ private final class DAffineToAffineConverter:
     Region(region.blocks.map(block => cloneBlock(block, yieldDialect)))
 
   private def cloneBlock(block: Block, yieldDialect: YieldDialect): Block =
-    Block(
-      block.arguments.map(_.typ),
-      args =>
-        block.arguments.zip(args).foreach { case (oldArg, newArg) =>
-          valueMapper.update(oldArg, newArg)
-        }
-        block.operations.map(op => cloneOp(op, yieldDialect)).toSeq,
-    )
+    val copied = Block.cloneArgumentTypes(block.arguments, Seq.empty)(using valueMapper)
+    copied.addOps(block.operations.map(op => cloneOp(op, yieldDialect)).toSeq)
+    copied
 
   private def cloneDAffineLoop(loop: d_affine.For): d_affine.For =
     val copiedResults = loop.res.map(result => Result(result.typ))

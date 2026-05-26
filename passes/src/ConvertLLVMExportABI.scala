@@ -43,9 +43,13 @@ private final class FunctionLegalizer(op: llvm.Func):
 
   def lower(): llvm.Func =
     val newBlocks = op.body.blocks.map { oldBlock =>
-      val newBlock = Block(oldBlock.arguments.map(arg => legalizeAttr(arg.typ)), Seq.empty)
+      val newBlock =
+        Block.cloneArgumentTypes(
+          oldBlock.arguments,
+          Seq.empty,
+          legalizeAttr,
+        )(using valueMap)
       blockMap(oldBlock) = newBlock
-      valueMap.addAll(oldBlock.arguments.zip(newBlock.arguments))
       newBlock
     }
 
@@ -197,7 +201,7 @@ private final class DescriptorPointerInterfaceBuilder(internal: llvm.Func):
     val newBlocks = internal.body.blocks.zipWithIndex.map { case (oldBlock, idx) =>
       val block =
         if idx == 0 then Block(argTypes, Seq.empty)
-        else Block(oldBlock.arguments.map(_.typ), Seq.empty)
+        else Block.cloneArgumentTypes(oldBlock.arguments, Seq.empty)(using valueMap)
       blockMap(oldBlock) = block
       block
     }

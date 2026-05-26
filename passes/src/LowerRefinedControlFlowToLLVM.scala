@@ -20,10 +20,10 @@ private final class Builder(val funcOp: func.Func):
   private val state = FunctionLoweringState(funcOp)
   private val blocks = mutable.ArrayBuffer.empty[Block]
   private val cfg = LoopCFGBuilder(blocks)
-  private var current: Block = Block(funcOp.body.blocks.head.arguments.map(_.typ), Seq.empty)
+  private var current: Block =
+    Block.cloneArgumentTypes(funcOp.body.blocks.head.arguments, Seq.empty)(using state.valueMap)
   blocks += current
   state.blockMap(funcOp.body.blocks.head) = current
-  state.valueMap.addAll(funcOp.body.blocks.head.arguments.zip(current.arguments))
 
   private def remap(v: Value[Attribute]): Value[Attribute] =
     state.remap(v)

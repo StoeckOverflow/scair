@@ -150,6 +150,37 @@ trait AliasedAttribute(val alias: String) extends Attribute
 
 object AttributeWalker:
 
+  private def clonePayload(payload: Any): Any =
+    payload match
+      case a: Attribute   => cloneValueAttributes(a)
+      case xs: Seq[?]     => xs.map(clonePayload)
+      case opt: Option[?] => opt.map(clonePayload)
+      case other          => other
+
+  def cloneValueAttributes(a: Attribute): Attribute =
+    a match
+      case va: ValueAttribute =>
+        new ValueAttribute(va.getVal())
+      case p: ParametrizedAttribute =>
+        p match
+          case product: Product =>
+            val ctorOpt =
+              a.getClass.getConstructors
+                .find(_.getParameterCount == product.productArity)
+            ctorOpt match
+              case Some(ctor) =>
+                val args =
+                  product.productIterator.map(clonePayload)
+                    .map(_.asInstanceOf[Object])
+                    .toArray
+                ctor.newInstance(args*).asInstanceOf[Attribute]
+              case None =>
+                a
+          case _ =>
+            a
+      case _ =>
+        a
+
   private def foreachValueAttributeInParams(
       params: Seq[Attribute | Seq[Attribute]],
       f: ValueAttribute => Unit,

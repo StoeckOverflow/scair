@@ -55,9 +55,9 @@ private final class Builder(val funcOp: func.Func):
 
   def lower(): llvm.Func =
     val newBlocks = funcOp.body.blocks.map { oldBlock =>
-      val newBlock = Block(oldBlock.arguments.map(_.typ), Seq.empty)
+      val newBlock =
+        Block.cloneArgumentTypes(oldBlock.arguments, Seq.empty)(using valueMap)
       blockMap(oldBlock) = newBlock
-      valueMap.addAll(oldBlock.arguments.zip(newBlock.arguments))
       newBlock
     }
 

@@ -101,9 +101,9 @@ private final class FuncAssertLowerer(funcOp: func.Func):
 
   def lower(): func.Func =
     funcOp.body.blocks.foreach { oldBlock =>
-      val newBlock = Block(oldBlock.arguments.map(_.typ), Seq.empty)
+      val newBlock =
+        Block.cloneArgumentTypes(oldBlock.arguments, Seq.empty)(using valueMap)
       blockMap(oldBlock) = newBlock
-      valueMap.addAll(oldBlock.arguments.zip(newBlock.arguments))
     }
     funcOp.body.blocks.foreach { oldBlock =>
       val initialBlock = blockMap(oldBlock)

@@ -151,9 +151,8 @@ private final class Builder(val funcOp: func.Func):
 
   def lower(): func.Func =
     val newBlocks = funcOp.body.blocks.map { oldBlock =>
-      val nb = Block(oldBlock.arguments.map(_.typ), Seq.empty)
+      val nb = Block.cloneArgumentTypes(oldBlock.arguments, Seq.empty)(using valueMap)
       blockMap(oldBlock) = nb
-      valueMap.addAll(oldBlock.arguments.zip(nb.arguments))
       nb
     }
     funcOp.body.blocks.zip(newBlocks).foreach { case (oldBlock, newBlock) =>
@@ -171,13 +170,23 @@ private final class Builder(val funcOp: func.Func):
         case other             => newBlock.addOps(lowerOp(other))
       }
     }
+    val loweredFunctionType =
+      AttributeWalker
+        .cloneValueAttributes(funcOp.function_type)
+        .asInstanceOf[FunctionType]
+    AttributeWalker.remapTypeUsesInPlace(loweredFunctionType)(using valueMap)
     val lowered = func.Func(
       funcOp.sym_name,
-      funcOp.function_type,
+      loweredFunctionType,
       funcOp.sym_visibility,
       Region(newBlocks),
     )
-    lowered.attributes.addAll(funcOp.attributes)
+    lowered.attributes.addAll(
+      funcOp.attributes.view.mapValues(AttributeWalker.cloneValueAttributes)
+    )
+    lowered.attributes.values.foreach(attr =>
+      AttributeWalker.remapTypeUsesInPlace(attr)(using valueMap)
+    )
     lowered
 
 private val LowerFunc = pattern {

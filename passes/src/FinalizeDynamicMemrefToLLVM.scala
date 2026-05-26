@@ -290,9 +290,13 @@ private final class Builder(val funcOp: func.Func):
 
   def lower(): func.Func =
     val clonedBlocks = funcOp.body.blocks.map { oldBlock =>
-      val nb = Block(oldBlock.arguments.map(arg => convertCarrierType(arg.typ)), Seq.empty)
+      val nb =
+        Block.cloneArgumentTypes(
+          oldBlock.arguments,
+          Seq.empty,
+          convertCarrierType,
+        )(using state.valueMap)
       state.blockMap(oldBlock) = nb
-      state.valueMap.addAll(oldBlock.arguments.zip(nb.arguments))
       nb
     }
     cachedIndexConstants = Some(CachedIndexConstants(clonedBlocks.head))

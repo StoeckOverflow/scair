@@ -139,6 +139,27 @@ object Block:
     val args = ListType.from(arguments)
     Block.applyArgs(args, operationsExpr(args))
 
+  def cloneArgumentTypes(
+      oldArguments: Iterable[Value[Attribute]],
+      operations: Iterable[Operation],
+      typeMapper: Attribute => Attribute = (attr: Attribute) => attr,
+  )(using
+      valueMapper: mutable.Map[Value[Attribute], Value[Attribute]],
+  ): Block =
+    val oldArgs = oldArguments.toSeq
+    val block =
+      Block(
+        oldArgs.map(arg =>
+          AttributeWalker.cloneValueAttributes(typeMapper(arg.typ))
+        ),
+        operations,
+      )
+    valueMapper addAll oldArgs.zip(block.arguments)
+    block.arguments.foreach(arg =>
+      AttributeWalker.remapTypeUsesInPlace(arg.typ)
+    )
+    block
+
 /** A basic block.
   *
   * @param arguments
@@ -156,12 +177,9 @@ case class Block private (
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]] = mutable.Map
         .empty,
   ): Block =
-    Block(
-      argumentsTypes = arguments.map(_.typ),
-      (args) =>
-        valueMapper addAll (arguments zip args)
-        operations.map(_.deepCopy),
-    )
+    val block = Block.cloneArgumentTypes(arguments, Seq.empty)
+    block.addOps(operations.map(_.deepCopy).toSeq)
+    block
 
   final override def parent: Option[Region] = containerRegion
 

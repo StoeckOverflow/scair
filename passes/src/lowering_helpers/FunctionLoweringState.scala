@@ -17,9 +17,8 @@ final class FunctionLoweringState(val funcOp: func.Func):
 
   def makeClonedBlocks(): Seq[Block] =
     funcOp.body.blocks.map { oldBlock =>
-      val nb = Block(oldBlock.arguments.map(_.typ), Seq.empty)
+      val nb = Block.cloneArgumentTypes(oldBlock.arguments, Seq.empty)(using valueMap)
       blockMap(oldBlock) = nb
-      valueMap.addAll(oldBlock.arguments.zip(nb.arguments))
       nb
     }
 

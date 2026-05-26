@@ -75,14 +75,14 @@ builtin.module {
 // CHECK: builtin.module {
 // CHECK:   %0 = "tlam.vlambda"() ({
 // CHECK:   ^bb0(%1: !tlam.type):
-// CHECK:     %2 = "builtin.unrealized_conversion_cast"(%1) : (!tlam.type) -> !value<%3>
-// CHECK:     %4 = "builtin.unrealized_conversion_cast"(%2) : (!value<%3>) -> !tlam.type
-// CHECK:     "tlam.vreturn"(%4) : (!tlam.type) -> ()
+// CHECK:     %2 = "builtin.unrealized_conversion_cast"(%1) : (!tlam.type) -> !value<%1>
+// CHECK:     %3 = "builtin.unrealized_conversion_cast"(%2) : (!value<%1>) -> !tlam.type
+// CHECK:     "tlam.vreturn"(%3) : (!tlam.type) -> ()
 // CHECK:   }) : () -> !tlam.fun<!tlam.type, !tlam.type>
-// CHECK:   %3 = "builtin.unrealized_conversion_cast"() : () -> !tlam.type
-// CHECK:   %1 = "builtin.unrealized_conversion_cast"(%3) : (!tlam.type) -> !value<%3>
-// CHECK:   %2 = "builtin.unrealized_conversion_cast"(%1) : (!value<%3>) -> !tlam.type
-// CHECK:   "test.use"(%2) : (!tlam.type) -> ()
+// CHECK:   %1 = "builtin.unrealized_conversion_cast"() : () -> !tlam.type
+// CHECK:   %2 = "builtin.unrealized_conversion_cast"(%1) : (!tlam.type) -> !value<%1>
+// CHECK:   %3 = "builtin.unrealized_conversion_cast"(%2) : (!value<%1>) -> !tlam.type
+// CHECK:   "test.use"(%3) : (!tlam.type) -> ()
 // CHECK: }
 
 // -----

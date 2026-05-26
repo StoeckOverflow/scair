@@ -362,14 +362,9 @@ object ValueDependentTiling:
       Region(region.blocks.map(cloneBlock))
 
     def cloneBlock(block: Block): Block =
-      Block(
-        block.arguments.map(_.typ),
-        args =>
-          block.arguments.zip(args).foreach { case (oldArg, newArg) =>
-            valueMapper.update(oldArg, newArg)
-          }
-          block.operations.map(cloneOp).toSeq,
-      )
+      val copied = Block.cloneArgumentTypes(block.arguments, Seq.empty)(using valueMapper)
+      copied.addOps(block.operations.map(cloneOp).toSeq)
+      copied
 
     def cloneOp(op: Operation): Operation =
       op match

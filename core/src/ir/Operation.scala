@@ -55,18 +55,24 @@ trait Operation extends IRNode with IntrusiveNode[Operation]:
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]] = mutable.Map
         .empty,
   ): Operation =
-    val newResults = results.map(_.copy())
+    val newResults = results.map(r =>
+      Result(AttributeWalker.cloneValueAttributes(r.typ))
+    )
     valueMapper addAll (results zip newResults)
     val newOp = updated(
       results = newResults.asInstanceOf[Seq[Result[Attribute]]],
       operands = operands.map(o => valueMapper.getOrElse(o, o)),
       successors = successors.map(b => blockMapper.getOrElseUpdate(b, b)),
       regions = regions.map(_.deepCopy),
-      attributes = LinkedHashMap.from(attributes),
+      properties = properties.view
+        .mapValues(AttributeWalker.cloneValueAttributes)
+        .toMap,
+      attributes = LinkedHashMap.from(
+        attributes.view.mapValues(AttributeWalker.cloneValueAttributes)
+      ),
     )
     // Remap type uses inside attributes to cloned SSA values.
     newOp.results.foreach(r => AttributeWalker.remapTypeUsesInPlace(r.typ))
-    newOp.operands.foreach(v => AttributeWalker.remapTypeUsesInPlace(v.typ))
     newOp.attributes.values
       .foreach(a => AttributeWalker.remapTypeUsesInPlace(a))
     newOp.properties.values
