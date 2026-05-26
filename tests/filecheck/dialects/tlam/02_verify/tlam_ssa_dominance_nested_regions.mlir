@@ -37,7 +37,7 @@ builtin.module {
 // -----
 
 // Invalid: nested forward reference of type value fails dominance.
-// expected-error @below {{ssa-dominance: value Value}}
+// expected-error @below {{ssa-dominance: value Value(!tlam.type) does not dominate its use in op `test.use`}}
 builtin.module {
   "scf.execute_region"() ({
   ^bb0:

@@ -22,7 +22,7 @@ builtin.module {
 // -----
 
 // Invalid nested attr forward reference in embedded tvar.
-// expected-error @below {{ssa-dominance: value Value}}
+// expected-error @below {{ssa-dominance: value Value(!tlam.type) does not dominate its use in op `test.use`}}
 builtin.module {
   "test.use"() {nested = [!value<%T>, [!tlam.forall<!value<%T>>, !value<%T>]]} : () -> ()
   %T = "test.make_type"() : () -> !tlam.type

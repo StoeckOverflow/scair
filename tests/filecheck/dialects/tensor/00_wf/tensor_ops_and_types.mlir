@@ -317,8 +317,7 @@ builtin.module {
   }) : () -> ()
 }
 
-// VERIFY: ssa-dominance: value Value
-// VERIFY: does not dominate its use in op `test.use`
+// VERIFY: ssa-dominance: value Value(!dtensor.nat) does not dominate its use in op `test.use`
 
 // -----
 
