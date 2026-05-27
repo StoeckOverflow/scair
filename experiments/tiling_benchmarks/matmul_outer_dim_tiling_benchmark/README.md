@@ -24,7 +24,8 @@ for i in 0..M:
 | `matmul_outer_dim_mlir_baseline.mlir` | `mlir_baseline_mn_tile` | `mlir-opt --affine-loop-tile=tile-size=64` | Upstream MLIR tiles `i/j` with `step 64` and keeps `affine.min` tail bounds. |
 | `matmul_outer_dim_scair_ordinary.mlir` | `ordinary_scair_mn_tile_with_tail` | `ordinary-affine-context-band-tile-with-tail:64`, then stock affine lowering | Ordinary ScaIR tiles the same `i/j` loops and keeps min/tail bounds. |
 | `matmul_outer_dim_scair_value_dependent.mlir` | `dependent_mn_guarded_tail_simplified` | `dependent-context-band-factor-tile-with-tail`, then `dependent-tail-min-simplify` | Emits guarded `i/j` tiles first; final output removes the provably unnecessary guards. |
-| `matmul_outer_dim_scair_value_dependent.mlir` | `dependent_mn_exact_tile` | `dependent-context-band-exact-tile` | Diagnostic route that emits tail-free exact `i/j` tiling directly. |
+| `matmul_outer_dim_scair_value_dependent.mlir` | `dependent_mn_separable_tile` | `dependent-context-band-separable-tile`, then `d-affine-to-affine-compatible` before lowering | Emits full-tile and partial-tile branches for `i/j`; the full branch is exact and the partial branch keeps guarded tail protection. |
+| `matmul_outer_dim_scair_value_dependent.mlir` | `dependent_mn_exact_tile` | `dependent-context-band-exact-tile` | Diagnostic route that emits tail-free exact `i/j` tiling directly from proof-only dependent facts. |
 
 ## What Is Fairly Compared
 
@@ -32,7 +33,7 @@ All routes start from the same matmul loop nest and tile the same output dimensi
 
 ## What Is Not Claimed
 
-This benchmark does not claim broad matmul runtime superiority. Runtime numbers are sanity checks and supporting measurements; the main claim is that dependent product facts remove dynamic tail guards in the same tiling target where baseline MLIR must remain conservative.
+This benchmark does not claim broad matmul runtime superiority or general polyhedral tiling. Runtime numbers are sanity checks and supporting measurements; the main claim is that dependent product facts support a representative affine-style tiling subset where exact routes remove dynamic tail guards and the separable route exposes full/partial tile control flow in the same tiling target.
 
 ## How To Run
 

@@ -1,4 +1,5 @@
 builtin.module {
+  func.func @foo(%n_nat, %k_nat, %A: memref<[%n_nat, %k_nat]>)
   func.func @matmul_strided(
     %n_nat : !dtensor.nat,
     %m_nat : !dtensor.nat,

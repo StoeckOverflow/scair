@@ -75,6 +75,21 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
     block.addOp(cmp)
     cmp.res
 
+  def emitICmp(
+      block: Block,
+      lhs: Value[Attribute],
+      rhs: Value[Attribute],
+      predicate: llvm.ICmpPredicate,
+  ): Value[Attribute] =
+    val cmp = llvm.ICmp(
+      asLLVMIndex(lhs),
+      asLLVMIndex(rhs),
+      Result(I1),
+      predicate,
+    )
+    block.addOp(cmp)
+    cmp.res
+
   def emitAdd(
       block: Block,
       lhs: Value[Attribute],
@@ -157,6 +172,29 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
         val dims = map.affineMap.dimensions.zip(operands.take(dimCount)).toMap
         val syms = map.affineMap.symbols.zip(operands.drop(dimCount)).toMap
         materializeAffineExpr(block, map.affineMap.affineExprs.head, dims, syms)
+
+  def materializeAffineSet(
+      block: Block,
+      operands: Seq[Value[Attribute]],
+      set: AffineSetAttr,
+  ): Option[Value[Attribute]] =
+    if set.affineSet.affineConstraints.size != 1 then None
+    else
+      val dimCount = set.affineSet.dimensions.size
+      if operands.size != dimCount + set.affineSet.symbols.size then None
+      else
+        val dims = set.affineSet.dimensions.zip(operands.take(dimCount)).toMap
+        val syms = set.affineSet.symbols.zip(operands.drop(dimCount)).toMap
+        val constraint = set.affineSet.affineConstraints.head
+        for
+          lhs <- materializeAffineExpr(block, constraint.lhs, dims, syms)
+          rhs <- materializeAffineExpr(block, constraint.rhs, dims, syms)
+        yield
+          val pred = constraint.kind match
+            case AffineConstraintKind.LessEqual    => llvm.ICmpPredicate.sle
+            case AffineConstraintKind.GreaterEqual => llvm.ICmpPredicate.sge
+            case AffineConstraintKind.Equal        => llvm.ICmpPredicate.eq
+          emitICmp(block, lhs, rhs, pred)
 
   def emitBr(
       block: Block,

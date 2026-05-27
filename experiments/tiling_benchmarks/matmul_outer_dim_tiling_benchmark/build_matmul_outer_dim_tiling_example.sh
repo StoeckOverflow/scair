@@ -9,7 +9,7 @@ MLIR_TRANSLATE="${MLIR_TRANSLATE:-$BIN_DIR/mlir-translate}"
 ITERATIONS="${MATMUL_OUTER_DIM_TILING_ITERATIONS:-${ITERATIONS:-30}}"
 MATMUL_OUTER_DIM_SIZE_SET="${MATMUL_OUTER_DIM_SIZE_SET:-2x64x2x64x768,3x64x2x64x512}"
 MATMUL_OUTER_DIM_TILE_SIZE="${MATMUL_OUTER_DIM_TILE_SIZE:-64}"
-MATMUL_OUTER_DIM_ROUTES="${MATMUL_OUTER_DIM_ROUTES:-mlir_baseline_mn_tile,ordinary_scair_mn_tile_with_tail,dependent_mn_guarded_tail_simplified,dependent_mn_exact_tile}"
+MATMUL_OUTER_DIM_ROUTES="${MATMUL_OUTER_DIM_ROUTES:-mlir_baseline_mn_tile,ordinary_scair_mn_tile_with_tail,dependent_mn_guarded_tail_simplified,dependent_mn_separable_tile,dependent_mn_exact_tile}"
 
 SCAIR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -352,6 +352,20 @@ for dims in "${sizes[@]}"; do
       "$tag" "$m0" "$m1" "$n0" "$n1" "$k"
     require_no_tail "$OUT_DIR/${tag}_dependent_mn_guarded_tail_simplified.tiled.mlir" "dependent guarded simplified route must remove tail guards"
     append_case "dependent_mn_guarded_tail_simplified" "$tag" "$size" "dtensor.nat.mul" "no" "guarded_artifact=$(basename "$guarded");proof_removes_i_j_tail"
+  fi
+
+  if route_enabled "dependent_mn_separable_tile"; then
+    echo "==> Building dependent separable M/N tile for $size"
+    build_scair_route \
+      "dependent_mn_separable_tile" \
+      "$DEPENDENT_SRC" \
+      "$DEPENDENT_DRIVER" \
+      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-separable-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
+      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-separable-tile,d-affine-to-affine-compatible,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-dmemref-to-llvm" \
+      "$tag" "$m0" "$m1" "$n0" "$n1" "$k"
+    require_pattern "$OUT_DIR/${tag}_dependent_mn_separable_tile.tiled.mlir" 'd_affine\.if' "dependent separable route must emit full/partial tile branches"
+    require_pattern "$OUT_DIR/${tag}_dependent_mn_separable_tile.tiled.mlir" 'arith\.minsi' "dependent separable route must retain partial-branch tail protection"
+    append_case "dependent_mn_separable_tile" "$tag" "$size" "dtensor.nat.mul" "no" "tiling_decision=separable;proof_source=natmul+affine_set;full_tile_branch_exact;partial_branch_guarded"
   fi
 
   if route_enabled "dependent_mn_exact_tile"; then
