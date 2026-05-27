@@ -14,8 +14,25 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   private def tensorOf(dim: Value[Attribute]): dTensorTensorType =
     dTensorTensorType(Seq(ValueAttribute(dim)), Float32Type())
 
+  private def tensorOf(dims: Seq[Value[Attribute]]): dTensorTensorType =
+    dTensorTensorType(dims.map(ValueAttribute(_)), Float32Type())
+
   private def embeddedDim(t: dTensorTensorType): Value[Attribute] =
     t.params.head.getVal()
+
+  private def embeddedDims(t: dTensorTensorType): Seq[Value[Attribute]] =
+    t.params.map(_.getVal())
+
+  private def reassociation(groups: Seq[Seq[Int]]): ArrayAttribute[Attribute] =
+    ArrayAttribute(groups.map(group =>
+      ArrayAttribute(group.map(idx => IntegerAttr(IntData(idx), I32)))
+    ))
+
+  private def i32Attr(value: Int): IntegerAttr =
+    IntegerAttr(IntData(value), I32)
+
+  private def i32Array(values: Seq[Int]): ArrayAttribute[Attribute] =
+    ArrayAttribute(values.map(i32Attr))
 
   "dtensor type uses" should "track and rewrite embedded dimension references during RAUW" in {
     val keptDim = Result(dTensorNatType())
@@ -54,6 +71,96 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
     embeddedDim(copiedTensor.res.typ) should be theSameInstanceAs copiedProducer.res
     embeddedDim(tensor.res.typ) should be theSameInstanceAs dim
     embeddedDim(tensor.res.typ) should not be theSameInstanceAs(copiedProducer.res)
+  }
+
+  it should "remap collapse_shape embedded dimensions without mutating the original" in {
+    val m = Result(dTensorNatType())
+    val n = Result(dTensorNatType())
+    val mn = Result(dTensorNatType())
+    val mProducer = NatParam(m)
+    val nProducer = NatParam(n)
+    val mnProducer = NatMul(m, n, mn)
+    val source = Empty(Result(tensorOf(Seq(m, n))))
+    val collapse =
+      CollapseShape(source.res, reassociation(Seq(Seq(0, 1))), Result(tensorOf(mn)))
+    val original = Block(operations = Seq(mProducer, nProducer, mnProducer, source, collapse))
+
+    val copied = original.deepCopy
+    val copiedOps = copied.operations.toSeq
+    val copiedM = copiedOps(0).asInstanceOf[NatParam].res
+    val copiedN = copiedOps(1).asInstanceOf[NatParam].res
+    val copiedMN = copiedOps(2).asInstanceOf[NatMul].res
+    val copiedSource = copiedOps(3).asInstanceOf[Empty]
+    val copiedCollapse = copiedOps(4).asInstanceOf[CollapseShape]
+
+    copiedM should not be theSameInstanceAs(m)
+    copiedN should not be theSameInstanceAs(n)
+    copiedMN should not be theSameInstanceAs(mn)
+    embeddedDims(copiedSource.res.typ) should contain theSameElementsInOrderAs Seq(copiedM, copiedN)
+    embeddedDim(copiedCollapse.res.typ) should be theSameInstanceAs copiedMN
+    embeddedDims(source.res.typ) should contain theSameElementsInOrderAs Seq(m, n)
+    embeddedDim(collapse.res.typ) should be theSameInstanceAs mn
+  }
+
+  it should "remap split_dim and join_dim embedded dimensions without mutating the original" in {
+    val m = Result(dTensorNatType())
+    val n = Result(dTensorNatType())
+    val mn = Result(dTensorNatType())
+    val mProducer = NatParam(m)
+    val nProducer = NatParam(n)
+    val mnProducer = NatMul(m, n, mn)
+    val splitSource = Empty(Result(tensorOf(mn)))
+    val split = SplitDim(splitSource.res, i32Attr(0), Result(tensorOf(Seq(m, n))))
+    val joinSource = Empty(Result(tensorOf(Seq(m, n))))
+    val join = JoinDim(joinSource.res, i32Attr(0), Result(tensorOf(mn)))
+    val original =
+      Block(operations = Seq(mProducer, nProducer, mnProducer, splitSource, split, joinSource, join))
+
+    val copied = original.deepCopy
+    val copiedOps = copied.operations.toSeq
+    val copiedM = copiedOps(0).asInstanceOf[NatParam].res
+    val copiedN = copiedOps(1).asInstanceOf[NatParam].res
+    val copiedMN = copiedOps(2).asInstanceOf[NatMul].res
+    val copiedSplitSource = copiedOps(3).asInstanceOf[Empty]
+    val copiedSplit = copiedOps(4).asInstanceOf[SplitDim]
+    val copiedJoinSource = copiedOps(5).asInstanceOf[Empty]
+    val copiedJoin = copiedOps(6).asInstanceOf[JoinDim]
+
+    copiedM should not be theSameInstanceAs(m)
+    copiedN should not be theSameInstanceAs(n)
+    copiedMN should not be theSameInstanceAs(mn)
+    embeddedDim(copiedSplitSource.res.typ) should be theSameInstanceAs copiedMN
+    embeddedDims(copiedSplit.res.typ) should contain theSameElementsInOrderAs Seq(copiedM, copiedN)
+    embeddedDims(copiedJoinSource.res.typ) should contain theSameElementsInOrderAs Seq(copiedM, copiedN)
+    embeddedDim(copiedJoin.res.typ) should be theSameInstanceAs copiedMN
+    embeddedDim(splitSource.res.typ) should be theSameInstanceAs mn
+    embeddedDims(split.res.typ) should contain theSameElementsInOrderAs Seq(m, n)
+    embeddedDims(joinSource.res.typ) should contain theSameElementsInOrderAs Seq(m, n)
+    embeddedDim(join.res.typ) should be theSameInstanceAs mn
+  }
+
+  it should "remap permute_dims embedded dimensions without mutating the original" in {
+    val m = Result(dTensorNatType())
+    val n = Result(dTensorNatType())
+    val mProducer = NatParam(m)
+    val nProducer = NatParam(n)
+    val source = Empty(Result(tensorOf(Seq(m, n))))
+    val permute = PermuteDims(source.res, i32Array(Seq(1, 0)), Result(tensorOf(Seq(n, m))))
+    val original = Block(operations = Seq(mProducer, nProducer, source, permute))
+
+    val copied = original.deepCopy
+    val copiedOps = copied.operations.toSeq
+    val copiedM = copiedOps(0).asInstanceOf[NatParam].res
+    val copiedN = copiedOps(1).asInstanceOf[NatParam].res
+    val copiedSource = copiedOps(2).asInstanceOf[Empty]
+    val copiedPermute = copiedOps(3).asInstanceOf[PermuteDims]
+
+    copiedM should not be theSameInstanceAs(m)
+    copiedN should not be theSameInstanceAs(n)
+    embeddedDims(copiedSource.res.typ) should contain theSameElementsInOrderAs Seq(copiedM, copiedN)
+    embeddedDims(copiedPermute.res.typ) should contain theSameElementsInOrderAs Seq(copiedN, copiedM)
+    embeddedDims(source.res.typ) should contain theSameElementsInOrderAs Seq(m, n)
+    embeddedDims(permute.res.typ) should contain theSameElementsInOrderAs Seq(n, m)
   }
 
   "Verifier" should "reject out-of-scope dtensor dimensions embedded in result types" in {

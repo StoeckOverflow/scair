@@ -21,5 +21,9 @@ val dTensorDialect = summonDialect[
     Matmul,
     Cast,
     ExpandShape,
+    CollapseShape,
+    SplitDim,
+    JoinDim,
+    PermuteDims,
   ),
 ]

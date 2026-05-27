@@ -7,7 +7,14 @@ import scair.dialects.dTensor.*
 import scair.dialects.d_affine
 import scair.dialects.d_memref
 import scair.ir.*
-import scair.transformations.{GreedyRewritePatternApplier, PatternRewriteWalker, WalkerPass, pattern}
+import scair.transformations.{
+  GreedyRewritePatternApplier,
+  Owner,
+  PatternAction,
+  PatternRewriteWalker,
+  WalkerPass,
+  pattern,
+}
 
 object DTensorDMemrefConversion:
   def tensorToMemrefType(t: dTensorTensorType): d_memref.dMemrefMemrefType =
@@ -50,6 +57,8 @@ private def layoutOne: d_memref.LayoutParam =
 
 private def layoutZero: d_memref.LayoutParam =
   IntegerAttr(IntData(0), IndexType())
+
+private def intAttrValue(attr: IntegerAttr): BigInt = attr.value.value
 
 private def multiplyLayoutByIndex(
     lhs: d_memref.LayoutParam,
@@ -252,6 +261,66 @@ private val LowerExpandShape = pattern {
     )
 }
 
+private def isPermutation(
+    attr: ArrayAttribute[Attribute],
+    expected: Seq[Int],
+): Boolean =
+  attr.attrValues == expected.map(i => IntegerAttr(IntData(i), I32))
+
+private val LowerExact2DTiledView = pattern {
+  case PermuteDims(Owner(splitN: SplitDim), permutation, res)
+      if intAttrValue(splitN.dim) == 2 &&
+        isPermutation(permutation, Seq(0, 2, 1, 3)) =>
+    splitN.src.owner match
+      case Some(splitM: SplitDim) if intAttrValue(splitM.dim) == 0 =>
+        val srcTy = splitM.src.typ
+        val splitMTy = splitM.res.typ
+        val splitNTy = splitN.res.typ
+        val srcRank = srcTy.params.size
+        val splitMRank = splitMTy.params.size
+        val splitNRank = splitNTy.params.size
+        val resRank = res.typ.params.size
+
+        if srcRank == 2 && splitMRank == 3 && splitNRank == 4 && resRank == 4 then
+          val srcMemType = DTensorDMemrefConversion.tensorToMemrefType(srcTy)
+          val (prefix, memValue) =
+            DTensorDMemrefConversion.toMemrefValue(splitM.src, srcMemType)
+
+          val tmToIndex = toIndex(splitMTy.params(1).getVal())
+          val nToIndex = toIndex(srcTy.params(1).getVal())
+          val tnToIndex = toIndex(splitNTy.params(3).getVal())
+          val tmTimesN = arith.MulI(
+            tmToIndex.res.asInstanceOf[Operand[arith.AnyIntegerType]],
+            nToIndex.res.asInstanceOf[Operand[arith.AnyIntegerType]],
+            Result(IndexType()),
+          )
+
+          val resMemType = d_memref.dMemrefMemrefType(
+            res.typ.params,
+            res.typ.elem,
+            offset = Some(layoutZero),
+            strides = Some(
+              Seq(
+                layoutFromValue(tmTimesN.result),
+                layoutFromValue(tnToIndex.res),
+                layoutFromValue(nToIndex.res),
+                layoutOne,
+              )
+            ),
+          )
+          val reinterpret = d_memref.ReinterpretCast(
+            memValue.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+            Result(resMemType),
+          )
+          val castBack = castBackToTensor(reinterpret.res, res.typ)
+          (
+            prefix ++ Seq(tmToIndex, nToIndex, tnToIndex, tmTimesN, reinterpret, castBack),
+            Seq(castBack.outputs.head),
+          )
+        else PatternAction.Abort
+      case _ => PatternAction.Abort
+}
+
 /**
  * Lowers a small shape-preserving subset of `dtensor` ops to `d_memref` while
  * keeping tensor-typed SSA results via unrealized casts.
@@ -284,6 +353,10 @@ private val LowerExpandShape = pattern {
  * `<dtensor.expand_shape %src : !dtensor.tensor<[..., product], ...> to !dtensor.tensor<[..., factors...], ...>>`
  * `->`
  * `<unrealized_conversion_cast to source memref + d_memref.reinterpret_cast with row-major expanded strides + unrealized_conversion_cast back to tensor>`
+ *
+ * `<dtensor.split_dim dim 0; dtensor.split_dim dim 2; dtensor.permute_dims [0,2,1,3]>`
+ * `->`
+ * `<unrealized_conversion_cast to original source memref + d_memref.reinterpret_cast with logical tiled-view strides [tm * n, tn, n, 1] + unrealized_conversion_cast back to tensor>`
  */
 final class DTensorToDMemrefShapePreserving(ctx: MLContext)
     extends WalkerPass(ctx):
@@ -291,6 +364,8 @@ final class DTensorToDMemrefShapePreserving(ctx: MLContext)
     *   - lower a minimal executable subset: `dtensor.empty`, `dtensor.fill`,
     *     `dtensor.cast`, `dtensor.dim`, and generic row-major
     *     `dtensor.expand_shape`
+    *   - lower the exact 2D logical tiled-view shape pattern
+    *     `split_dim dim 0`, `split_dim dim 2`, `permute_dims [0,2,1,3]`
     *   - preserve value-dependent shapes in `!d_memref.memref`
     *   - use unrealized casts as temporary bridges between `!dtensor.tensor`
     *     and `!d_memref.memref`
@@ -301,6 +376,13 @@ final class DTensorToDMemrefShapePreserving(ctx: MLContext)
 
   override val walker: PatternRewriteWalker = PatternRewriteWalker(
     GreedyRewritePatternApplier(
-      Seq(LowerEmpty, LowerFill, LowerDim, LowerCast, LowerExpandShape)
+      Seq(
+        LowerEmpty,
+        LowerFill,
+        LowerDim,
+        LowerCast,
+        LowerExpandShape,
+        LowerExact2DTiledView,
+      )
     )
   )
