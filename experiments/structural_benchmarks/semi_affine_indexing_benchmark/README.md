@@ -17,8 +17,7 @@ Use in thesis:
 - useful for showing that value-dependent memory provenance composes with affine-style indexing
 
 Metric interpretation / limitations:
-- The default benchmark reports a 256x1024 fill/reduction and should not be described as an 8x8 case.
-- `scair_baseline` is the ScaIR dynamic memref baseline and intentionally does not carry dependent `d_memref` provenance.
+- The default benchmark reports a 256x1024 fill/reduction
 - The default runtime layout uses non-unit inner stride (`stride0=2048`, `stride1=2`) to exercise dynamic semi-affine indexing rather than contiguous row-major access.
 - The drivers and kernels accept `rows` and `cols` parameters and compute the expected checksum from them.
 - The runtime result validates the generated route and checksum, but the benchmark is not a broad speedup claim for semi-affine indexing.
