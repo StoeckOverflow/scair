@@ -52,75 +52,72 @@ builtin.module {
 
 // -----
 
-// Valid: expand_shape followed by collapse_shape round trip.
-builtin.module {
-  %m = "dtensor.nat.param"() : () -> !dtensor.nat
-  %n = "dtensor.nat.param"() : () -> !dtensor.nat
-  %mn = "dtensor.nat.mul"(%m, %n) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %flat = "test.flat"() : () -> !dtensor.tensor<[%mn], f32>
-  %expanded = "dtensor.expand_shape"(%flat)
-    <{reassociation = [[0 : i32, 1 : i32]]}>
-    : (!dtensor.tensor<[%mn], f32>) -> !dtensor.tensor<[%m, %n], f32>
-  %collapsed = "dtensor.collapse_shape"(%expanded)
-    <{reassociation = [[0 : i32, 1 : i32]]}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%mn], f32>
-  "test.keep"(%collapsed) : (!dtensor.tensor<[%mn], f32>) -> ()
-}
-
-// CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CHECK-NEXT:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CHECK-NEXT:   %2 = "dtensor.nat.mul"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// CHECK-NEXT:   %3 = "test.flat"() : () -> !dtensor.tensor<[%2], f32>
-// CHECK-NEXT:   %4 = "dtensor.expand_shape"(%3) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!dtensor.tensor<[%2], f32>) -> !dtensor.tensor<[%0, %1], f32>
-// CHECK-NEXT:   %5 = "dtensor.collapse_shape"(%4) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!dtensor.tensor<[%0, %1], f32>) -> !dtensor.tensor<[%2], f32>
-// CHECK-NEXT:   "test.keep"(%5) : (!dtensor.tensor<[%2], f32>) -> ()
-// CHECK-NEXT: }
-
-// -----
-
-// Invalid: result dimension is unrelated SSA value.
+// Valid structural IR: result dimension may be unrelated before canonicalization.
 builtin.module {
   %m = "dtensor.nat.param"() : () -> !dtensor.nat
   %n = "dtensor.nat.param"() : () -> !dtensor.nat
   %other = "dtensor.nat.param"() : () -> !dtensor.nat
   %a = "test.a"() : () -> !dtensor.tensor<[%m, %n], f32>
-  %bad = "dtensor.collapse_shape"(%a)
+  %structural = "dtensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 1 : i32]]}>
     : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%other], f32>
+  "test.keep"(%structural) : (!dtensor.tensor<[%other], f32>) -> ()
 }
 
-// CHECK: dtensor.collapse_shape: expected result dim 0 to equal ordered product of source dims [0, 1]
+// CHECK: builtin.module {
+// CHECK-NEXT:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CHECK-NEXT:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CHECK-NEXT:   %2 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CHECK-NEXT:   %3 = "test.a"() : () -> !dtensor.tensor<[%0, %1], f32>
+// CHECK-NEXT:   %4 = "dtensor.collapse_shape"(%3) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!dtensor.tensor<[%0, %1], f32>) -> !dtensor.tensor<[%2], f32>
+// CHECK-NEXT:   "test.keep"(%4) : (!dtensor.tensor<[%2], f32>) -> ()
+// CHECK-NEXT: }
 
 // -----
 
-// Invalid: ordered product equality rejects commuted factors.
+// Valid structural IR: product order is not checked by the verifier.
 builtin.module {
   %m = "dtensor.nat.param"() : () -> !dtensor.nat
   %n = "dtensor.nat.param"() : () -> !dtensor.nat
   %nm = "dtensor.nat.mul"(%n, %m) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
   %a = "test.a"() : () -> !dtensor.tensor<[%m, %n], f32>
-  %bad = "dtensor.collapse_shape"(%a)
+  %structural = "dtensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 1 : i32]]}>
     : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%nm], f32>
+  "test.keep"(%structural) : (!dtensor.tensor<[%nm], f32>) -> ()
 }
 
-// CHECK: dtensor.collapse_shape: expected result dim 0 to equal ordered product of source dims [0, 1]
+// CHECK: builtin.module {
+// CHECK-NEXT:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CHECK-NEXT:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CHECK-NEXT:   %2 = "dtensor.nat.mul"(%1, %0) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CHECK-NEXT:   %3 = "test.a"() : () -> !dtensor.tensor<[%0, %1], f32>
+// CHECK-NEXT:   %4 = "dtensor.collapse_shape"(%3) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!dtensor.tensor<[%0, %1], f32>) -> !dtensor.tensor<[%2], f32>
+// CHECK-NEXT:   "test.keep"(%4) : (!dtensor.tensor<[%2], f32>) -> ()
+// CHECK-NEXT: }
 
 // -----
 
-// Invalid: missing product provenance.
+// Valid structural IR: missing product provenance is materialized by tensor-shape-canonicalize.
 builtin.module {
   %m = "dtensor.nat.param"() : () -> !dtensor.nat
   %n = "dtensor.nat.param"() : () -> !dtensor.nat
   %mn = "dtensor.nat.param"() : () -> !dtensor.nat
   %a = "test.a"() : () -> !dtensor.tensor<[%m, %n], f32>
-  %bad = "dtensor.collapse_shape"(%a)
+  %structural = "dtensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 1 : i32]]}>
     : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%mn], f32>
+  "test.keep"(%structural) : (!dtensor.tensor<[%mn], f32>) -> ()
 }
 
-// CHECK: dtensor.collapse_shape: expected result dim 0 to equal ordered product of source dims [0, 1]
+// CHECK: builtin.module {
+// CHECK-NEXT:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CHECK-NEXT:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CHECK-NEXT:   %2 = "dtensor.nat.param"() : () -> !dtensor.nat
+// CHECK-NEXT:   %3 = "test.a"() : () -> !dtensor.tensor<[%0, %1], f32>
+// CHECK-NEXT:   %4 = "dtensor.collapse_shape"(%3) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!dtensor.tensor<[%0, %1], f32>) -> !dtensor.tensor<[%2], f32>
+// CHECK-NEXT:   "test.keep"(%4) : (!dtensor.tensor<[%2], f32>) -> ()
+// CHECK-NEXT: }
 
 // -----
 

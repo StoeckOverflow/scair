@@ -176,6 +176,7 @@ final case class Cast(
 
 final case class ExpandShape(
     src: Operand[dTensorTensorType],
+    outputShape: Seq[Operand[dTensorNatLikeType]],
     reassociation: ArrayAttribute[Attribute],
     res: Result[dTensorTensorType],
 ) extends DerivedOperation["dtensor.expand_shape"]
@@ -231,26 +232,27 @@ final case class ExpandShape(
         )
       else OK(())
 
-  private def verifyGroupProducts(groups: Seq[Seq[Int]]): OK[Operation] =
-    groups.zipWithIndex
-      .foldLeft[OK[Unit]](OK(())) { case (acc, (group, srcIdx)) =>
-        acc.flatMap(_ =>
-          val srcDim = src.typ.params(srcIdx).getVal()
-          val resDims = group.map(resIdx => res.typ.params(resIdx).getVal())
-          dTensorTypeUtil.sameOrderedNatProduct(srcDim, resDims).flatMap {
-            case true => OK(())
-            case false =>
-              Err(
-                s"dtensor.expand_shape: expected source dim $srcIdx to equal ordered product of result dims ${group.mkString("[", ", ", "]")}"
-              )
-          }
-        )
-      }
-      .map(_ => this)
+  private def outputShapeMatchesResult(): OK[Unit] =
+    if outputShape.size != res.typ.params.size then
+      Err(
+        s"dtensor.expand_shape: expected ${res.typ.params.size} output shape operands, got ${outputShape.size}"
+      )
+    else
+      outputShape.zip(res.typ.params).zipWithIndex
+        .foldLeft[OK[Unit]](OK(())) { case (acc, ((operand, dim), idx)) =>
+          acc.flatMap(_ =>
+            (dTensorTypeUtil.resolveNatValue(operand), dTensorTypeUtil.resolveNatValue(dim.getVal())) match
+              case (OK(lhs), OK(rhs)) if lhs eq rhs => OK(())
+              case _ =>
+                Err(
+                  s"dtensor.expand_shape: output shape operand $idx must be SSA-identical to result dimension $idx"
+                )
+          )
+        }
 
-  /** ScaIR carries expand-shape output sizes in the dependent result tensor type.
-    * Unlike MLIR tensor.expand_shape, this op intentionally has no separate
-    * output_shape/static_output_shape operands in this phase.
+  /** Baseline-style shape expansion: output dimensions are explicit operands
+    * and must match the dependent result type. This op does not rediscover or
+    * assert that collapsed source dimensions equal products of output dims.
     */
   override def customVerify(): OK[Operation] =
     val srcRank = src.typ.params.size
@@ -264,9 +266,9 @@ final case class ExpandShape(
         s"dtensor.expand_shape: expected result rank >= source rank, got $srcRank -> $resRank"
       )
     else
-      parseReassociationGroups.flatMap(groups =>
-        checkReassociation(groups, srcRank, resRank).flatMap(_ =>
-          verifyGroupProducts(groups)
+      outputShapeMatchesResult().flatMap(_ =>
+        parseReassociationGroups.flatMap(groups =>
+          checkReassociation(groups, srcRank, resRank).map(_ => this)
         )
       )
 
@@ -327,25 +329,9 @@ final case class CollapseShape(
         )
       else OK(())
 
-  private def verifyGroupProducts(groups: Seq[Seq[Int]]): OK[Operation] =
-    groups.zipWithIndex
-      .foldLeft[OK[Unit]](OK(())) { case (acc, (group, resIdx)) =>
-        acc.flatMap(_ =>
-          val resDim = res.typ.params(resIdx).getVal()
-          val srcDims = group.map(srcIdx => src.typ.params(srcIdx).getVal())
-          dTensorTypeUtil.sameOrderedNatProduct(resDim, srcDims).flatMap {
-            case true => OK(())
-            case false =>
-              Err(
-                s"dtensor.collapse_shape: expected result dim $resIdx to equal ordered product of source dims ${group.mkString("[", ", ", "]")}"
-              )
-          }
-        )
-      }
-      .map(_ => this)
-
-  /** Inverse of `dtensor.expand_shape`: each result dimension names the
-    * ordered product of one contiguous reassociation group of source dims.
+  /** Baseline-style shape collapse: reassociation only records which source
+    * dimensions become each result dimension. Product-shaped result dimensions
+    * are materialized by `tensor-shape-canonicalize`, not asserted here.
     */
   override def customVerify(): OK[Operation] =
     val srcRank = src.typ.params.size
@@ -360,13 +346,13 @@ final case class CollapseShape(
       )
     else
       parseReassociationGroups.flatMap(groups =>
-        checkReassociation(groups, srcRank, resRank).flatMap(_ =>
-          verifyGroupProducts(groups)
-        )
+        checkReassociation(groups, srcRank, resRank).map(_ => this)
       )
 
 final case class SplitDim(
     src: Operand[dTensorTensorType],
+    outer: Operand[dTensorNatLikeType],
+    inner: Operand[dTensorNatLikeType],
     dim: IntegerAttr,
     res: Result[dTensorTensorType],
 ) extends DerivedOperation["dtensor.split_dim"]
@@ -374,6 +360,11 @@ final case class SplitDim(
 
   private def sameDim(lhs: ValueAttribute, rhs: ValueAttribute): Boolean =
     dTensorTypeUtil.sameDims(Seq(lhs), Seq(rhs))
+
+  private def sameNatValue(lhs: Value[Attribute], rhs: Value[Attribute]): Boolean =
+    (dTensorTypeUtil.resolveNatValue(lhs), dTensorTypeUtil.resolveNatValue(rhs)) match
+      case (OK(lv), OK(rv)) => lv eq rv
+      case _                => false
 
   override def customVerify(): OK[Operation] =
     val srcRank = src.typ.params.size
@@ -402,16 +393,11 @@ final case class SplitDim(
           Err("dtensor.split_dim: expected dimensions before split dim to be SSA-identical")
         else if !suffixOk then
           Err("dtensor.split_dim: expected dimensions after split dim to be shifted and SSA-identical")
-        else
-          val srcDim = src.typ.params(idx).getVal()
-          val splitDims = Seq(res.typ.params(idx).getVal(), res.typ.params(idx + 1).getVal())
-          dTensorTypeUtil.sameOrderedNatProduct(srcDim, splitDims).flatMap {
-            case true => OK(this)
-            case false =>
-              Err(
-                s"dtensor.split_dim: expected input dim $idx to equal ordered product of result dims [$idx, ${idx + 1}]"
-              )
-          }
+        else if !sameNatValue(outer, res.typ.params(idx).getVal()) then
+          Err(s"dtensor.split_dim: outer operand must be SSA-identical to result dimension $idx")
+        else if !sameNatValue(inner, res.typ.params(idx + 1).getVal()) then
+          Err(s"dtensor.split_dim: inner operand must be SSA-identical to result dimension ${idx + 1}")
+        else OK(this)
 
 final case class JoinDim(
     src: Operand[dTensorTensorType],
@@ -450,16 +436,7 @@ final case class JoinDim(
           Err("dtensor.join_dim: expected dimensions before joined dim to be SSA-identical")
         else if !suffixOk then
           Err("dtensor.join_dim: expected dimensions after joined dim to be shifted and SSA-identical")
-        else
-          val resDim = res.typ.params(idx).getVal()
-          val joinedDims = Seq(src.typ.params(idx).getVal(), src.typ.params(idx + 1).getVal())
-          dTensorTypeUtil.sameOrderedNatProduct(resDim, joinedDims).flatMap {
-            case true => OK(this)
-            case false =>
-              Err(
-                s"dtensor.join_dim: expected result dim $idx to equal ordered product of input dims [$idx, ${idx + 1}]"
-              )
-          }
+        else OK(this)
 
 final case class PermuteDims(
     src: Operand[dTensorTensorType],

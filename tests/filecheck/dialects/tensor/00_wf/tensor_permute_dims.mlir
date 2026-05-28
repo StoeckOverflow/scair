@@ -76,34 +76,6 @@ builtin.module {
 
 // -----
 
-// Valid: exact 2D tiling as split, split, permute.
-builtin.module {
-  %mt = "dtensor.nat.param"() : () -> !dtensor.nat
-  %tm = "dtensor.nat.param"() : () -> !dtensor.nat
-  %nt = "dtensor.nat.param"() : () -> !dtensor.nat
-  %tn = "dtensor.nat.param"() : () -> !dtensor.nat
-  %m = "dtensor.nat.mul"(%mt, %tm) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %n = "dtensor.nat.mul"(%nt, %tn) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %a = "test.a"() : () -> !dtensor.tensor<[%m, %n], f32>
-  %b = "dtensor.split_dim"(%a) <{dim = 0 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%mt, %tm, %n], f32>
-  %c = "dtensor.split_dim"(%b) <{dim = 2 : i32}>
-    : (!dtensor.tensor<[%mt, %tm, %n], f32>) -> !dtensor.tensor<[%mt, %tm, %nt, %tn], f32>
-  %d = "dtensor.permute_dims"(%c)
-    <{permutation = [0 : i32, 2 : i32, 1 : i32, 3 : i32]}>
-    : (!dtensor.tensor<[%mt, %tm, %nt, %tn], f32>) -> !dtensor.tensor<[%mt, %nt, %tm, %tn], f32>
-  "test.keep"(%d) : (!dtensor.tensor<[%mt, %nt, %tm, %tn], f32>) -> ()
-}
-
-// CHECK: "dtensor.split_dim"
-// CHECK-SAME: !dtensor.tensor<[%4, %5], f32>) -> !dtensor.tensor<[%0, %1, %5], f32>
-// CHECK: "dtensor.split_dim"
-// CHECK-SAME: !dtensor.tensor<[%0, %1, %5], f32>) -> !dtensor.tensor<[%0, %1, %2, %3], f32>
-// CHECK: "dtensor.permute_dims"
-// CHECK-SAME: !dtensor.tensor<[%0, %1, %2, %3], f32>) -> !dtensor.tensor<[%0, %2, %1, %3], f32>
-
-// -----
-
 // Invalid: wrong result rank.
 builtin.module {
   %m = "dtensor.nat.param"() : () -> !dtensor.nat

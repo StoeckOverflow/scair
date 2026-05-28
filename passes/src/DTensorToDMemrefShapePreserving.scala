@@ -7,9 +7,9 @@ import scair.dialects.dTensor.*
 import scair.dialects.d_affine
 import scair.dialects.d_memref
 import scair.ir.*
+import scair.utils.OK
 import scair.transformations.{
   GreedyRewritePatternApplier,
-  Owner,
   PatternAction,
   PatternRewriteWalker,
   WalkerPass,
@@ -43,75 +43,6 @@ private def idxConst(v: Int): arith.Constant =
 
 private def toIndex(nat: Value[Attribute]): ShapeToIndex =
   ShapeToIndex(nat.asInstanceOf[Operand[dTensorNatLikeType]], Result(IndexType()))
-
-private def layoutParamValue(param: d_memref.LayoutParam): Option[Value[Attribute]] =
-  param match
-    case v: ValueAttribute => Some(v.getVal())
-    case _                 => None
-
-private def layoutFromValue(v: Value[Attribute]): d_memref.LayoutParam =
-  ValueAttribute(v)
-
-private def layoutOne: d_memref.LayoutParam =
-  IntegerAttr(IntData(1), IndexType())
-
-private def layoutZero: d_memref.LayoutParam =
-  IntegerAttr(IntData(0), IndexType())
-
-private def intAttrValue(attr: IntegerAttr): BigInt = attr.value.value
-
-private def multiplyLayoutByIndex(
-    lhs: d_memref.LayoutParam,
-    rhs: Value[Attribute],
-): (Seq[Operation], d_memref.LayoutParam) =
-  lhs match
-    case IntegerAttr(IntData(1), _: IndexType | _: IntegerType) =>
-      (Seq.empty, layoutFromValue(rhs))
-    case _ =>
-      layoutParamValue(lhs) match
-        case Some(lhsValue) =>
-          val mul = arith.MulI(
-            lhsValue.asInstanceOf[Operand[arith.AnyIntegerType]],
-            rhs.asInstanceOf[Operand[arith.AnyIntegerType]],
-            Result(IndexType()),
-          )
-          (Seq(mul), layoutFromValue(mul.result))
-        case None =>
-          throw new IllegalArgumentException(
-            "dtensor expand_shape lowering only supports unit literal or SSA layout strides"
-          )
-
-private def buildSourceRowMajorStrides(
-    dimIdxValues: Seq[Value[Attribute]]
-): (Seq[Operation], Seq[d_memref.LayoutParam]) =
-  val strides = Array.fill[d_memref.LayoutParam](dimIdxValues.size)(layoutOne)
-  var current: d_memref.LayoutParam = layoutOne
-  var ops = Seq.empty[Operation]
-  for i <- dimIdxValues.indices.reverse do
-    strides(i) = current
-    if i > 0 then
-      val (nextOps, nextCurrent) = multiplyLayoutByIndex(current, dimIdxValues(i))
-      ops = ops ++ nextOps
-      current = nextCurrent
-  (ops, strides.toSeq)
-
-private def reassociationGroups(
-    reassociation: ArrayAttribute[Attribute]
-): Seq[Seq[Int]] =
-  reassociation.attrValues.map {
-    case group: ArrayAttribute[?] =>
-      group.attrValues.map {
-        case IntegerAttr(IntData(idx), _) => idx.toInt
-        case other =>
-          throw new IllegalArgumentException(
-            s"dtensor expand_shape lowering expected integer reassociation index, got ${dTensorTypeUtil.renderAttr(other)}"
-          )
-      }
-    case other =>
-      throw new IllegalArgumentException(
-        s"dtensor expand_shape lowering expected array reassociation group, got ${dTensorTypeUtil.renderAttr(other)}"
-      )
-  }
 
 private def identityMap: AffineMapAttr =
   AffineMapAttr(
@@ -151,6 +82,89 @@ private def castBackToTensor(
     inputs = Seq(memref),
     outputs = Seq(Result(tensorType)),
   )
+
+private def parseReassociationGroups(
+    reassociation: ArrayAttribute[Attribute]
+): Option[Seq[Seq[Int]]] =
+  reassociation.attrValues.foldLeft[Option[Seq[Seq[Int]]]](Some(Seq.empty)) {
+    case (acc, group: ArrayAttribute[?]) =>
+      acc.flatMap(groups =>
+        group.attrValues.foldLeft[Option[Seq[Int]]](Some(Seq.empty)) {
+          case (groupAcc, IntegerAttr(IntData(idx), I32)) =>
+            groupAcc.map(_ :+ idx.toInt)
+          case _ => None
+        }.map(indices => groups :+ indices)
+      )
+    case _ => None
+  }
+
+private def productMatches(
+    product: Value[Attribute],
+    factors: Seq[Value[Attribute]],
+): Boolean =
+  dTensorTypeUtil.sameOrderedNatProduct(product, factors) match
+    case OK(true) => true
+    case _        => false
+
+private def productType(
+    lhs: Value[Attribute],
+    rhs: Value[Attribute],
+): dTensorNatLikeType =
+  (lhs.typ, rhs.typ) match
+    case (_: dTensorPosNatType, _: dTensorPosNatType) => dTensorPosNatType()
+    case _                                            => dTensorNatType()
+
+private def buildOrderedProduct(
+    dims: Seq[Value[Attribute]]
+): (Seq[Operation], d_memref.LayoutParam) =
+  dims match
+    case Seq() =>
+      (Seq.empty, IntegerAttr(IntData(1), IndexType()))
+    case Seq(dim) =>
+      (Seq.empty, ValueAttribute(dim))
+    case first +: rest =>
+      val (ops, product) = rest.foldLeft((Seq.empty[Operation], first)) {
+        case ((ops, acc), dim) =>
+          val mul = NatMul(
+            acc.asInstanceOf[Operand[dTensorNatLikeType]],
+            dim.asInstanceOf[Operand[dTensorNatLikeType]],
+            Result(productType(acc, dim)),
+          )
+          (ops :+ mul, mul.res)
+      }
+      (ops, ValueAttribute(product))
+
+private def rowMajorMemrefType(
+    tensorType: dTensorTensorType
+): (Seq[Operation], d_memref.dMemrefMemrefType) =
+  val dims = tensorType.params.map(_.getVal())
+  val (strideOps, strides) =
+    dims.indices.foldLeft((Seq.empty[Operation], Seq.empty[d_memref.LayoutParam])) {
+      case ((ops, ss), idx) =>
+        val (productOps, stride) = buildOrderedProduct(dims.drop(idx + 1))
+        (ops ++ productOps, ss :+ stride)
+    }
+  val memType = d_memref.dMemrefMemrefType(
+    tensorType.params,
+    tensorType.elem,
+    Some(IntegerAttr(IntData(0), IndexType())),
+    Some(strides),
+  )
+  (strideOps, memType)
+
+private def lowerReinterpretView(
+    src: Operand[dTensorTensorType],
+    resType: dTensorTensorType,
+): (Seq[Operation], Seq[Value[Attribute]]) =
+  val srcMemType = DTensorDMemrefConversion.tensorToMemrefType(src.typ)
+  val (prefix, memValue) = DTensorDMemrefConversion.toMemrefValue(src, srcMemType)
+  val (strideOps, resMemType) = rowMajorMemrefType(resType)
+  val reinterpret = d_memref.ReinterpretCast(
+    memValue.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+    Result(resMemType),
+  )
+  val castBack = castBackToTensor(reinterpret.res, resType)
+  (prefix ++ strideOps ++ Seq(reinterpret, castBack), Seq(castBack.outputs.head))
 
 private def buildFillNest(
     memref: Value[Attribute],
@@ -219,106 +233,64 @@ private val LowerCast = pattern {
     (prefix ++ Seq(lowered, castBack), Seq(castBack.outputs.head))
 }
 
-private val LowerExpandShape = pattern {
-  case ExpandShape(src, reassociation, res) =>
-    val srcMemType = DTensorDMemrefConversion.tensorToMemrefType(src.typ)
-    val (prefix, memValue) = DTensorDMemrefConversion.toMemrefValue(src, srcMemType)
-    val srcDimIdxs = src.typ.params.map(_.getVal()).map(toIndex)
-    val resDimIdxs = res.typ.params.map(_.getVal()).map(toIndex)
-    val (srcStrideOps, srcStrides) =
-      buildSourceRowMajorStrides(srcDimIdxs.map(_.res))
-    val groups = reassociationGroups(reassociation)
-    val resultStrides = Array.fill[d_memref.LayoutParam](res.typ.params.size)(layoutOne)
-    var splitStrideOps = Seq.empty[Operation]
-
-    groups.zipWithIndex.foreach { case (group, srcIdx) =>
-      var currentStride = srcStrides(srcIdx)
-      group.reverse.foreach { resIdx =>
-        resultStrides(resIdx) = currentStride
-        if resIdx != group.head then
-          val (ops, nextStride) =
-            multiplyLayoutByIndex(currentStride, resDimIdxs(resIdx).res)
-          splitStrideOps = splitStrideOps ++ ops
-          currentStride = nextStride
-      }
-    }
-
-    val resMemType = d_memref.dMemrefMemrefType(
-      res.typ.params,
-      res.typ.elem,
-      offset = Some(layoutZero),
-      strides = Some(resultStrides.toSeq),
-    )
-    val reinterpret = d_memref.ReinterpretCast(
-      memValue.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
-      Result(resMemType),
-    )
-    val castBack = castBackToTensor(reinterpret.res, res.typ)
-    (
-      prefix ++ srcDimIdxs ++ resDimIdxs ++ srcStrideOps ++ splitStrideOps ++
-        Seq(reinterpret, castBack),
-      Seq(castBack.outputs.head),
-    )
+private val LowerCollapseShape = pattern {
+  case op: CollapseShape =>
+    parseReassociationGroups(op.reassociation) match
+      case Some(groups)
+          if groups.size == op.res.typ.params.size &&
+            groups.zipWithIndex.forall { case (group, resIdx) =>
+              productMatches(
+                op.res.typ.params(resIdx).getVal(),
+                group.map(srcIdx => op.src.typ.params(srcIdx).getVal()),
+              )
+            } =>
+        lowerReinterpretView(op.src, op.res.typ)
+      case _ => PatternAction.Abort
 }
 
-private def isPermutation(
-    attr: ArrayAttribute[Attribute],
-    expected: Seq[Int],
-): Boolean =
-  attr.attrValues == expected.map(i => IntegerAttr(IntData(i), I32))
+private val LowerJoinDim = pattern {
+  case op: JoinDim =>
+    val axis = op.dim.value.value
+    val srcRank = op.src.typ.params.size
+    if axis < 0 || axis + 1 >= srcRank then PatternAction.Abort
+    else
+      val idx = axis.toInt
+      if productMatches(
+          op.res.typ.params(idx).getVal(),
+          Seq(op.src.typ.params(idx).getVal(), op.src.typ.params(idx + 1).getVal()),
+        )
+      then lowerReinterpretView(op.src, op.res.typ)
+      else PatternAction.Abort
+}
 
-private val LowerExact2DTiledView = pattern {
-  case PermuteDims(Owner(splitN: SplitDim), permutation, res)
-      if intAttrValue(splitN.dim) == 2 &&
-        isPermutation(permutation, Seq(0, 2, 1, 3)) =>
-    splitN.src.owner match
-      case Some(splitM: SplitDim) if intAttrValue(splitM.dim) == 0 =>
-        val srcTy = splitM.src.typ
-        val splitMTy = splitM.res.typ
-        val splitNTy = splitN.res.typ
-        val srcRank = srcTy.params.size
-        val splitMRank = splitMTy.params.size
-        val splitNRank = splitNTy.params.size
-        val resRank = res.typ.params.size
-
-        if srcRank == 2 && splitMRank == 3 && splitNRank == 4 && resRank == 4 then
-          val srcMemType = DTensorDMemrefConversion.tensorToMemrefType(srcTy)
-          val (prefix, memValue) =
-            DTensorDMemrefConversion.toMemrefValue(splitM.src, srcMemType)
-
-          val tmToIndex = toIndex(splitMTy.params(1).getVal())
-          val nToIndex = toIndex(srcTy.params(1).getVal())
-          val tnToIndex = toIndex(splitNTy.params(3).getVal())
-          val tmTimesN = arith.MulI(
-            tmToIndex.res.asInstanceOf[Operand[arith.AnyIntegerType]],
-            nToIndex.res.asInstanceOf[Operand[arith.AnyIntegerType]],
-            Result(IndexType()),
-          )
-
-          val resMemType = d_memref.dMemrefMemrefType(
-            res.typ.params,
-            res.typ.elem,
-            offset = Some(layoutZero),
-            strides = Some(
-              Seq(
-                layoutFromValue(tmTimesN.result),
-                layoutFromValue(tnToIndex.res),
-                layoutFromValue(nToIndex.res),
-                layoutOne,
+private val LowerExpandShape = pattern {
+  case op: ExpandShape =>
+    parseReassociationGroups(op.reassociation) match
+      case Some(groups)
+          if groups.size == op.src.typ.params.size &&
+            groups.zipWithIndex.forall { case (group, srcIdx) =>
+              productMatches(
+                op.src.typ.params(srcIdx).getVal(),
+                group.map(resIdx => op.res.typ.params(resIdx).getVal()),
               )
-            ),
-          )
-          val reinterpret = d_memref.ReinterpretCast(
-            memValue.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
-            Result(resMemType),
-          )
-          val castBack = castBackToTensor(reinterpret.res, res.typ)
-          (
-            prefix ++ Seq(tmToIndex, nToIndex, tnToIndex, tmTimesN, reinterpret, castBack),
-            Seq(castBack.outputs.head),
-          )
-        else PatternAction.Abort
+            } =>
+        lowerReinterpretView(op.src, op.res.typ)
       case _ => PatternAction.Abort
+}
+
+private val LowerSplitDim = pattern {
+  case op: SplitDim =>
+    val axis = op.dim.value.value
+    val srcRank = op.src.typ.params.size
+    if axis < 0 || axis >= srcRank then PatternAction.Abort
+    else
+      val idx = axis.toInt
+      if productMatches(
+          op.src.typ.params(idx).getVal(),
+          Seq(op.outer, op.inner),
+        )
+      then lowerReinterpretView(op.src, op.res.typ)
+      else PatternAction.Abort
 }
 
 /**
@@ -327,8 +299,7 @@ private val LowerExact2DTiledView = pattern {
  *
  * This pass rewrites `dtensor.empty` to buffer allocation, rewrites
  * `dtensor.fill` to allocate-and-store loop nests, rewrites `dtensor.dim` to
- * `d_memref.dim_exact`, rewrites `dtensor.cast` to `d_memref.cast`, and rewrites
- * generic row-major `dtensor.expand_shape` metadata to `d_memref.reinterpret_cast`.
+ * `d_memref.dim_exact`, and rewrites `dtensor.cast` to `d_memref.cast`.
  * In each case where a tensor result must remain visible, it bridges back with
  * `unrealized_conversion_cast` so value-dependent shapes are preserved in the
  * underlying `!d_memref.memref`.
@@ -349,23 +320,12 @@ private val LowerExact2DTiledView = pattern {
  * `<dtensor.cast %src : !dtensor.tensor<...> to !dtensor.tensor<...>>`
  * `->`
  * `<unrealized_conversion_cast to source memref + d_memref.cast + unrealized_conversion_cast back to tensor>`
- *
- * `<dtensor.expand_shape %src : !dtensor.tensor<[..., product], ...> to !dtensor.tensor<[..., factors...], ...>>`
- * `->`
- * `<unrealized_conversion_cast to source memref + d_memref.reinterpret_cast with row-major expanded strides + unrealized_conversion_cast back to tensor>`
- *
- * `<dtensor.split_dim dim 0; dtensor.split_dim dim 2; dtensor.permute_dims [0,2,1,3]>`
- * `->`
- * `<unrealized_conversion_cast to original source memref + d_memref.reinterpret_cast with logical tiled-view strides [tm * n, tn, n, 1] + unrealized_conversion_cast back to tensor>`
  */
 final class DTensorToDMemrefShapePreserving(ctx: MLContext)
     extends WalkerPass(ctx):
   /** Scope (intentionally narrow):
     *   - lower a minimal executable subset: `dtensor.empty`, `dtensor.fill`,
-    *     `dtensor.cast`, `dtensor.dim`, and generic row-major
-    *     `dtensor.expand_shape`
-    *   - lower the exact 2D logical tiled-view shape pattern
-    *     `split_dim dim 0`, `split_dim dim 2`, `permute_dims [0,2,1,3]`
+    *     `dtensor.cast`, and `dtensor.dim`
     *   - preserve value-dependent shapes in `!d_memref.memref`
     *   - use unrealized casts as temporary bridges between `!dtensor.tensor`
     *     and `!d_memref.memref`
@@ -381,8 +341,10 @@ final class DTensorToDMemrefShapePreserving(ctx: MLContext)
         LowerFill,
         LowerDim,
         LowerCast,
+        LowerCollapseShape,
+        LowerJoinDim,
         LowerExpandShape,
-        LowerExact2DTiledView,
+        LowerSplitDim,
       )
     )
   )

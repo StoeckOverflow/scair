@@ -102,41 +102,69 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
     embeddedDim(collapse.res.typ) should be theSameInstanceAs mn
   }
 
-  it should "remap split_dim and join_dim embedded dimensions without mutating the original" in {
+  it should "remap join_dim embedded dimensions without mutating the original" in {
     val m = Result(dTensorNatType())
     val n = Result(dTensorNatType())
     val mn = Result(dTensorNatType())
     val mProducer = NatParam(m)
     val nProducer = NatParam(n)
     val mnProducer = NatMul(m, n, mn)
-    val splitSource = Empty(Result(tensorOf(mn)))
-    val split = SplitDim(splitSource.res, i32Attr(0), Result(tensorOf(Seq(m, n))))
     val joinSource = Empty(Result(tensorOf(Seq(m, n))))
     val join = JoinDim(joinSource.res, i32Attr(0), Result(tensorOf(mn)))
-    val original =
-      Block(operations = Seq(mProducer, nProducer, mnProducer, splitSource, split, joinSource, join))
+    val original = Block(operations = Seq(mProducer, nProducer, mnProducer, joinSource, join))
 
     val copied = original.deepCopy
     val copiedOps = copied.operations.toSeq
     val copiedM = copiedOps(0).asInstanceOf[NatParam].res
     val copiedN = copiedOps(1).asInstanceOf[NatParam].res
     val copiedMN = copiedOps(2).asInstanceOf[NatMul].res
-    val copiedSplitSource = copiedOps(3).asInstanceOf[Empty]
-    val copiedSplit = copiedOps(4).asInstanceOf[SplitDim]
-    val copiedJoinSource = copiedOps(5).asInstanceOf[Empty]
-    val copiedJoin = copiedOps(6).asInstanceOf[JoinDim]
+    val copiedJoinSource = copiedOps(3).asInstanceOf[Empty]
+    val copiedJoin = copiedOps(4).asInstanceOf[JoinDim]
 
     copiedM should not be theSameInstanceAs(m)
     copiedN should not be theSameInstanceAs(n)
     copiedMN should not be theSameInstanceAs(mn)
-    embeddedDim(copiedSplitSource.res.typ) should be theSameInstanceAs copiedMN
-    embeddedDims(copiedSplit.res.typ) should contain theSameElementsInOrderAs Seq(copiedM, copiedN)
     embeddedDims(copiedJoinSource.res.typ) should contain theSameElementsInOrderAs Seq(copiedM, copiedN)
     embeddedDim(copiedJoin.res.typ) should be theSameInstanceAs copiedMN
-    embeddedDim(splitSource.res.typ) should be theSameInstanceAs mn
-    embeddedDims(split.res.typ) should contain theSameElementsInOrderAs Seq(m, n)
     embeddedDims(joinSource.res.typ) should contain theSameElementsInOrderAs Seq(m, n)
     embeddedDim(join.res.typ) should be theSameInstanceAs mn
+  }
+
+  it should "remap split_dim embedded dimensions without mutating the original" in {
+    val m = Result(dTensorNatType())
+    val mt = Result(dTensorNatType())
+    val tm = Result(dTensorNatType())
+    val n = Result(dTensorNatType())
+    val mProducer = NatParam(m)
+    val mtProducer = NatParam(mt)
+    val tmProducer = NatParam(tm)
+    val nProducer = NatParam(n)
+    val splitSource = Empty(Result(tensorOf(Seq(m, n))))
+    val split = SplitDim(splitSource.res, mt, tm, i32Attr(0), Result(tensorOf(Seq(mt, tm, n))))
+    val original =
+      Block(operations = Seq(mProducer, mtProducer, tmProducer, nProducer, splitSource, split))
+
+    val copied = original.deepCopy
+    val copiedOps = copied.operations.toSeq
+    val copiedM = copiedOps(0).asInstanceOf[NatParam].res
+    val copiedMT = copiedOps(1).asInstanceOf[NatParam].res
+    val copiedTM = copiedOps(2).asInstanceOf[NatParam].res
+    val copiedN = copiedOps(3).asInstanceOf[NatParam].res
+    val copiedSplitSource = copiedOps(4).asInstanceOf[Empty]
+    val copiedSplit = copiedOps(5).asInstanceOf[SplitDim]
+
+    copiedM should not be theSameInstanceAs(m)
+    copiedMT should not be theSameInstanceAs(mt)
+    copiedTM should not be theSameInstanceAs(tm)
+    copiedN should not be theSameInstanceAs(n)
+    embeddedDims(copiedSplitSource.res.typ) should contain theSameElementsInOrderAs Seq(copiedM, copiedN)
+    copiedSplit.outer should be theSameInstanceAs copiedMT
+    copiedSplit.inner should be theSameInstanceAs copiedTM
+    embeddedDims(copiedSplit.res.typ) should contain theSameElementsInOrderAs Seq(copiedMT, copiedTM, copiedN)
+    embeddedDims(splitSource.res.typ) should contain theSameElementsInOrderAs Seq(m, n)
+    split.outer should be theSameInstanceAs mt
+    split.inner should be theSameInstanceAs tm
+    embeddedDims(split.res.typ) should contain theSameElementsInOrderAs Seq(mt, tm, n)
   }
 
   it should "remap permute_dims embedded dimensions without mutating the original" in {
