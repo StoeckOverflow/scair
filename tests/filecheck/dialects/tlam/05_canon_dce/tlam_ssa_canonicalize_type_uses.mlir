@@ -1,7 +1,7 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=CANON
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p canonicalize,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=CANON
 // Purpose: Canonicalization dead-op cleanup with SSA-in-types uses.
-// Invariants covered: values used only through embedded Tvar are retained; no accidental DCE of type-only dependencies.
+// Invariants covered: values used only through embedded type references are retained.
 
 // Value used only in embedded tvar must not be removed.
 builtin.module {
