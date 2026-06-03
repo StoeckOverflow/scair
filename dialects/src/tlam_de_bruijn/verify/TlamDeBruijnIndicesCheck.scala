@@ -70,6 +70,10 @@ object TlamDeBruijnIndicesCheck extends VerifierCheck:
                 case _ => ()
 
             case vl: VLambda =>
+              checkVLambda(vl) match
+                case e: Err => break(e)
+                case _      => ()
+
               checkType(vl.res.typ, depth) match
                 case e: Err => break(e)
                 case _      => ()
@@ -94,6 +98,24 @@ object TlamDeBruijnIndicesCheck extends VerifierCheck:
     a match
       case t: tlamType => checkType(t, depth)
       case _           => OK(())
+
+  private def checkVLambda(vl: VLambda): OK[Unit] =
+    val funTy = vl.res.typ
+    vl.body.blocks match
+      case Block(args, ops) :: Nil
+          if args.length == 1 && args.head.typ == funTy.in =>
+        ops.lastOption match
+          case Some(VReturn(ret)) =>
+            if ret.typ == funTy.out then OK(())
+            else
+              Err(s"vlambda: return type mismatch, expected ${funTy
+                  .out}, got ${ret.typ}")
+          case Some(other) =>
+            Err(s"vlambda: last op must be tlam.vreturn, got '${other.name}'")
+          case None =>
+            Err("vlambda: body block must not be empty (needs a terminator)")
+      case _ =>
+        Err("vlambda: one block with one arg of input type required")
 
   private def checkType(t: TypeAttribute, depth: Int): OK[Unit] =
     t match
