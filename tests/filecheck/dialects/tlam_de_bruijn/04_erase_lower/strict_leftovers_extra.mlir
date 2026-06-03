@@ -1,5 +1,5 @@
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn | filecheck %s --check-prefix=ERASE -DFILE=%s
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | filecheck %s --check-prefix=LOWER -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn | filecheck %s --check-prefix=ERASE -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | filecheck %s --check-prefix=LOWER -DFILE=%s
 
 // EXTRA STRICTNESS: erase/lower should remove all TLam constructs in this shape too.
 builtin.module {
@@ -26,6 +26,8 @@ builtin.module {
 
     "tlam_dbi.treturn"(%spec) : (!tlam_dbi.fun<i64, i64>) -> ()
   }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>)
+  %top = "tlam_dbi.tapply"(%outer) <{tyArg = i32}> : (!tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>) -> (!tlam_dbi.fun<i64, i64>)
+  "test.use"(%top) : (!tlam_dbi.fun<i64, i64>) -> ()
 }
 
 // ERASE: builtin.module {

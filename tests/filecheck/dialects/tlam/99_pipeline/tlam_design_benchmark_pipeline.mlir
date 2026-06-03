@@ -1,7 +1,7 @@
 // Purpose: Thesis-facing TLam design benchmark pipeline smoke.
 // Invariants covered: small identity and tensor-shaped polymorphic examples fully specialize, erase, and lower with no residual TLam constructs.
 
-// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize,beta-reduce-tlam,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s --check-prefix=LOWER
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize,beta-reduce-tlam,dce,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s --check-prefix=LOWER
 
 builtin.module {
   func.func @polymorphic_identity_specialization(%i32v: i32, %i64v: i64) -> i64 {
@@ -53,11 +53,7 @@ builtin.module {
 }
 
 // LOWER-NOT: tlam
-// LOWER: func.func @lifted_
-// LOWER-NOT: tlam
 // LOWER: func.func @polymorphic_identity_specialization
-// LOWER-NOT: tlam
-// LOWER: func.func @lifted_
 // LOWER-NOT: tlam
 // LOWER: func.func @tensor_shape_identity
 // LOWER-NOT: tlam

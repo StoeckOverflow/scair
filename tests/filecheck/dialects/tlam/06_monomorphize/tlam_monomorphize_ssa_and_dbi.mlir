@@ -22,9 +22,14 @@ builtin.module {
 }
 
 // MONO: builtin.module {
-// MONO:   %0 = "test.mk_poly"() : () -> !tlam.forall<i32>
+// MONO:   %0 = "tlam.tlambda"() ({
+// MONO:   ^bb0(%1: !tlam.type):
+// MONO:     %2 = "test.mk_poly"() : () -> !tlam.forall<!value<%1>>
+// MONO:     "tlam.treturn"(%2) : (!tlam.forall<!value<%1>>) -> ()
+// MONO:   }) : () -> !tlam.forall<!tlam.forall<!tlam.bvar<1>>>
 // MONO:   %1 = "test.mk_poly"() : () -> !tlam.forall<i32>
-// MONO:   "test.use"(%0, %1) : (!tlam.forall<i32>, !tlam.forall<i32>) -> ()
+// MONO:   %2 = "test.mk_poly"() : () -> !tlam.forall<i32>
+// MONO:   "test.use"(%1, %2) : (!tlam.forall<i32>, !tlam.forall<i32>) -> ()
 // MONO: }
 
 // -----
@@ -46,9 +51,14 @@ builtin.module {
 }
 
 // MONO: builtin.module {
-// MONO:   %0 = "test.mk_poly"() : () -> !tlam.forall<i32>
-// MONO:   %1 = "test.mk_poly"() : () -> !tlam.forall<i64>
-// MONO:   "test.use"(%0, %1) : (!tlam.forall<i32>, !tlam.forall<i64>) -> ()
+// MONO:   %0 = "tlam.tlambda"() ({
+// MONO:   ^bb0(%1: !tlam.type):
+// MONO:     %2 = "test.mk_poly"() : () -> !tlam.forall<!value<%1>>
+// MONO:     "tlam.treturn"(%2) : (!tlam.forall<!value<%1>>) -> ()
+// MONO:   }) : () -> !tlam.forall<!tlam.forall<!tlam.bvar<1>>>
+// MONO:   %1 = "test.mk_poly"() : () -> !tlam.forall<i32>
+// MONO:   %2 = "test.mk_poly"() : () -> !tlam.forall<i64>
+// MONO:   "test.use"(%1, %2) : (!tlam.forall<i32>, !tlam.forall<i64>) -> ()
 // MONO: }
 
 // -----
@@ -77,9 +87,15 @@ builtin.module {
 // MONO: builtin.module {
 // MONO:   %0 = "arith.constant"() <{value = 3 : i32}> : () -> i32
 // MONO:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
-// MONO:   %2 = "builtin.unrealized_conversion_cast"(%1) {dep = !tlam.forall<!value<%1>>} : (!tlam.type) -> !tlam.type
-// MONO:   "test.use"(%2) {dep = !tlam.forall<!tlam.fun<!value<%2>, !tlam.forall<!value<%1>>>>} : (!tlam.type) -> ()
-// MONO:   "test.consume"(%2) : (!tlam.type) -> ()
+// MONO:   %2 = "tlam.tlambda"() ({
+// MONO:   ^bb0(%3: !tlam.type):
+// MONO:     %4 = "builtin.unrealized_conversion_cast"(%3) {dep = !tlam.forall<!value<%3>>} : (!tlam.type) -> !tlam.type
+// MONO:     "test.use"(%4) {dep = !tlam.forall<!tlam.fun<!value<%4>, !tlam.forall<!value<%3>>>>} : (!tlam.type) -> ()
+// MONO:     "tlam.treturn"(%4) : (!tlam.type) -> ()
+// MONO:   }) : () -> !tlam.forall<!tlam.type>
+// MONO:   %3 = "builtin.unrealized_conversion_cast"(%1) {dep = !tlam.forall<!value<%1>>} : (!tlam.type) -> !tlam.type
+// MONO:   "test.use"(%3) {dep = !tlam.forall<!tlam.fun<!value<%3>, !tlam.forall<!value<%1>>>>} : (!tlam.type) -> ()
+// MONO:   "test.consume"(%3) : (!tlam.type) -> ()
 // MONO: }
 
 // -----

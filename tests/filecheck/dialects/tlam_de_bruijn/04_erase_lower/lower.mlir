@@ -1,4 +1,4 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | filecheck %s
 
 builtin.module {
   %0 = "tlam_dbi.tlambda"() ({
@@ -13,6 +13,8 @@ builtin.module {
     %spec = "tlam_dbi.tapply"(%poly_id) <{tyArg = i64}> : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>>) -> (!tlam_dbi.fun<i64, i64>)
     "tlam_dbi.treturn"(%spec) : (!tlam_dbi.fun<i64, i64>) -> ()
   }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>)
+  %top = "tlam_dbi.tapply"(%0) <{tyArg = i32}> : (!tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>) -> (!tlam_dbi.fun<i64, i64>)
+  "test.use"(%top) : (!tlam_dbi.fun<i64, i64>) -> ()
 }
 
 // CHECK: builtin.module {

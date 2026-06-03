@@ -3,8 +3,8 @@
 
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETA
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,monomorphize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=MONO
-// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,monomorphize,erase-tlam --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=ERASE
-// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,monomorphize,erase-tlam,lower-tlam-to-func --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=LOWER
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,monomorphize,dce,erase-tlam --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=ERASE
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,monomorphize,dce,erase-tlam,lower-tlam-to-func --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=LOWER
 
 // Example 1
 builtin.module {
@@ -73,53 +73,51 @@ builtin.module {
 // MONO:     %2 = "builtin.unrealized_conversion_cast"() : () -> i64
 // MONO:     "tlam.treturn"(%2) : (i64) -> ()
 // MONO:   }) : () -> !tlam.forall<i64>
-// MONO:   %1 = "tlam.vlambda"() ({
-// MONO:   ^bb0(%2: i64):
-// MONO:     "tlam.vreturn"(%2) : (i64) -> ()
+// MONO:   %1 = "tlam.tlambda"() ({
+// MONO:   ^bb0(%2: !tlam.type):
+// MONO:     %3 = "tlam.vlambda"() ({
+// MONO:     ^bb1(%4: !value<%2>):
+// MONO:       "tlam.vreturn"(%4) : (!value<%2>) -> ()
+// MONO:     }) : () -> !tlam.fun<!value<%2>, !value<%2>>
+// MONO:     "tlam.treturn"(%3) : (!tlam.fun<!value<%2>, !value<%2>>) -> ()
+// MONO:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// MONO:   %2 = "tlam.vlambda"() ({
+// MONO:   ^bb0(%3: i64):
+// MONO:     "tlam.vreturn"(%3) : (i64) -> ()
 // MONO:   }) : () -> !tlam.fun<i64, i64>
-// MONO:   %2 = "arith.constant"() <{value = 7}> : () -> i64
-// MONO:   %3 = "tlam.vapply"(%1, %2) : (!tlam.fun<i64, i64>, i64) -> i64
-// MONO:   "test.use"(%3) : (i64) -> ()
-// MONO:   %4 = "tlam.vlambda"() ({
-// MONO:   ^bb0(%5: i64):
-// MONO:     "tlam.vreturn"(%5) : (i64) -> ()
+// MONO:   %3 = "arith.constant"() <{value = 7}> : () -> i64
+// MONO:   %4 = "tlam.vapply"(%2, %3) : (!tlam.fun<i64, i64>, i64) -> i64
+// MONO:   "test.use"(%4) : (i64) -> ()
+// MONO:   %5 = "tlam.vlambda"() ({
+// MONO:   ^bb0(%6: i64):
+// MONO:     "tlam.vreturn"(%6) : (i64) -> ()
 // MONO:   }) : () -> !tlam.fun<i64, i64>
-// MONO:   %5 = "arith.constant"() <{value = 11}> : () -> i64
-// MONO:   "test.use"(%5) : (i64) -> ()
+// MONO:   %6 = "arith.constant"() <{value = 11}> : () -> i64
+// MONO:   "test.use"(%6) : (i64) -> ()
 // MONO: }
 
 // ERASE: builtin.module {
-// ERASE:   %0 = "builtin.unrealized_conversion_cast"() : () -> i64
-// ERASE:   %1 = "tlam.vlambda"() ({
-// ERASE:   ^bb0(%2: i64):
-// ERASE:     "tlam.vreturn"(%2) : (i64) -> ()
+// ERASE:   %0 = "tlam.vlambda"() ({
+// ERASE:   ^bb0(%1: i64):
+// ERASE:     "tlam.vreturn"(%1) : (i64) -> ()
 // ERASE:   }) : () -> !tlam.fun<i64, i64>
-// ERASE:   %2 = "arith.constant"() <{value = 7}> : () -> i64
-// ERASE:   %3 = "tlam.vapply"(%1, %2) : (!tlam.fun<i64, i64>, i64) -> i64
+// ERASE:   %1 = "arith.constant"() <{value = 7}> : () -> i64
+// ERASE:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i64, i64>, i64) -> i64
+// ERASE:   "test.use"(%2) : (i64) -> ()
+// ERASE:   %3 = "arith.constant"() <{value = 11}> : () -> i64
 // ERASE:   "test.use"(%3) : (i64) -> ()
-// ERASE:   %4 = "tlam.vlambda"() ({
-// ERASE:   ^bb0(%5: i64):
-// ERASE:     "tlam.vreturn"(%5) : (i64) -> ()
-// ERASE:   }) : () -> !tlam.fun<i64, i64>
-// ERASE:   %5 = "arith.constant"() <{value = 11}> : () -> i64
-// ERASE:   "test.use"(%5) : (i64) -> ()
 // ERASE: }
 
 // LOWER: builtin.module {
-// LOWER:   func.func @lifted_2(%0: i64) -> i64 {
+// LOWER:   func.func @lifted_1(%0: i64) -> i64 {
 // LOWER:     func.return %0 : i64
 // LOWER:   }
-// LOWER:   %0 = func.constant @lifted_2 : (i64) -> i64
-// LOWER:   func.func @lifted_1(%1: i64) -> i64 {
-// LOWER:     func.return %1 : i64
-// LOWER:   }
-// LOWER:   %1 = func.constant @lifted_1 : (i64) -> i64
-// LOWER:   %2 = "builtin.unrealized_conversion_cast"() : () -> i64
-// LOWER:   %3 = "arith.constant"() <{value = 7}> : () -> i64
-// LOWER:   %4 = "func.call_indirect"(%1, %3) : ((i64) -> i64, i64) -> i64
-// LOWER:   "test.use"(%4) : (i64) -> ()
-// LOWER:   %5 = "arith.constant"() <{value = 11}> : () -> i64
-// LOWER:   "test.use"(%5) : (i64) -> ()
+// LOWER:   %0 = func.constant @lifted_1 : (i64) -> i64
+// LOWER:   %1 = "arith.constant"() <{value = 7}> : () -> i64
+// LOWER:   %2 = "func.call_indirect"(%0, %1) : ((i64) -> i64, i64) -> i64
+// LOWER:   "test.use"(%2) : (i64) -> ()
+// LOWER:   %3 = "arith.constant"() <{value = 11}> : () -> i64
+// LOWER:   "test.use"(%3) : (i64) -> ()
 // LOWER: }
 
 // -----
@@ -208,53 +206,67 @@ builtin.module {
 // MONO:     %2 = "builtin.unrealized_conversion_cast"() : () -> i64
 // MONO:     "tlam.treturn"(%2) : (i64) -> ()
 // MONO:   }) : () -> !tlam.forall<i64>
-// MONO:   %1 = "tlam.vlambda"() ({
-// MONO:   ^bb0(%2: i64):
-// MONO:     "tlam.vreturn"(%2) : (i64) -> ()
+// MONO:   %1 = "tlam.tlambda"() ({
+// MONO:   ^bb0(%2: !tlam.type):
+// MONO:     %3 = "tlam.tlambda"() ({
+// MONO:     ^bb1(%4: !tlam.type):
+// MONO:       %5 = "tlam.vlambda"() ({
+// MONO:       ^bb2(%6: !value<%4>):
+// MONO:         "tlam.vreturn"(%6) : (!value<%4>) -> ()
+// MONO:       }) : () -> !tlam.fun<!value<%4>, !value<%4>>
+// MONO:       "tlam.treturn"(%5) : (!tlam.fun<!value<%4>, !value<%4>>) -> ()
+// MONO:     }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// MONO:     %4 = "tlam.vlambda"() ({
+// MONO:     ^bb1(%5: !value<%2>):
+// MONO:       "tlam.vreturn"(%5) : (!value<%2>) -> ()
+// MONO:     }) : () -> !tlam.fun<!value<%2>, !value<%2>>
+// MONO:     "tlam.treturn"(%4) : (!tlam.fun<!value<%2>, !value<%2>>) -> ()
+// MONO:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// MONO:   %2 = "tlam.tlambda"() ({
+// MONO:   ^bb0(%3: !tlam.type):
+// MONO:     %4 = "tlam.vlambda"() ({
+// MONO:     ^bb1(%5: !value<%3>):
+// MONO:       "tlam.vreturn"(%5) : (!value<%3>) -> ()
+// MONO:     }) : () -> !tlam.fun<!value<%4>, !value<%4>>
+// MONO:     "tlam.treturn"(%4) : (!tlam.fun<!value<%4>, !value<%4>>) -> ()
+// MONO:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// MONO:   %3 = "tlam.vlambda"() ({
+// MONO:   ^bb0(%4: i64):
+// MONO:     "tlam.vreturn"(%4) : (i64) -> ()
 // MONO:   }) : () -> !tlam.fun<i64, i64>
-// MONO:   %2 = "arith.constant"() <{value = 9}> : () -> i64
-// MONO:   %3 = "tlam.vapply"(%1, %2) : (!tlam.fun<i64, i64>, i64) -> i64
-// MONO:   "test.use"(%3) : (i64) -> ()
-// MONO:   %4 = "tlam.vlambda"() ({
-// MONO:   ^bb0(%5: i64):
-// MONO:     "tlam.vreturn"(%5) : (i64) -> ()
-// MONO:   }) : () -> !tlam.fun<i64, i64>
-// MONO:   %5 = "arith.constant"() <{value = 13}> : () -> i64
+// MONO:   %4 = "arith.constant"() <{value = 9}> : () -> i64
+// MONO:   %5 = "tlam.vapply"(%3, %4) : (!tlam.fun<i64, i64>, i64) -> i64
 // MONO:   "test.use"(%5) : (i64) -> ()
+// MONO:   %6 = "tlam.vlambda"() ({
+// MONO:   ^bb0(%7: i64):
+// MONO:     "tlam.vreturn"(%7) : (i64) -> ()
+// MONO:   }) : () -> !tlam.fun<i64, i64>
+// MONO:   %7 = "arith.constant"() <{value = 13}> : () -> i64
+// MONO:   "test.use"(%7) : (i64) -> ()
 // MONO: }
 
 // ERASE: // -----
 // ERASE: builtin.module {
-// ERASE:   %0 = "builtin.unrealized_conversion_cast"() : () -> i64
-// ERASE:   %1 = "tlam.vlambda"() ({
-// ERASE:   ^bb0(%2: i64):
-// ERASE:     "tlam.vreturn"(%2) : (i64) -> ()
+// ERASE:   %0 = "tlam.vlambda"() ({
+// ERASE:   ^bb0(%1: i64):
+// ERASE:     "tlam.vreturn"(%1) : (i64) -> ()
 // ERASE:   }) : () -> !tlam.fun<i64, i64>
-// ERASE:   %2 = "arith.constant"() <{value = 9}> : () -> i64
-// ERASE:   %3 = "tlam.vapply"(%1, %2) : (!tlam.fun<i64, i64>, i64) -> i64
+// ERASE:   %1 = "arith.constant"() <{value = 9}> : () -> i64
+// ERASE:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i64, i64>, i64) -> i64
+// ERASE:   "test.use"(%2) : (i64) -> ()
+// ERASE:   %3 = "arith.constant"() <{value = 13}> : () -> i64
 // ERASE:   "test.use"(%3) : (i64) -> ()
-// ERASE:   %4 = "tlam.vlambda"() ({
-// ERASE:   ^bb0(%5: i64):
-// ERASE:     "tlam.vreturn"(%5) : (i64) -> ()
-// ERASE:   }) : () -> !tlam.fun<i64, i64>
-// ERASE:   %5 = "arith.constant"() <{value = 13}> : () -> i64
-// ERASE:   "test.use"(%5) : (i64) -> ()
 // ERASE: }
 
 // LOWER: // -----
 // LOWER: builtin.module {
-// LOWER:   func.func @lifted_2(%0: i64) -> i64 {
+// LOWER:   func.func @lifted_1(%0: i64) -> i64 {
 // LOWER:     func.return %0 : i64
 // LOWER:   }
-// LOWER:   %0 = func.constant @lifted_2 : (i64) -> i64
-// LOWER:   func.func @lifted_1(%1: i64) -> i64 {
-// LOWER:     func.return %1 : i64
-// LOWER:   }
-// LOWER:   %1 = func.constant @lifted_1 : (i64) -> i64
-// LOWER:   %2 = "builtin.unrealized_conversion_cast"() : () -> i64
-// LOWER:   %3 = "arith.constant"() <{value = 9}> : () -> i64
-// LOWER:   %4 = "func.call_indirect"(%1, %3) : ((i64) -> i64, i64) -> i64
-// LOWER:   "test.use"(%4) : (i64) -> ()
-// LOWER:   %5 = "arith.constant"() <{value = 13}> : () -> i64
-// LOWER:   "test.use"(%5) : (i64) -> ()
+// LOWER:   %0 = func.constant @lifted_1 : (i64) -> i64
+// LOWER:   %1 = "arith.constant"() <{value = 9}> : () -> i64
+// LOWER:   %2 = "func.call_indirect"(%0, %1) : ((i64) -> i64, i64) -> i64
+// LOWER:   "test.use"(%2) : (i64) -> ()
+// LOWER:   %3 = "arith.constant"() <{value = 13}> : () -> i64
+// LOWER:   "test.use"(%3) : (i64) -> ()
 // LOWER: }

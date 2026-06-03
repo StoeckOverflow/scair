@@ -17,9 +17,16 @@ builtin.module {
 // CHECK: builtin.module {
 // CHECK:   %0 = "tlam_dbi.tlambda"() ({
 // CHECK:     %1 = "tlam_dbi.tlambda"() ({
-// CHECK:       %2 = "test.op"() : () -> !tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>
-// CHECK:       "tlam_dbi.treturn"(%2) : (!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>) -> ()
+// CHECK:       %2 = "tlam_dbi.tlambda"() ({
+// CHECK:         %3 = "test.op"() : () -> !tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>
+// CHECK:         "tlam_dbi.treturn"(%3) : (!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>) -> ()
+// CHECK:       }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>
+// CHECK:       "tlam_dbi.treturn"(%2) : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>) -> ()
+// CHECK:     }) : () -> !tlam_dbi.forall<!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>>
+// CHECK:     %2 = "tlam_dbi.tlambda"() ({
+// CHECK:       %3 = "test.op"() : () -> !tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>
+// CHECK:       "tlam_dbi.treturn"(%3) : (!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>) -> ()
 // CHECK:     }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>
-// CHECK:     "tlam_dbi.treturn"(%1) : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>) -> ()
+// CHECK:     "tlam_dbi.treturn"(%2) : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>) -> ()
 // CHECK:   }) : () -> !tlam_dbi.forall<!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>>
 // CHECK: }

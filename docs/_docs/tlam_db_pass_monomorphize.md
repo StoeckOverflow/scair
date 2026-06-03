@@ -32,7 +32,7 @@ Concretely, this is the System F reduction:
      - Use its current `containerBlock` as the rewrite location.
      - If cached specialization `(block, fun, tyArg)` exists, reuse it.
      - Else, find `TLambda` producer and rewrite one site.
-3. Optional cleanup: erase `TLambda` when unused.
+3. Leave unused lambda producers for the `dce` pass.
 
 ### High-level algorithm (detailed walkthrough)
 The implementation is a rewrite-to-fixed-point loop over the module:
@@ -50,8 +50,9 @@ The implementation is a rewrite-to-fixed-point loop over the module:
    - Cache miss: resolve producer of `ta.fun`:
      - If producer is a `TLambda`, call `rewriteOneTApply`.
      - Record rewritten result in cache and mark pass as changed.
-4. Producer cleanup:
-   - After rewriting a site, if producer `TLambda` result has no uses, erase it.
+4. Dead producer cleanup:
+   - Monomorphization does not erase unused `TLambda` / `VLambda` producers.
+   - Run `dce` after monomorphization when unused lambda producers should be removed.
 5. Repeat while any rewrite occurred (`changed = true`).
 
 Why fixed-point is needed:
@@ -119,7 +120,8 @@ Why this preserves type semantics:
 
 ## Current limitations
 - Some malformed-IR cases still use hard errors (`sys.error`) in internal helper paths.
-- No global dead-specialization elimination pass beyond existing cleanup opportunities.
+- Dead specialized or polymorphic lambda producers are cleaned up by a later
+  `dce` pass, not by monomorphization itself.
 - If a `TApply` is detached by the time the iteration reaches it, the pass skips
   it rather than trying to rediscover a parent block.
 
@@ -138,7 +140,6 @@ Why this preserves type semantics:
 
 ## Relevant tests
 - `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/monomorphize.mlir`
-- `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/binder_shift.mlir`
 - `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/nested_outer_binder_shift.mlir`
 - `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/reuse_three_sites.mlir`
 - `tests/filecheck/dialects/tlam_de_bruijn/03_monomorphize/multi_tyargs.mlir`

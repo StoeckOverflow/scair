@@ -23,8 +23,13 @@ builtin.module {
 // MONO: builtin.module {
 // MONO:   %0 = "arith.constant"() <{value = 7 : i32}> : () -> i32
 // MONO:   %1 = "builtin.unrealized_conversion_cast"(%0) : (i32) -> !tlam.type
-// MONO:   %2 = "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<%1>>>>
-// MONO:   "test.use"(%2) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<%1>>>>) -> ()
+// MONO:   %2 = "tlam.tlambda"() ({
+// MONO:   ^bb0(%3: !tlam.type):
+// MONO:     %4 = "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !value<%3>>>
+// MONO:     "tlam.treturn"(%4) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !value<%3>>>) -> ()
+// MONO:   }) : () -> !tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<1>>>>
+// MONO:   %3 = "test.mk_poly2"() : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<%1>>>>
+// MONO:   "test.use"(%3) : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.forall<!value<%1>>>>) -> ()
 // MONO: }
 
 // -----

@@ -1,4 +1,4 @@
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | filecheck %s -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | filecheck %s -DFILE=%s
 
 // Lowering with two value lambdas and chained applies.
 builtin.module {

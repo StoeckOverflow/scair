@@ -1,5 +1,5 @@
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse | filecheck %s --check-prefix=FULL -DFILE=%s
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse,beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse | filecheck %s --check-prefix=FULL2 -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse | filecheck %s --check-prefix=FULL -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse,beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse | filecheck %s --check-prefix=FULL2 -DFILE=%s
 
 // Build two specializations, use one; pipeline should remain stable and TLam-free.
 builtin.module {
@@ -24,6 +24,8 @@ builtin.module {
     }) : () -> (!tlam_dbi.fun<i64, i64>)
     "tlam_dbi.treturn"(%id2) : (!tlam_dbi.fun<i64, i64>) -> ()
   }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>)
+  %top = "tlam_dbi.tapply"(%outer) <{tyArg = i32}> : (!tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>) -> (!tlam_dbi.fun<i64, i64>)
+  "test.use"(%top) : (!tlam_dbi.fun<i64, i64>) -> ()
 }
 
 // FULL: builtin.module {

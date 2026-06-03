@@ -1,4 +1,4 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p monomorphize,erase-tlam,lower-tlam-to-func | scair-run | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p monomorphize,dce,beta-reduce-tlam,erase-tlam,lower-tlam-to-func | scair-run | filecheck %s
 
 builtin.module {
   %mk = "tlam.tlambda"() ({

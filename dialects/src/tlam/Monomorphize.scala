@@ -518,12 +518,10 @@ object Monomorphize:
                     rewriteOneTApply(ta, tl).foreach { repl =>
                       cache += (blk, ta.fun, ta.tyArg) -> repl
                       changed = true
-                      if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
                     }
               else
                 rewriteOneTApply(ta, tl).foreach { _ =>
                   changed = true
-                  if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
                 }
             case None =>
               ()

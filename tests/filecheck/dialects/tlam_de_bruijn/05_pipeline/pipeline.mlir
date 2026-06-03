@@ -1,10 +1,10 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s --check-prefix=VERIFY -DFILE=%s
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p beta-reduce-tlam-de-bruijn | filecheck %s --check-prefix=BETA -DFILE=%s
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn | filecheck %s --check-prefix=MONO -DFILE=%s
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn | filecheck %s --check-prefix=ERASE -DFILE=%s
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | filecheck %s --check-prefix=LOWER -DFILE=%s
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse | filecheck %s --check-prefix=FULL -DFILE=%s
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse,beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse | filecheck %s --check-prefix=FULL2 -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn | filecheck %s --check-prefix=ERASE -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | filecheck %s --check-prefix=LOWER -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse | filecheck %s --check-prefix=FULL -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse,beta-reduce-tlam-de-bruijn,canonicalize,cse,monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,canonicalize,cse | filecheck %s --check-prefix=FULL2 -DFILE=%s
 
 // VALID: polymorphic program that monomorphizes, erases TLam, then lowers.
 builtin.module {
@@ -20,6 +20,8 @@ builtin.module {
     %spec = "tlam_dbi.tapply"(%poly_id) <{tyArg = i64}> : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>>) -> (!tlam_dbi.fun<i64, i64>)
     "tlam_dbi.treturn"(%spec) : (!tlam_dbi.fun<i64, i64>) -> ()
   }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>)
+  %top = "tlam_dbi.tapply"(%outer) <{tyArg = i32}> : (!tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>) -> (!tlam_dbi.fun<i64, i64>)
+  "test.use"(%top) : (!tlam_dbi.fun<i64, i64>) -> ()
 }
 // VERIFY: builtin.module {
 // VERIFY:   %0 = "tlam_dbi.tlambda"() ({
@@ -49,12 +51,31 @@ builtin.module {
 // BETA: }
 // MONO: builtin.module {
 // MONO:   %0 = "tlam_dbi.tlambda"() ({
-// MONO:     %1 = "tlam_dbi.vlambda"() ({
-// MONO:     ^bb0(%2: i64):
-// MONO:       "tlam_dbi.vreturn"(%2) : (i64) -> ()
+// MONO:     %1 = "tlam_dbi.tlambda"() ({
+// MONO:       %2 = "tlam_dbi.vlambda"() ({
+// MONO:       ^bb0(%3: !tlam_dbi.bvar<0>):
+// MONO:         "tlam_dbi.vreturn"(%3) : (!tlam_dbi.bvar<0>) -> ()
+// MONO:       }) : () -> !tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>
+// MONO:       "tlam_dbi.treturn"(%2) : (!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>) -> ()
+// MONO:     }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>>
+// MONO:     %2 = "tlam_dbi.vlambda"() ({
+// MONO:     ^bb0(%3: i64):
+// MONO:       "tlam_dbi.vreturn"(%3) : (i64) -> ()
 // MONO:     }) : () -> !tlam_dbi.fun<i64, i64>
-// MONO:     "tlam_dbi.treturn"(%1) : (!tlam_dbi.fun<i64, i64>) -> ()
+// MONO:     "tlam_dbi.treturn"(%2) : (!tlam_dbi.fun<i64, i64>) -> ()
 // MONO:   }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>
+// MONO:   %1 = "tlam_dbi.tlambda"() ({
+// MONO:     %2 = "tlam_dbi.vlambda"() ({
+// MONO:     ^bb0(%3: !tlam_dbi.bvar<0>):
+// MONO:       "tlam_dbi.vreturn"(%3) : (!tlam_dbi.bvar<0>) -> ()
+// MONO:     }) : () -> !tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>
+// MONO:     "tlam_dbi.treturn"(%2) : (!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>) -> ()
+// MONO:   }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>>
+// MONO:   %2 = "tlam_dbi.vlambda"() ({
+// MONO:   ^bb0(%3: i64):
+// MONO:     "tlam_dbi.vreturn"(%3) : (i64) -> ()
+// MONO:   }) : () -> !tlam_dbi.fun<i64, i64>
+// MONO:   "test.use"(%2) : (!tlam_dbi.fun<i64, i64>) -> ()
 // MONO: }
 // ERASE: builtin.module {
 // ERASE:   %0 = "tlam_dbi.vlambda"() ({
@@ -132,15 +153,9 @@ builtin.module {
 // LOWER:   %2 = "func.call_indirect"(%0, %1) : ((i32) -> i32, i32) -> i32
 // LOWER: }
 // FULL: builtin.module {
-// FULL:   func.func @lifted_1(%0: i32) -> i32 {
-// FULL:     func.return %0 : i32
-// FULL:   }
 // FULL:   %0 = "test.op"() : () -> i32
 // FULL: }
 // FULL2: builtin.module {
-// FULL2:   func.func @lifted_1(%0: i32) -> i32 {
-// FULL2:     func.return %0 : i32
-// FULL2:   }
 // FULL2:   %0 = "test.op"() : () -> i32
 // FULL2: }
 
@@ -207,17 +222,11 @@ builtin.module {
 // LOWER:   "test.use"(%2) : (i32) -> ()
 // LOWER: }
 // FULL: builtin.module {
-// FULL:   func.func @lifted_1(%0: i32) -> i32 {
-// FULL:     func.return %0 : i32
-// FULL:   }
 // FULL:   "test.pipeline.beta"() : () -> ()
 // FULL:   %0 = "arith.constant"() <{value = 1 : i32}> : () -> i32
 // FULL:   "test.use"(%0) : (i32) -> ()
 // FULL: }
 // FULL2: builtin.module {
-// FULL2:   func.func @lifted_1(%0: i32) -> i32 {
-// FULL2:     func.return %0 : i32
-// FULL2:   }
 // FULL2:   "test.pipeline.beta"() : () -> ()
 // FULL2:   %0 = "arith.constant"() <{value = 1 : i32}> : () -> i32
 // FULL2:   "test.use"(%0) : (i32) -> ()
@@ -386,35 +395,30 @@ builtin.module {
 // MONO: builtin.module {
 // MONO:   %0 = "tlam_dbi.tlambda"() ({
 // MONO:     %1 = "tlam_dbi.tlambda"() ({
-// MONO:       %2 = "test.op"() : () -> !tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>
-// MONO:       "tlam_dbi.treturn"(%2) : (!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>) -> ()
+// MONO:       %2 = "tlam_dbi.tlambda"() ({
+// MONO:         %3 = "test.op"() : () -> !tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>
+// MONO:         "tlam_dbi.treturn"(%3) : (!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>) -> ()
+// MONO:       }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>
+// MONO:       "tlam_dbi.treturn"(%2) : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>) -> ()
+// MONO:     }) : () -> !tlam_dbi.forall<!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>>
+// MONO:     %2 = "tlam_dbi.tlambda"() ({
+// MONO:       %3 = "test.op"() : () -> !tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>
+// MONO:       "tlam_dbi.treturn"(%3) : (!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>) -> ()
 // MONO:     }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>
-// MONO:     "tlam_dbi.treturn"(%1) : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>) -> ()
+// MONO:     "tlam_dbi.treturn"(%2) : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>) -> ()
 // MONO:   }) : () -> !tlam_dbi.forall<!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>>
 // MONO: }
 // ERASE: builtin.module {
-// ERASE:   %0 = "tlam_dbi.tlambda"() ({
-// ERASE:     %1 = "test.op"() : () -> !tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>
-// ERASE:     "tlam_dbi.treturn"(%1) : (!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>) -> ()
-// ERASE:   }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>
+// ERASE: ^bb0:
 // ERASE: }
 // LOWER: builtin.module {
-// LOWER:   %0 = "tlam_dbi.tlambda"() ({
-// LOWER:     %1 = "test.op"() : () -> !tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>
-// LOWER:     "tlam_dbi.treturn"(%1) : (!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>) -> ()
-// LOWER:   }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>
+// LOWER: ^bb0:
 // LOWER: }
 // FULL: builtin.module {
-// FULL:   %0 = "tlam_dbi.tlambda"() ({
-// FULL:     %1 = "test.op"() : () -> !tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>
-// FULL:     "tlam_dbi.treturn"(%1) : (!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>) -> ()
-// FULL:   }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>
+// FULL: ^bb0:
 // FULL: }
 // FULL2: builtin.module {
-// FULL2:   %0 = "tlam_dbi.tlambda"() ({
-// FULL2:     %1 = "test.op"() : () -> !tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>
-// FULL2:     "tlam_dbi.treturn"(%1) : (!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>) -> ()
-// FULL2:   }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<1>, !tlam_dbi.bvar<0>>>
+// FULL2: ^bb0:
 // FULL2: }
 
 // -----
@@ -479,36 +483,16 @@ builtin.module {
 // MONO:   }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>
 // MONO: }
 // ERASE: builtin.module {
-// ERASE:   %0 = "tlam_dbi.vlambda"() ({
-// ERASE:   ^bb0(%1: !tlam_dbi.bvar<0>):
-// ERASE:     "tlam_dbi.vreturn"(%1) : (!tlam_dbi.bvar<0>) -> ()
-// ERASE:   }) : () -> !tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>
-// ERASE:   %1 = "tlam_dbi.vlambda"() ({
-// ERASE:   ^bb0(%2: i64):
-// ERASE:     "tlam_dbi.vreturn"(%2) : (i64) -> ()
-// ERASE:   }) : () -> !tlam_dbi.fun<i64, i64>
+// ERASE: ^bb0:
 // ERASE: }
 // LOWER: builtin.module {
-// LOWER:   func.func @lifted_2(%0: i64) -> i64 {
-// LOWER:     func.return %0 : i64
-// LOWER:   }
-// LOWER:   %0 = func.constant @lifted_2 : (i64) -> i64
-// LOWER:   func.func @lifted_1(%1: !tlam_dbi.bvar<0>) -> !tlam_dbi.bvar<0> {
-// LOWER:     func.return %1 : !tlam_dbi.bvar<0>
-// LOWER:   }
-// LOWER:   %1 = func.constant @lifted_1 : (!tlam_dbi.bvar<0>) -> !tlam_dbi.bvar<0>
+// LOWER: ^bb0:
 // LOWER: }
 // FULL: builtin.module {
-// FULL:   func.func @lifted_1(%0: i64) -> i64 {
-// FULL:     func.return %0 : i64
-// FULL:   }
-// FULL:   %0 = func.constant @lifted_1 : (i64) -> i64
+// FULL: ^bb0:
 // FULL: }
 // FULL2: builtin.module {
-// FULL2:   func.func @lifted_1(%0: i64) -> i64 {
-// FULL2:     func.return %0 : i64
-// FULL2:   }
-// FULL2:   %0 = func.constant @lifted_1 : (i64) -> i64
+// FULL2: ^bb0:
 // FULL2: }
 
 // -----
@@ -576,71 +560,38 @@ builtin.module {
 // BETA: }
 // MONO: builtin.module {
 // MONO:   %0 = "tlam_dbi.tlambda"() ({
-// MONO:     %1 = "tlam_dbi.vlambda"() ({
-// MONO:     ^bb0(%2: i64):
-// MONO:       "tlam_dbi.vreturn"(%2) : (i64) -> ()
+// MONO:     %1 = "tlam_dbi.tlambda"() ({
+// MONO:       %2 = "tlam_dbi.vlambda"() ({
+// MONO:       ^bb0(%3: !tlam_dbi.bvar<0>):
+// MONO:         "tlam_dbi.vreturn"(%3) : (!tlam_dbi.bvar<0>) -> ()
+// MONO:       }) : () -> !tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>
+// MONO:       "tlam_dbi.treturn"(%2) : (!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>) -> ()
+// MONO:     }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>>
+// MONO:     %2 = "tlam_dbi.vlambda"() ({
+// MONO:     ^bb0(%3: i64):
+// MONO:       "tlam_dbi.vreturn"(%3) : (i64) -> ()
 // MONO:     }) : () -> !tlam_dbi.fun<i64, i64>
-// MONO:     %2 = "arith.constant"() <{value = 3}> : () -> i64
-// MONO:     %3 = "tlam_dbi.vapply"(%1, %2) : (!tlam_dbi.fun<i64, i64>, i64) -> i64
-// MONO:     "test.use"(%3) : (i64) -> ()
-// MONO:     %4 = "tlam_dbi.vlambda"() ({
-// MONO:     ^bb0(%5: i64):
-// MONO:       "tlam_dbi.vreturn"(%5) : (i64) -> ()
+// MONO:     %3 = "arith.constant"() <{value = 3}> : () -> i64
+// MONO:     %4 = "tlam_dbi.vapply"(%2, %3) : (!tlam_dbi.fun<i64, i64>, i64) -> i64
+// MONO:     "test.use"(%4) : (i64) -> ()
+// MONO:     %5 = "tlam_dbi.vlambda"() ({
+// MONO:     ^bb0(%6: i64):
+// MONO:       "tlam_dbi.vreturn"(%6) : (i64) -> ()
 // MONO:     }) : () -> !tlam_dbi.fun<i64, i64>
-// MONO:     "tlam_dbi.treturn"(%4) : (!tlam_dbi.fun<i64, i64>) -> ()
+// MONO:     "tlam_dbi.treturn"(%5) : (!tlam_dbi.fun<i64, i64>) -> ()
 // MONO:   }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>
 // MONO: }
 // ERASE: builtin.module {
-// ERASE:   %0 = "tlam_dbi.vlambda"() ({
-// ERASE:   ^bb0(%1: i64):
-// ERASE:     "tlam_dbi.vreturn"(%1) : (i64) -> ()
-// ERASE:   }) : () -> !tlam_dbi.fun<i64, i64>
-// ERASE:   %1 = "arith.constant"() <{value = 3}> : () -> i64
-// ERASE:   %2 = "tlam_dbi.vapply"(%0, %1) : (!tlam_dbi.fun<i64, i64>, i64) -> i64
-// ERASE:   "test.use"(%2) : (i64) -> ()
-// ERASE:   %3 = "tlam_dbi.vlambda"() ({
-// ERASE:   ^bb0(%4: i64):
-// ERASE:     "tlam_dbi.vreturn"(%4) : (i64) -> ()
-// ERASE:   }) : () -> !tlam_dbi.fun<i64, i64>
+// ERASE: ^bb0:
 // ERASE: }
 // LOWER: builtin.module {
-// LOWER:   func.func @lifted_2(%0: i64) -> i64 {
-// LOWER:     func.return %0 : i64
-// LOWER:   }
-// LOWER:   %0 = func.constant @lifted_2 : (i64) -> i64
-// LOWER:   func.func @lifted_1(%1: i64) -> i64 {
-// LOWER:     func.return %1 : i64
-// LOWER:   }
-// LOWER:   %1 = func.constant @lifted_1 : (i64) -> i64
-// LOWER:   %2 = "arith.constant"() <{value = 3}> : () -> i64
-// LOWER:   %3 = "func.call_indirect"(%1, %2) : ((i64) -> i64, i64) -> i64
-// LOWER:   "test.use"(%3) : (i64) -> ()
+// LOWER: ^bb0:
 // LOWER: }
 // FULL: builtin.module {
-// FULL:   func.func @lifted_2(%0: i64) -> i64 {
-// FULL:     func.return %0 : i64
-// FULL:   }
-// FULL:   %0 = func.constant @lifted_2 : (i64) -> i64
-// FULL:   func.func @lifted_1(%1: i64) -> i64 {
-// FULL:     func.return %1 : i64
-// FULL:   }
-// FULL:   %1 = func.constant @lifted_1 : (i64) -> i64
-// FULL:   %2 = "arith.constant"() <{value = 3}> : () -> i64
-// FULL:   %3 = "func.call_indirect"(%1, %2) : ((i64) -> i64, i64) -> i64
-// FULL:   "test.use"(%3) : (i64) -> ()
+// FULL: ^bb0:
 // FULL: }
 // FULL2: builtin.module {
-// FULL2:   func.func @lifted_2(%0: i64) -> i64 {
-// FULL2:     func.return %0 : i64
-// FULL2:   }
-// FULL2:   %0 = func.constant @lifted_2 : (i64) -> i64
-// FULL2:   func.func @lifted_1(%1: i64) -> i64 {
-// FULL2:     func.return %1 : i64
-// FULL2:   }
-// FULL2:   %1 = func.constant @lifted_1 : (i64) -> i64
-// FULL2:   %2 = "arith.constant"() <{value = 3}> : () -> i64
-// FULL2:   %3 = "func.call_indirect"(%1, %2) : ((i64) -> i64, i64) -> i64
-// FULL2:   "test.use"(%3) : (i64) -> ()
+// FULL2: ^bb0:
 // FULL2: }
 
 // -----

@@ -1,4 +1,4 @@
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn | filecheck %s --check-prefix=ERASE -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn | filecheck %s --check-prefix=ERASE -DFILE=%s
 
 // Erase with an unused polymorphic def and a used monomorphic path.
 builtin.module {
@@ -21,15 +21,14 @@ builtin.module {
     %spec = "tlam_dbi.tapply"(%poly) <{tyArg = i64}> : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>>) -> (!tlam_dbi.fun<i64, i64>)
     "tlam_dbi.treturn"(%spec) : (!tlam_dbi.fun<i64, i64>) -> ()
   }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>)
+  %top = "tlam_dbi.tapply"(%outer) <{tyArg = i32}> : (!tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>) -> (!tlam_dbi.fun<i64, i64>)
+  "test.use"(%top) : (!tlam_dbi.fun<i64, i64>) -> ()
 }
 
 // ERASE: builtin.module {
 // ERASE:   %0 = "tlam_dbi.vlambda"() ({
-// ERASE:   ^bb0(%1: !tlam_dbi.bvar<0>):
-// ERASE:     "tlam_dbi.vreturn"(%1) : (!tlam_dbi.bvar<0>) -> ()
-// ERASE:   }) : () -> !tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>
-// ERASE:   %1 = "tlam_dbi.vlambda"() ({
-// ERASE:   ^bb0(%2: i64):
-// ERASE:     "tlam_dbi.vreturn"(%2) : (i64) -> ()
+// ERASE:   ^bb0(%1: i64):
+// ERASE:     "tlam_dbi.vreturn"(%1) : (i64) -> ()
 // ERASE:   }) : () -> !tlam_dbi.fun<i64, i64>
+// ERASE:   "test.use"(%0) : (!tlam_dbi.fun<i64, i64>) -> ()
 // ERASE: }

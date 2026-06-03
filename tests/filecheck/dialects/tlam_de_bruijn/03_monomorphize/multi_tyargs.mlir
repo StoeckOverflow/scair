@@ -19,15 +19,22 @@ builtin.module {
 }
 // CHECK: builtin.module {
 // CHECK:   %0 = "tlam_dbi.tlambda"() ({
-// CHECK:     %1 = "tlam_dbi.vlambda"() ({
-// CHECK:     ^bb0(%2: i32):
-// CHECK:       "tlam_dbi.vreturn"(%2) : (i32) -> ()
-// CHECK:     }) : () -> !tlam_dbi.fun<i32, i32>
+// CHECK:     %1 = "tlam_dbi.tlambda"() ({
+// CHECK:       %2 = "tlam_dbi.vlambda"() ({
+// CHECK:       ^bb0(%3: !tlam_dbi.bvar<0>):
+// CHECK:         "tlam_dbi.vreturn"(%3) : (!tlam_dbi.bvar<0>) -> ()
+// CHECK:       }) : () -> !tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>
+// CHECK:       "tlam_dbi.treturn"(%2) : (!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>) -> ()
+// CHECK:     }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>>
 // CHECK:     %2 = "tlam_dbi.vlambda"() ({
-// CHECK:     ^bb0(%3: i64):
-// CHECK:       "tlam_dbi.vreturn"(%3) : (i64) -> ()
+// CHECK:     ^bb0(%3: i32):
+// CHECK:       "tlam_dbi.vreturn"(%3) : (i32) -> ()
+// CHECK:     }) : () -> !tlam_dbi.fun<i32, i32>
+// CHECK:     %3 = "tlam_dbi.vlambda"() ({
+// CHECK:     ^bb0(%4: i64):
+// CHECK:       "tlam_dbi.vreturn"(%4) : (i64) -> ()
 // CHECK:     }) : () -> !tlam_dbi.fun<i64, i64>
-// CHECK:     "test.use"(%1) : (!tlam_dbi.fun<i32, i32>) -> ()
-// CHECK:     "tlam_dbi.treturn"(%2) : (!tlam_dbi.fun<i64, i64>) -> ()
+// CHECK:     "test.use"(%2) : (!tlam_dbi.fun<i32, i32>) -> ()
+// CHECK:     "tlam_dbi.treturn"(%3) : (!tlam_dbi.fun<i64, i64>) -> ()
 // CHECK:   }) : () -> !tlam_dbi.forall<!tlam_dbi.fun<i64, i64>>
 // CHECK: }

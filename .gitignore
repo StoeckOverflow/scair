@@ -44,3 +44,11 @@ out/
 
 # Python
 __pycache__/
+
+# linting
+node_modules/**
+.prettierrc
+.prettierignore
+.markdownlint.json
+package.json
+package-lock.json

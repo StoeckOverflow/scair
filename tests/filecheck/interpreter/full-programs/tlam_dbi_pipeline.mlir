@@ -1,4 +1,4 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p monomorphize-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | scair-run | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | scair-run | filecheck %s
 
 builtin.module {
   %poly = "tlam_dbi.tlambda"() ({

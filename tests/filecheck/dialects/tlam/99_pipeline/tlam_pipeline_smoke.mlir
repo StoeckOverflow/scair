@@ -2,9 +2,9 @@
 // Invariants covered: Monomorphize/erase/lower/full pipeline success plus invalid-input verifier failures.
 
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=MONO
-// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize,erase-tlam,lower-tlam-to-func --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=LOWER
-// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,canonicalize,cse,canonicalize,monomorphize,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETAFULL
-// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p canonicalize,monomorphize,beta-reduce-tlam,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETALATE
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize,dce,erase-tlam,lower-tlam-to-func --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=LOWER
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,canonicalize,cse,canonicalize,monomorphize,dce,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETAFULL
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p canonicalize,monomorphize,beta-reduce-tlam,dce,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETALATE
 
 // Targets: end-to-end SSA-in-types TLam pipeline safety, including verifier-fail
 // behavior on invalid input and pass-order regressions with beta-reduction.
@@ -26,17 +26,22 @@ builtin.module {
 }
 
 // MONO: builtin.module {
-// MONO:   %0 = "tlam.vlambda"() ({
-// MONO:   ^bb0(%1: i64):
-// MONO:     "tlam.vreturn"(%1) : (i64) -> ()
+// MONO:   %0 = "tlam.tlambda"() ({
+// MONO:   ^bb0(%1: !tlam.type):
+// MONO:     %2 = "tlam.vlambda"() ({
+// MONO:     ^bb1(%3: !value<%1>):
+// MONO:       "tlam.vreturn"(%3) : (!value<%1>) -> ()
+// MONO:     }) : () -> !tlam.fun<!value<%1>, !value<%1>>
+// MONO:     "tlam.treturn"(%2) : (!tlam.fun<!value<%1>, !value<%1>>) -> ()
+// MONO:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// MONO:   %1 = "tlam.vlambda"() ({
+// MONO:   ^bb0(%2: i64):
+// MONO:     "tlam.vreturn"(%2) : (i64) -> ()
 // MONO:   }) : () -> !tlam.fun<i64, i64>
 // MONO: }
 
 // LOWER: builtin.module {
-// LOWER:   func.func @lifted_1(%0: i64) -> i64 {
-// LOWER:     func.return %0 : i64
-// LOWER:   }
-// LOWER:   %0 = func.constant @lifted_1 : (i64) -> i64
+// LOWER: ^bb0:
 // LOWER: }
 
 // -----
@@ -85,13 +90,9 @@ builtin.module {
 }
 
 // BETAFULL: builtin.module {
-// BETAFULL:   func.func @lifted_1(%0: i32) -> i32 {
-// BETAFULL:     func.return %0 : i32
-// BETAFULL:   }
+// BETAFULL: ^bb0:
 // BETAFULL: }
 
 // BETALATE: builtin.module {
-// BETALATE:   func.func @lifted_1(%0: i32) -> i32 {
-// BETALATE:     func.return %0 : i32
-// BETALATE:   }
+// BETALATE: ^bb0:
 // BETALATE: }

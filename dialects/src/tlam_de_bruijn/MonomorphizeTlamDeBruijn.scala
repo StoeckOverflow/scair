@@ -304,13 +304,23 @@ object MonomorphizeTlamDeBruijn:
                         case None =>
                           val repl = rewriteOneTApply(ta, tl)
                           cache += (blk, ta.fun, tyArg) -> repl
+                          tapplies.foreach { other =>
+                            if (other ne ta) &&
+                              other.containerBlock.contains(blk) &&
+                              (other.fun eq ta.fun) &&
+                              other.tyArg == tyArg
+                            then
+                              RewriteMethods.replaceValue(
+                                other.res.asInstanceOf[Value[Attribute]],
+                                repl.asInstanceOf[Value[Attribute]],
+                              )
+                              RewriteMethods.eraseOp(other, safeErase = false)
+                          }
                           changed = true
-                          if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
                     else
                       // Not cacheable: always specialize fresh, don’t store/reuse cache.
                       val _ = rewriteOneTApply(ta, tl)
                       changed = true
-                      if tl.res.uses.isEmpty then RewriteMethods.eraseOp(tl)
 
                   case None =>
                     ()
