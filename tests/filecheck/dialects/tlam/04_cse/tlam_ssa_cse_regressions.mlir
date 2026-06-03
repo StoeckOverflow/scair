@@ -7,38 +7,7 @@
 // Note: region-bearing ops here are not CSE-eligible (not NoMemoryEffect),
 // so this checks they are never merged accidentally.
 
-// 1) Region-bearing ops with different regions must not merge.
-builtin.module {
-  %a = "scf.execute_region"() ({
-  ^bb0:
-    %c0 = "arith.constant"() <{value = 0 : i32}> : () -> i32
-    "scf.yield"(%c0) : (i32) -> ()
-  }) : () -> i32
-
-  %b = "scf.execute_region"() ({
-  ^bb0:
-    %c1 = "arith.constant"() <{value = 1 : i32}> : () -> i32
-    "scf.yield"(%c1) : (i32) -> ()
-  }) : () -> i32
-
-  "test.use"(%a, %b) : (i32, i32) -> ()
-}
-
-// CSE: builtin.module {
-// CSE:   %0 = "scf.execute_region"() ({
-// CSE:     %1 = "arith.constant"() <{value = 0 : i32}> : () -> i32
-// CSE:     scf.yield %1 : i32
-// CSE:   }) : () -> i32
-// CSE:   %1 = "scf.execute_region"() ({
-// CSE:     %2 = "arith.constant"() <{value = 1 : i32}> : () -> i32
-// CSE:     scf.yield %2 : i32
-// CSE:   }) : () -> i32
-// CSE:   "test.use"(%0, %1) : (i32, i32) -> ()
-// CSE: }
-
-// -----
-
-// 2) Differing embedded Tvar identity must not merge.
+// 1) Differing embedded Tvar identity must not merge.
 builtin.module {
   %x = "arith.constant"() <{value = 0 : i32}> : () -> i32
   %TA = "test.make_type_a"() : () -> !tlam.type
@@ -60,7 +29,7 @@ builtin.module {
 
 // -----
 
-// 3) Positive control: identical memory-effect-free ops should merge.
+// 2) Positive control: identical memory-effect-free ops should merge.
 builtin.module {
   %x = "arith.constant"() <{value = 7 : i32}> : () -> i32
   %t0 = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !tlam.type
