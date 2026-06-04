@@ -161,3 +161,38 @@ builtin.module {
 
 // DIAG: "d_memref.cast"({{%[0-9]+}}) : (!d_memref.memref<{{\[}}%{{[0-9]+}}, %{{[0-9]+}}, %{{[0-9]+}}, %{{[0-9]+}}], f32, offset: 0, strides: {{\[}}%{{[0-9]+}}, %{{[0-9]+}}, %{{[0-9]+}}, %{{[0-9]+}}]>) -> !d_memref.memref<{{\[}}%{{[0-9]+}}, %{{[0-9]+}}, %{{[0-9]+}}, %{{[0-9]+}}], f32, offset: 0, strides: {{\[}}%{{[0-9]+}}, %{{[0-9]+}}, %{{[0-9]+}}, %{{[0-9]+}}]>
 // DIAG: d_memref.cast: expected pairwise SSA-identical dims
+
+// -----
+
+// Negative: subview result dims must be proven by the size operands, not arbitrary index values.
+builtin.module {
+  func.func @conv2d_subview_size_without_shape_provenance(
+    %n_nat : !dtensor.nat,
+    %cout_nat : !dtensor.nat,
+    %oh_nat : !dtensor.nat,
+    %ow_nat : !dtensor.nat,
+    %Yflat : !d_memref.memref<[], f32>
+  ) attributes {scair.emit_bare_interface = true} {
+    %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %n = "dtensor.shape.to_index"(%n_nat) : (!dtensor.nat) -> index
+    %cout = "dtensor.shape.to_index"(%cout_nat) : (!dtensor.nat) -> index
+    %oh = "dtensor.shape.to_index"(%oh_nat) : (!dtensor.nat) -> index
+    %ow = "dtensor.shape.to_index"(%ow_nat) : (!dtensor.nat) -> index
+    %ohow = "arith.muli"(%oh, %ow) : (index, index) -> index
+    %cout_ohow = "arith.muli"(%cout, %ohow) : (index, index) -> index
+    %Y = d_memref.reinterpret_cast %Yflat
+      : !d_memref.memref<[], f32>
+        to !d_memref.memref<[%n_nat, %cout_nat, %oh_nat, %ow_nat],
+             f32, offset: 0, strides: [%cout_ohow, %ohow, %ow, %c1]>
+    %bad_size = "arith.addi"(%n, %c0) : (index, index) -> index
+    // expected-error @below {{d_memref.subview: size provenance mismatch at axis 0}}
+    %bad = d_memref.subview %Y[%c0, %c0, %c0, %c0][%bad_size, %cout, %oh, %ow][%c1, %c1, %c1, %c1]
+      : !d_memref.memref<[%n_nat, %cout_nat, %oh_nat, %ow_nat], f32, offset: 0, strides: [%cout_ohow, %ohow, %ow, %c1]>
+     -> !d_memref.memref<[%n_nat, %cout_nat, %oh_nat, %ow_nat], f32>
+    "test.keep_kernel_subview_bad"(%bad) : (!d_memref.memref<[%n_nat, %cout_nat, %oh_nat, %ow_nat], f32>) -> ()
+    "func.return"() : () -> ()
+  }
+}
+
+// DIAG: d_memref.subview: size provenance mismatch at axis 0; expected result dim to match size operand via dtensor.shape.to_index

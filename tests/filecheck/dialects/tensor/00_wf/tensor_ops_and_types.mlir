@@ -43,6 +43,46 @@ builtin.module {
 
 // -----
 
+// Valid: nat.add may refine to !dtensor.posnat if either operand is positive.
+builtin.module {
+  %n = "dtensor.nat.param"() : () -> !dtensor.nat
+  %p = "dtensor.nat.param"() : () -> !dtensor.posnat
+  %sum0 = "dtensor.nat.add"(%n, %p) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.posnat
+  %sum1 = "dtensor.nat.add"(%p, %n) : (!dtensor.posnat, !dtensor.nat) -> !dtensor.posnat
+  %a = "test.a"() : () -> !dtensor.tensor<[%sum0], f32>
+  %b = "test.b"() : () -> !dtensor.tensor<[%sum1], f32>
+}
+
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// VERIFY:   %1 = "dtensor.nat.param"() : () -> !dtensor.posnat
+// VERIFY:   %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.posnat
+// VERIFY:   %3 = "dtensor.nat.add"(%1, %0) : (!dtensor.posnat, !dtensor.nat) -> !dtensor.posnat
+// VERIFY:   %4 = "test.a"() : () -> !dtensor.tensor<[%2], f32>
+// VERIFY:   %5 = "test.b"() : () -> !dtensor.tensor<[%3], f32>
+// VERIFY: }
+
+// -----
+
+// Valid: refine_positive bridges a nat plus i1 proof into !dtensor.posnat.
+builtin.module {
+  %n = "dtensor.nat.param"() : () -> !dtensor.nat
+  %proof = "arith.constant"() <{value = true}> : () -> i1
+  %p = "dtensor.nat.refine_positive"(%n, %proof) : (!dtensor.nat, i1) -> !dtensor.posnat
+  %idx = "dtensor.shape.to_index"(%p) : (!dtensor.posnat) -> index
+  %t = "test.t"() : () -> !dtensor.tensor<[%p], f32>
+}
+
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
+// VERIFY:   %1 = "arith.constant"() <{value = true}> : () -> i1
+// VERIFY:   %2 = "dtensor.nat.refine_positive"(%0, %1) : (!dtensor.nat, i1) -> !dtensor.posnat
+// VERIFY:   %3 = "dtensor.shape.to_index"(%2) : (!dtensor.posnat) -> index
+// VERIFY:   %4 = "test.t"() : () -> !dtensor.tensor<[%2], f32>
+// VERIFY: }
+
+// -----
+
 // Invalid: nat.const literal must be >= 0.
 builtin.module {
   %n = "dtensor.nat.const"() <{value = -1 : i32}> : () -> !dtensor.nat

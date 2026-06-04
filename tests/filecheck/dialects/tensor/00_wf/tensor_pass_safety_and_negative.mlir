@@ -282,6 +282,18 @@ builtin.module {
 
 // -----
 
+// Invalid: posnat sum requires at least one positive operand.
+builtin.module {
+  %lhs = "dtensor.nat.param"() : () -> !dtensor.nat
+  %rhs = "dtensor.nat.param"() : () -> !dtensor.nat
+  // expected-error @below {{dtensor.nat.add: !dtensor.posnat result requires at least one !dtensor.posnat operand}}
+  %bad = "dtensor.nat.add"(%lhs, %rhs) : (!dtensor.nat, !dtensor.nat) -> !dtensor.posnat
+}
+
+// DIAG: dtensor.nat.add: !dtensor.posnat result requires at least one !dtensor.posnat operand
+
+// -----
+
 // Invalid: posnat product requires positive operands.
 builtin.module {
   %n = "dtensor.nat.param"() : () -> !dtensor.nat
@@ -291,3 +303,15 @@ builtin.module {
 }
 
 // DIAG: dtensor.nat.mul: !dtensor.posnat result requires two !dtensor.posnat operands
+
+// -----
+
+// Invalid: refine_positive proof must be i1.
+builtin.module {
+  %n = "dtensor.nat.param"() : () -> !dtensor.nat
+  %proof = "arith.constant"() <{value = 1 : i32}> : () -> i32
+  // expected-error @below {{dtensor.nat.refine_positive: expected i1 proof}}
+  %bad = "dtensor.nat.refine_positive"(%n, %proof) : (!dtensor.nat, i32) -> !dtensor.posnat
+}
+
+// DIAG: dtensor.nat.refine_positive: expected i1 proof

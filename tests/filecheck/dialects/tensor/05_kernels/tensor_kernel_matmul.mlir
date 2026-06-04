@@ -1,4 +1,4 @@
-// Purpose: Kernel-shaped matmul coverage mirroring experiment IR plus direct dtensor.matmul shape checks.
+// Purpose: Kernel-shaped matmul coverage mirroring experiment IR with explicit dependent memref shape checks.
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefixes=VERIFY,DIAG
 
 // Positive: experiment-style factorized matmul kernel with matching A/B/C shapes.
@@ -129,39 +129,49 @@ builtin.module {
 
 // -----
 
-// Positive: direct dtensor.matmul validates MxK * KxN -> MxN.
+// Negative: kernel memref cast rejects changed layout metadata even when dimensions match.
 builtin.module {
-  %m = "dtensor.nat.param"() : () -> !dtensor.nat
-  %k = "dtensor.nat.param"() : () -> !dtensor.nat
-  %n = "dtensor.nat.param"() : () -> !dtensor.nat
-  %lhs = "test.lhs"() : () -> !dtensor.tensor<[%m, %k], f32>
-  %rhs = "test.rhs"() : () -> !dtensor.tensor<[%k, %n], f32>
-  %res = "dtensor.matmul"(%lhs, %rhs)
-    : (!dtensor.tensor<[%m, %k], f32>, !dtensor.tensor<[%k, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
-  "test.keep_direct_matmul"(%res) : (!dtensor.tensor<[%m, %n], f32>) -> ()
+  func.func @matmul_layout_mismatch(
+    %m_nat : !dtensor.nat,
+    %n_nat : !dtensor.nat,
+    %Cflat : !d_memref.memref<[], f32>
+  ) attributes {scair.emit_bare_interface = true} {
+    %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %m = "dtensor.shape.to_index"(%m_nat) : (!dtensor.nat) -> index
+    %n = "dtensor.shape.to_index"(%n_nat) : (!dtensor.nat) -> index
+    %C = d_memref.reinterpret_cast %Cflat
+      : !d_memref.memref<[], f32>
+        to !d_memref.memref<[%m_nat, %n_nat], f32,
+             offset: 0, strides: [%n, %c1]>
+    // expected-error @below {{d_memref.cast: expected identical layout metadata}}
+    %bad = d_memref.cast %C
+      : !d_memref.memref<[%m_nat, %n_nat], f32, offset: 0, strides: [%n, %c1]>
+     -> !d_memref.memref<[%m_nat, %n_nat], f32, offset: 0, strides: [%m, %c1]>
+    "test.keep_kernel_layout_bad"(%bad) : (!d_memref.memref<[%m_nat, %n_nat], f32, offset: 0, strides: [%m, %c1]>) -> ()
+    "func.return"() : () -> ()
+  }
 }
 
-// VERIFY: [[DM:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// VERIFY: [[DK:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// VERIFY: [[DN:%[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// VERIFY: [[LHS:%[0-9]+]] = "test.lhs"() : () -> !dtensor.tensor<{{\[}}[[DM]], [[DK]]], f32>
-// VERIFY: [[RHS:%[0-9]+]] = "test.rhs"() : () -> !dtensor.tensor<{{\[}}[[DK]], [[DN]]], f32>
-// VERIFY: [[RES:%[0-9]+]] = "dtensor.matmul"([[LHS]], [[RHS]]) : (!dtensor.tensor<{{\[}}[[DM]], [[DK]]], f32>, !dtensor.tensor<{{\[}}[[DK]], [[DN]]], f32>) -> !dtensor.tensor<{{\[}}[[DM]], [[DN]]], f32>
-// VERIFY: "test.keep_direct_matmul"([[RES]]) : (!dtensor.tensor<{{\[}}[[DM]], [[DN]]], f32>) -> ()
+// DIAG: d_memref.cast: expected identical layout metadata
 
 // -----
 
-// Negative: direct dtensor.matmul rejects non-identical inner dimensions.
+// Negative: layout SSA parameters embedded in d_memref types must dominate their uses.
 builtin.module {
-  %m = "dtensor.nat.param"() : () -> !dtensor.nat
-  %k0 = "dtensor.nat.param"() : () -> !dtensor.nat
-  %k1 = "dtensor.nat.param"() : () -> !dtensor.nat
-  %n = "dtensor.nat.param"() : () -> !dtensor.nat
-  %lhs = "test.lhs"() : () -> !dtensor.tensor<[%m, %k0], f32>
-  %rhs = "test.rhs"() : () -> !dtensor.tensor<[%k1, %n], f32>
-  // expected-error @below {{dtensor.matmul: expected SSA-identical inner dims}}
-  %bad = "dtensor.matmul"(%lhs, %rhs)
-    : (!dtensor.tensor<[%m, %k0], f32>, !dtensor.tensor<[%k1, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
+  "test.region"() ({
+  ^bb0:
+    %m_nat = "dtensor.nat.param"() : () -> !dtensor.nat
+    %n_nat = "dtensor.nat.param"() : () -> !dtensor.nat
+    %c = "arith.constant"() <{value = true}> : () -> i1
+    "test.cond_br"(%c) [^bb1, ^bb2] : (i1) -> ()
+  ^bb1:
+    %stride = "dtensor.shape.to_index"(%n_nat) : (!dtensor.nat) -> index
+    "test.br"() [^bb2] : () -> ()
+  ^bb2:
+    // expected-error @below {{ssa-dominance: value}}
+    %bad = "test.bad_layout"() : () -> !d_memref.memref<[%m_nat, %n_nat], f32, offset: 0, strides: [%stride, 1]>
+    "test.ret"() : () -> ()
+  }) : () -> ()
 }
 
-// DIAG: dtensor.matmul: expected SSA-identical inner dims (lhs.k === rhs.k)
+// DIAG: ssa-dominance: value Value(index) does not dominate its use in op `test.bad_layout`
