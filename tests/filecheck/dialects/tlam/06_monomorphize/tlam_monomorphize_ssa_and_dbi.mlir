@@ -6,6 +6,7 @@
 // Targets: monomorphize with repeated specialization + nested binder DBI behavior.
 
 // Valid: repeated same specialization and nested forall under tlambda.
+// Because test.mk_poly is not known effect-free, identical specializations are cloned rather than reused.
 builtin.module {
   %mk = "tlam.tlambda"() ({
   ^bb0(%T: !tlam.type):
