@@ -1,4 +1,4 @@
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p tensor-shape-canonicalize,canonicalize,cse,dce
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p tensor-shape-canonicalize,canonicalize,cse,dce 2>&1 | filecheck %s --check-prefix=DIAG
 
 builtin.module {
   func.func @post_pass_bad_result_dims(
@@ -12,3 +12,5 @@ builtin.module {
     "func.return"(%bad) : (!dtensor.tensor<[%n, %m], f32>) -> ()
   }
 }
+
+// DIAG: dtensor.add: expected pairwise SSA-identical dims for lhs/result

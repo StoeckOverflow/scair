@@ -1,4 +1,4 @@
-// RUN: ! scair-opt %s --allow-unregistered-dialect -p d-memref-bounds-check 2>&1 | filecheck %s -DFILE=%s
+// RUN: ! scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p d-memref-bounds-check 2>&1 | filecheck %s -DFILE=%s
 
 builtin.module {
   %eight = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat

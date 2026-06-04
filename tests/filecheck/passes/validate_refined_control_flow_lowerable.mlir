@@ -15,5 +15,16 @@ builtin.module {
   }
 }
 
+// CHECK: #[[ID:.*]] = affine_map<(d0)[] -> (d0)>
+// CHECK: #[[SHIFTED_UB:.*]] = affine_map<(d0)[] -> (d0 + 4)>
+// CHECK: #[[DOUBLE:.*]] = affine_map<(d0)[] -> (d0 * 2)>
 // CHECK-LABEL: func.func @lowerable_shifted_bound
-// CHECK: d_affine.for
+// CHECK-SAME: (%[[UB:[0-9]+]]: index, %[[STEP_NAT:[0-9]+]]: !dtensor.posnat)
+// CHECK: %[[C0:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
+// CHECK: %[[STEP:[0-9]+]] = "dtensor.shape.to_index"(%[[STEP_NAT]]) : (!dtensor.posnat) -> index
+// CHECK: d_affine.for %[[P:[0-9]+]] = #[[ID]](%[[C0]]) to #[[SHIFTED_UB]](%[[UB]]) step %[[STEP]] : index {
+// CHECK-NEXT:   %[[NEXT:[0-9]+]] = d_affine.apply #[[DOUBLE]] (%[[P]])[] : (index)[] -> index
+// CHECK-NEXT:   "test.keep"(%[[NEXT]]) : (index) -> ()
+// CHECK-NEXT:   d_affine.yield
+// CHECK-NEXT: }
+// CHECK-NEXT: func.return

@@ -8,5 +8,9 @@ builtin.module {
   "test.keep"(%dim) : (index) -> ()
 }
 
-// CHECK: d_memref.dim
+// CHECK: %[[M:[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
+// CHECK: %[[ZERO:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
+// CHECK: %[[BUF:[0-9]+]] = d_memref.alloc : () -> !d_memref.memref<[%[[M]]], f32>
+// CHECK: %[[DIM:[0-9]+]] = d_memref.dim %[[BUF]], %[[ZERO]] : !d_memref.memref<[%[[M]]], f32> -> index
+// CHECK: "test.keep"(%[[DIM]]) : (index) -> ()
 // CHECK-NOT: "dtensor.dim"

@@ -14,6 +14,31 @@ builtin.module {
     %v = d_memref.load %view[%i, %j] : !d_memref.memref<[%d0, %d1], f32, offset: %c0, strides: [%stride0, %stride1]> -> f32
     func.return %v : f32
   }
+
+  func.func @normalize_store(%stride0 : index, %stride1 : index, %i : index, %j : index, %v : f32) {
+    %d0 = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
+    %d1 = "dtensor.nat.const"() <{value = 16 : i32}> : () -> !dtensor.nat
+    %flat = "dtensor.nat.const"() <{value = 128 : i32}> : () -> !dtensor.nat
+    %buf = d_memref.alloc : () -> !d_memref.memref<[%flat], f32>
+    %c3 = "arith.constant"() <{value = 3 : index}> : () -> index
+    %view = d_memref.reinterpret_cast %buf
+    : !d_memref.memref<[%flat], f32> to !d_memref.memref<[%d0, %d1], f32, offset: %c3, strides: [%stride0, %stride1]>
+    d_memref.store %v, %view[%i, %j] : f32, !d_memref.memref<[%d0, %d1], f32, offset: %c3, strides: [%stride0, %stride1]>
+    func.return
+  }
+
+  func.func @normalize_subview_load(%i : index) -> f32 {
+    %d0 = "dtensor.nat.const"() <{value = 16 : i32}> : () -> !dtensor.nat
+    %d1 = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
+    %flat = "dtensor.nat.const"() <{value = 16 : i32}> : () -> !dtensor.nat
+    %src = d_memref.alloc : () -> !d_memref.memref<[%d0], f32>
+    %off = "arith.constant"() <{value = 4 : index}> : () -> index
+    %size = "dtensor.shape.to_index"(%d1) : (!dtensor.nat) -> index
+    %stride = "arith.constant"() <{value = 2 : index}> : () -> index
+    %sv = d_memref.subview %src[%off][%size][%stride] : !d_memref.memref<[%d0], f32> -> !d_memref.memref<[%d1], f32>
+    %v = d_memref.load %sv[%i] : !d_memref.memref<[%d1], f32> -> f32
+    func.return %v : f32
+  }
 }
 
 // CHECK-LABEL: func.func @normalize(%0: index, %1: index, %2: index, %3: index) -> f32 {
@@ -33,3 +58,22 @@ builtin.module {
 // CHECK-NEXT:    %16 = d_memref.load %7[%15] : !d_memref.memref<[%6], f32> -> f32
 // CHECK-NEXT:    func.return %16 : f32
 // CHECK-NEXT:  }
+// CHECK-LABEL: func.func @normalize_store(%0: index, %1: index, %2: index, %3: index, %4: f32) {
+// CHECK:        %[[BUF:[0-9]+]] = d_memref.alloc : () -> !d_memref.memref<[%{{[0-9]+}}], f32>
+// CHECK:        %[[OFF:[0-9]+]] = "arith.constant"() <{value = 3 : index}> : () -> index
+// CHECK:        %[[M0:[0-9]+]] = "arith.muli"(%2, %0) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK:        %[[M1:[0-9]+]] = "arith.muli"(%3, %1) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK:        %[[A0:[0-9]+]] = "arith.addi"(%[[OFF]], %[[M0]]) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK:        %[[LIN:[0-9]+]] = "arith.addi"(%[[A0]], %[[M1]]) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK:        d_memref.store %4, %[[BUF]][%[[LIN]]] : f32, !d_memref.memref<[%{{[0-9]+}}], f32>
+// CHECK:        func.return
+// CHECK:      }
+// CHECK-LABEL: func.func @normalize_subview_load(%0: index) -> f32 {
+// CHECK:        %[[SRC:[0-9]+]] = d_memref.alloc : () -> !d_memref.memref<[%{{[0-9]+}}], f32>
+// CHECK:        %[[OFF:[0-9]+]] = "arith.constant"() <{value = 4 : index}> : () -> index
+// CHECK:        %[[STRIDE:[0-9]+]] = "arith.constant"() <{value = 2 : index}> : () -> index
+// CHECK:        %[[SCALED:[0-9]+]] = "arith.muli"(%0, %[[STRIDE]]) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK:        %[[SHIFTED:[0-9]+]] = "arith.addi"(%[[SCALED]], %[[OFF]]) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK:        %[[V:[0-9]+]] = d_memref.load %[[SRC]][%[[SHIFTED]]] : !d_memref.memref<[%{{[0-9]+}}], f32> -> f32
+// CHECK:        func.return %[[V]] : f32
+// CHECK:      }

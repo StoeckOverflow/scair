@@ -9,9 +9,13 @@ builtin.module {
 }
 
 // CHECK-LABEL: func.func @apply_and_single_expr_min_lower
-// CHECK: "llvm.mul"
-// CHECK: "llvm.add"
-// CHECK: "llvm.mul"
-// CHECK: "llvm.add"
+// CHECK-SAME: %[[A:[0-9]+]]: index, %[[B:[0-9]+]]: index
+// CHECK: %[[TWO:[0-9]+]] = "llvm.mlir.constant"() <{value = 2}> : () -> i64
+// CHECK: %[[TWOB:[0-9]+]] = "llvm.mul"(%[[TWO]], %[[B]]) : (i64, index) -> i64
+// CHECK: %[[APPLIED:[0-9]+]] = "llvm.add"(%[[A]], %[[TWOB]]) : (index, i64) -> i64
+// CHECK: %[[NEGONE:[0-9]+]] = "llvm.mlir.constant"() <{value = -1}> : () -> i64
+// CHECK: %[[NEGB:[0-9]+]] = "llvm.mul"(%[[B]], %[[NEGONE]]) : (index, i64) -> i64
+// CHECK: %[[MINNED:[0-9]+]] = "llvm.add"(%[[A]], %[[NEGB]]) : (index, i64) -> i64
+// CHECK: func.return %[[APPLIED]], %[[MINNED]] : i64, i64
 // CHECK-NOT: d_affine.apply
 // CHECK-NOT: d_affine.min

@@ -14,6 +14,13 @@ builtin.module {
   }
 }
 
+// CHECK: #[[ID:.*]] = affine_map<(d0)[] -> (d0)>
 // CHECK-LABEL: func.func @positive_dynamic_step
-// CHECK: !dtensor.posnat
-// CHECK: step %{{[0-9]+}} : index
+// CHECK-SAME: (%[[STEP_NAT:[0-9]+]]: !dtensor.posnat)
+// CHECK: %[[C0:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
+// CHECK: %[[UB:[0-9]+]] = "arith.constant"() <{value = 16 : index}> : () -> index
+// CHECK: %[[STEP:[0-9]+]] = "dtensor.shape.to_index"(%[[STEP_NAT]]) : (!dtensor.posnat) -> index
+// CHECK: d_affine.for %[[IV:[0-9]+]] = #[[ID]](%[[C0]]) to #[[ID]](%[[UB]]) step %[[STEP]] : index {
+// CHECK-NEXT:   d_affine.yield
+// CHECK-NEXT: }
+// CHECK-NEXT: func.return

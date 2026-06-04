@@ -8,8 +8,11 @@ builtin.module {
 }
 
 // CHECK-LABEL: func.func @assert_to_abort
-// CHECK: "llvm.cond_br"(%{{[0-9]+}})[^bb{{[0-9]+}}, ^bb{{[0-9]+}}]
+// CHECK-SAME: (%[[OK:[0-9]+]]: i1)
+// CHECK: "llvm.cond_br"(%[[OK]])[^bb[[PASS:[0-9]+]], ^bb[[FAIL:[0-9]+]]] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+// CHECK: ^bb[[FAIL]]:
 // CHECK: llvm.call @abort() : () -> ()
 // CHECK: "llvm.unreachable"() : () -> ()
+// CHECK: ^bb[[PASS]]:
 // CHECK: func.return
 // CHECK-NOT: cf.assert
