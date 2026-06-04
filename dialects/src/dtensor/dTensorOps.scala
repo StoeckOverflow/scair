@@ -250,9 +250,9 @@ final case class ExpandShape(
           )
         }
 
-  /** Baseline-style shape expansion: output dimensions are explicit operands
-    * and must match the dependent result type. This op does not rediscover or
-    * assert that collapsed source dimensions equal products of output dims.
+  /** Verifies the local shape contract for collapse: reassociation groups must
+    * cover source dimensions contiguously. Product-shaped result dimensions are
+    * handled by canonicalization.
     */
   override def customVerify(): OK[Operation] =
     val srcRank = src.typ.params.size
