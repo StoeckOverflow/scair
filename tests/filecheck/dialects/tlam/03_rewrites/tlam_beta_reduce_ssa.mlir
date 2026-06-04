@@ -29,7 +29,42 @@ builtin.module {
 
 // -----
 
-// Valid 2: body with memory-effect-free intermediates is cloned at call site.
+// Valid 2: nested vlambda shadowing is capture-avoiding.
+builtin.module {
+  %make = "tlam.vlambda"() ({
+  ^bb0(%x: i32):
+    %inner = "tlam.vlambda"() ({
+    ^bb1(%x: i32):
+      "tlam.vreturn"(%x) : (i32) -> ()
+    }) : () -> !tlam.fun<i32, i32>
+    "tlam.vreturn"(%inner) : (!tlam.fun<i32, i32>) -> ()
+  }) : () -> !tlam.fun<i32, !tlam.fun<i32, i32>>
+
+  %a = "arith.constant"() <{value = 11 : i32}> : () -> i32
+  %g = "tlam.vapply"(%make, %a) : (!tlam.fun<i32, !tlam.fun<i32, i32>>, i32) -> !tlam.fun<i32, i32>
+  "test.use_fun"(%g) : (!tlam.fun<i32, i32>) -> ()
+}
+
+// CHECK: builtin.module {
+// CHECK:   %0 = "tlam.vlambda"() ({
+// CHECK:   ^bb0(%1: i32):
+// CHECK:     %2 = "tlam.vlambda"() ({
+// CHECK:     ^bb1(%3: i32):
+// CHECK:       "tlam.vreturn"(%3) : (i32) -> ()
+// CHECK:     }) : () -> !tlam.fun<i32, i32>
+// CHECK:     "tlam.vreturn"(%2) : (!tlam.fun<i32, i32>) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, !tlam.fun<i32, i32>>
+// CHECK:   %1 = "arith.constant"() <{value = 11 : i32}> : () -> i32
+// CHECK:   %2 = "tlam.vlambda"() ({
+// CHECK:   ^bb1(%3: i32):
+// CHECK:     "tlam.vreturn"(%3) : (i32) -> ()
+// CHECK:   }) : () -> !tlam.fun<i32, i32>
+// CHECK:   "test.use_fun"(%2) : (!tlam.fun<i32, i32>) -> ()
+// CHECK: }
+
+// -----
+
+// Valid 3: body with memory-effect-free intermediates is cloned at call site.
 builtin.module {
   %f = "tlam.vlambda"() ({
   ^bb0(%x: i32):
@@ -58,7 +93,7 @@ builtin.module {
 
 // -----
 
-// Valid 3: SSA-in-types remap in cloned ops: !value<%x> becomes !value<%A>.
+// Valid 4: SSA-in-types remap in cloned ops: !value<%x> becomes !value<%A>.
 builtin.module {
   %f = "tlam.vlambda"() ({
   ^bb0(%x: !tlam.type):
@@ -87,7 +122,7 @@ builtin.module {
 
 // -----
 
-// Must NOT reduce 4: callee is not directly a vlambda producer.
+// Must NOT reduce 5: callee is not directly a vlambda producer.
 builtin.module {
   %f = "test.fun_source"() : () -> !tlam.fun<i32, i32>
   %a = "arith.constant"() <{value = 3 : i32}> : () -> i32
@@ -102,7 +137,7 @@ builtin.module {
 
 // -----
 
-// Must NOT reduce 5: lambda body contains effectful/unknown op.
+// Must NOT reduce 6: lambda body contains effectful/unknown op.
 builtin.module {
   %f = "tlam.vlambda"() ({
   ^bb0(%x: i32):
@@ -126,7 +161,7 @@ builtin.module {
 
 // -----
 
-// Must NOT reduce 5b: lambda body contains a call (vapply), conservatively effectful.
+// Must NOT reduce 6b: lambda body contains a call (vapply), conservatively effectful.
 builtin.module {
   %callee = "test.fun_source"() : () -> !tlam.fun<i32, i32>
   %f = "tlam.vlambda"() ({
@@ -152,7 +187,7 @@ builtin.module {
 
 // -----
 
-// Must NOT reduce 6: effectful arg producer used more than once in body.
+// Must NOT reduce 7: effectful arg producer used more than once in body.
 builtin.module {
   %f = "tlam.vlambda"() ({
   ^bb0(%x: i32):
