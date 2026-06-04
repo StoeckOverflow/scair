@@ -1,5 +1,4 @@
-// RUN: scair-run %s 2> %t || true
-// RUN: filecheck %s < %t
+// RUN: ! scair-run %s 2>&1 | filecheck %s
 
 builtin.module {
   %bad = "tlam_dbi.tlambda"() ({
