@@ -1,4 +1,5 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file --verify-diagnostics -p tensor-shape-canonicalize | filecheck %s -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file --verify-diagnostics -p tensor-shape-canonicalize | scair-opt --allow-unregistered-dialect --split-input-file --verify-diagnostics
 
 // add(x, 0) -> x with deep RAUW into type-embedded dims.
 builtin.module {

@@ -1,4 +1,5 @@
 // RUN: scair-opt --allow-unregistered-dialect --split-input-file --parsing-diagnostics %s | filecheck %s -DFILE=%s
+// RUN: scair-opt --allow-unregistered-dialect --split-input-file --parsing-diagnostics %s | scair-opt --allow-unregistered-dialect --split-input-file --verify-diagnostics
 
 // Valid: SSA shape param is defined earlier.
 builtin.module {

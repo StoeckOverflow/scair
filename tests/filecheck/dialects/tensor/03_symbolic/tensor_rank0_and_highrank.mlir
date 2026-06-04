@@ -1,7 +1,7 @@
 // Purpose: Rank-0 policy + high-rank symbolic-shape coverage without duplicating existing mismatch suites.
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=VERIFY
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize | filecheck %s -DFILE=%s --check-prefix=CANON
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | filecheck %s -DFILE=%s --check-prefix=PIPE
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefixes=VERIFY,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize | filecheck %s -DFILE=%s --check-prefixes=CANON,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | filecheck %s -DFILE=%s --check-prefixes=PIPE,DIAG
 
 // Rank-0 tensors are valid: empty/fill/cast/add/mul.
 builtin.module {
@@ -54,6 +54,8 @@ builtin.module {
   %d = "dtensor.dim"(%e) <{axis = 0 : i32}> : (!dtensor.tensor<[], f32>) -> !value<%m>
 }
 
+// DIAG: dtensor.dim: axis 0 out of bounds for rank 0
+
 // -----
 
 // Valid high-rank (rank 5) with repeated symbolic dims.
@@ -93,3 +95,5 @@ builtin.module {
   %bad = "dtensor.add"(%a, %b)
     : (!dtensor.tensor<[%d0, %d0, %d0, %d0], f32>, !dtensor.tensor<[%d1, %d1, %d1, %d1], f32>) -> !dtensor.tensor<[%d0, %d0, %d0, %d0], f32>
 }
+
+// DIAG: dtensor.add: expected pairwise SSA-identical dims for lhs/rhs

@@ -1,4 +1,5 @@
 // RUN: scair-opt %s | filecheck %s -DFILE=%s --check-prefix=VERIFY
+// RUN: scair-opt %s | scair-opt --allow-unregistered-dialect --verify-diagnostics
 
 // elementwise add function
 func.func @ew_add(%m: !dtensor.nat, %n: !dtensor.nat) {

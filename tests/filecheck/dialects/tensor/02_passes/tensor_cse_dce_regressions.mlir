@@ -1,5 +1,7 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file --verify-diagnostics -p cse | filecheck %s -DFILE=%s --check-prefix=CSE
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file --verify-diagnostics -p cse | scair-opt --allow-unregistered-dialect --split-input-file --verify-diagnostics
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file --verify-diagnostics -p dce | filecheck %s -DFILE=%s --check-prefix=DCE
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file --verify-diagnostics -p dce | scair-opt --allow-unregistered-dialect --split-input-file --verify-diagnostics
 
 // CSE + deep RAUW: merged dim value must rewrite type-embedded use.
 builtin.module {

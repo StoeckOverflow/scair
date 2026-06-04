@@ -1,8 +1,8 @@
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=VERIFY
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize | filecheck %s -DFILE=%s --check-prefixes=CANON,CANONF,CANOND
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p cse | filecheck %s -DFILE=%s --check-prefix=CSE
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p dce | filecheck %s -DFILE=%s --check-prefix=DCE
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | filecheck %s -DFILE=%s --check-prefixes=PIPE,PIPESYM
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefixes=VERIFY,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize | filecheck %s -DFILE=%s --check-prefixes=CANON,CANONF,CANOND,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p cse | filecheck %s -DFILE=%s --check-prefixes=CSE,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p dce | filecheck %s -DFILE=%s --check-prefixes=DCE,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | filecheck %s -DFILE=%s --check-prefixes=PIPE,PIPESYM,DIAG
 
 // Symbolic producers from dtensor.nat.param and nat algebra are valid dim params.
 builtin.module {
@@ -77,10 +77,12 @@ builtin.module {
   %c = "dtensor.nat.add"(%z, %a) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
   %t0 = "test.a"() : () -> !dtensor.tensor<[%b], f32>
   %t1 = "test.b"() : () -> !dtensor.tensor<[%c], f32>
-  // expected-error @below {{tensor.add: expected pairwise SSA-identical dims for lhs/rhs}}
-  %bad = "tensor.add"(%t0, %t1)
+  // expected-error @below {{dtensor.add: expected pairwise SSA-identical dims for lhs/rhs}}
+  %bad = "dtensor.add"(%t0, %t1)
     : (!dtensor.tensor<[%b], f32>, !dtensor.tensor<[%c], f32>) -> !dtensor.tensor<[%b], f32>
 }
+
+// DIAG: dtensor.add: expected pairwise SSA-identical dims for lhs/rhs
 
 // -----
 
@@ -121,6 +123,8 @@ builtin.module {
   %bad = "dtensor.matmul"(%A, %Bbad)
     : (!dtensor.tensor<[%m, %k], f32>, !dtensor.tensor<[%k2, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
 }
+
+// DIAG: dtensor.matmul: expected SSA-identical inner dims
 
 // -----
 

@@ -1,4 +1,5 @@
 // RUN: scair-opt %s | filecheck %s -DFILE=%s --check-prefix=VERIFY
+// RUN: scair-opt %s | scair-opt --allow-unregistered-dialect --verify-diagnostics
 
 // Transformer projection GEMM with head_dim = 64.
 //

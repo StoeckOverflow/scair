@@ -1,10 +1,10 @@
 // Purpose: Canonical negative verifier coverage + pass safety (transform and must-not-transform) in one place.
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=VERIFY
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize | filecheck %s -DFILE=%s --check-prefix=CANON
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p canonicalize | filecheck %s -DFILE=%s --check-prefix=CN
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p cse | filecheck %s -DFILE=%s --check-prefix=CSE
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p dce | filecheck %s -DFILE=%s --check-prefix=DCE
-// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | filecheck %s -DFILE=%s --check-prefix=PIPE
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefixes=VERIFY,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize | filecheck %s -DFILE=%s --check-prefixes=CANON,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p canonicalize | filecheck %s -DFILE=%s --check-prefixes=CN,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p cse | filecheck %s -DFILE=%s --check-prefixes=CSE,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p dce | filecheck %s -DFILE=%s --check-prefixes=DCE,DIAG
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | filecheck %s -DFILE=%s --check-prefixes=PIPE,DIAG
 
 // Smoke: pass pipeline keeps a simple valid tensor program intact.
 builtin.module {
@@ -58,6 +58,8 @@ builtin.module {
     : (!dtensor.tensor<[%m], f32>, !dtensor.tensor<[%k, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
 }
 
+// DIAG: dtensor.matmul: expected rank-2 operands
+
 // -----
 
 // Invalid: matmul inner dims not SSA-identical.
@@ -72,6 +74,8 @@ builtin.module {
   %bad = "dtensor.matmul"(%lhs, %rhs)
     : (!dtensor.tensor<[%m, %k0], f32>, !dtensor.tensor<[%k1, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
 }
+
+// DIAG: dtensor.matmul: expected SSA-identical inner dims
 
 // -----
 
@@ -88,6 +92,8 @@ builtin.module {
     : (!dtensor.tensor<[%m, %k], f32>, !dtensor.tensor<[%k, %n], f32>) -> !dtensor.tensor<[%x, %n], f32>
 }
 
+// DIAG: dtensor.matmul: expected result dims to be outer dims
+
 // -----
 
 // Invalid: add element mismatch.
@@ -99,6 +105,8 @@ builtin.module {
   %bad = "dtensor.add"(%a, %b)
     : (!dtensor.tensor<[%m], f32>, !dtensor.tensor<[%m], i32>) -> !dtensor.tensor<[%m], f32>
 }
+
+// DIAG: dtensor.add: expected equal element types for lhs/rhs
 
 // -----
 
@@ -113,6 +121,8 @@ builtin.module {
     : (!dtensor.tensor<[%m], f32>, !dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%m], f32>
 }
 
+// DIAG: dtensor.add: expected equal ranks for lhs/rhs
+
 // -----
 
 // Invalid: add dims not SSA-identical.
@@ -126,6 +136,8 @@ builtin.module {
     : (!dtensor.tensor<[%m0], f32>, !dtensor.tensor<[%m1], f32>) -> !dtensor.tensor<[%m0], f32>
 }
 
+// DIAG: dtensor.add: expected pairwise SSA-identical dims for lhs/rhs
+
 // -----
 
 // Invalid: mul element mismatch.
@@ -137,6 +149,8 @@ builtin.module {
   %bad = "dtensor.mul"(%a, %b)
     : (!dtensor.tensor<[%m], f32>, !dtensor.tensor<[%m], i32>) -> !dtensor.tensor<[%m], f32>
 }
+
+// DIAG: dtensor.mul: expected equal element types for lhs/rhs
 
 // -----
 
@@ -151,6 +165,8 @@ builtin.module {
     : (!dtensor.tensor<[%m], f32>, !dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%m], f32>
 }
 
+// DIAG: dtensor.mul: expected equal ranks for lhs/rhs
+
 // -----
 
 // Invalid: mul dims not SSA-identical.
@@ -164,6 +180,8 @@ builtin.module {
     : (!dtensor.tensor<[%m0], f32>, !dtensor.tensor<[%m1], f32>) -> !dtensor.tensor<[%m0], f32>
 }
 
+// DIAG: dtensor.mul: expected pairwise SSA-identical dims for lhs/rhs
+
 // -----
 
 // Invalid: cast rank mismatch.
@@ -175,6 +193,8 @@ builtin.module {
   %bad = "dtensor.cast"(%src) : (!dtensor.tensor<[%m], f32>) -> !dtensor.tensor<[%m, %n], f32>
 }
 
+// DIAG: dtensor.cast: expected equal ranks
+
 // -----
 
 // Invalid: cast element mismatch.
@@ -184,6 +204,8 @@ builtin.module {
   // expected-error @below {{dtensor.cast: expected equal element types}}
   %bad = "dtensor.cast"(%src) : (!dtensor.tensor<[%m], f32>) -> !dtensor.tensor<[%m], i32>
 }
+
+// DIAG: dtensor.cast: expected equal element types
 
 // -----
 
@@ -198,6 +220,8 @@ builtin.module {
   %bad = "dtensor.cast"(%src) : (!dtensor.tensor<[%d0], f32>) -> !dtensor.tensor<[%d1], f32>
 }
 
+// DIAG: dtensor.cast: expected pairwise SSA-identical dims
+
 // -----
 
 // Invalid: dim axis = -1.
@@ -208,6 +232,8 @@ builtin.module {
   // expected-error @below {{dtensor.dim: axis -1 out of bounds for rank 2}}
   %bad = "dtensor.dim"(%a) <{axis = -1 : i32}> : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
 }
+
+// DIAG: dtensor.dim: axis -1 out of bounds for rank 2
 
 // -----
 
@@ -220,6 +246,8 @@ builtin.module {
   %bad = "dtensor.dim"(%a) <{axis = 2 : i32}> : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
 }
 
+// DIAG: dtensor.dim: axis 2 out of bounds for rank 2
+
 // -----
 
 // Invalid: dim axis attribute type.
@@ -230,6 +258,8 @@ builtin.module {
   %bad = "dtensor.dim"(%a) <{axis = 0 : i64}> : (!dtensor.tensor<[%m], f32>) -> !value<%m>
 }
 
+// DIAG: dtensor.dim: expected i32 axis attribute
+
 // -----
 
 // Invalid: nat.const negative literal.
@@ -238,6 +268,8 @@ builtin.module {
   %n = "dtensor.nat.const"() <{value = -1 : i32}> : () -> !dtensor.nat
 }
 
+// DIAG: dtensor.nat.const: expected non-negative literal
+
 // -----
 
 // Invalid: posnat const must be strictly positive.
@@ -245,6 +277,8 @@ builtin.module {
   // expected-error @below {{dtensor.nat.const: expected positive literal for !dtensor.posnat}}
   %n = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.posnat
 }
+
+// DIAG: dtensor.nat.const: expected positive literal for !dtensor.posnat
 
 // -----
 
@@ -255,3 +289,5 @@ builtin.module {
   // expected-error @below {{dtensor.nat.mul: !dtensor.posnat result requires two !dtensor.posnat operands}}
   %bad = "dtensor.nat.mul"(%n, %p) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.posnat
 }
+
+// DIAG: dtensor.nat.mul: !dtensor.posnat result requires two !dtensor.posnat operands
