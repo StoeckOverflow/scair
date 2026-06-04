@@ -1,38 +1,9 @@
-// Purpose: High-level WF smoke for TLam SSA-in-types.
-// Invariants covered: end-to-end valid form plus apply typing checks.
+// Purpose: Verifier checks for TLam apply operation typing.
+// Invariants covered: tapply/vapply operands and result types must match their function types.
 
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s
 
-// Targets: compact WF coverage. Detailed dominance/DBI/region checks live in
-// dedicated files under 02_verify/.
-
-// Note: wrong-type tvar parse-time failures are covered in
-// tests/filecheck/dialects/tlam/invalid_parse.mlir.
-
-// Valid: binder tvar use + lambda region protocols.
-builtin.module {
-  %F = "tlam.tlambda"() ({
-  ^bb0(%T: !tlam.type):
-    %f = "tlam.vlambda"() ({
-    ^bb1(%x: !value<%T>):
-      "tlam.vreturn"(%x) : (!value<%T>) -> ()
-    }) : () -> !tlam.fun<!value<%T>, !value<%T>>
-    "tlam.treturn"(%f) : (!tlam.fun<!value<%T>, !value<%T>>) -> ()
-  }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
-}
-
-// CHECK: builtin.module {
-// CHECK:   %0 = "tlam.tlambda"() ({
-// CHECK:   ^bb0(%1: !tlam.type):
-// CHECK:     %2 = "tlam.vlambda"() ({
-// CHECK:     ^bb1(%3: !value<%1>):
-// CHECK:       "tlam.vreturn"(%3) : (!value<%1>) -> ()
-// CHECK:     }) : () -> !tlam.fun<!value<%1>, !value<%1>>
-// CHECK:     "tlam.treturn"(%2) : (!tlam.fun<!value<%1>, !value<%1>>) -> ()
-// CHECK:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
-// CHECK: }
-
-// -----
+// Targets: compact negative coverage for TApply/VApply custom verifiers.
 
 // Invalid: tapply operand is not forall.
 builtin.module {

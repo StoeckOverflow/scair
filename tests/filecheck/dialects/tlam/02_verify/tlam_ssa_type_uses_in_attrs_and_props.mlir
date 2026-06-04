@@ -1,9 +1,46 @@
-// Purpose: Dominance and traversal checks for tvar uses inside attrs/properties.
-// Invariants covered: Attribute/property-embedded tvar uses are walked and dominance-verified.
+// Purpose: Dominance and traversal checks for tvar uses inside types/attrs/properties.
+// Invariants covered: Embedded tvar uses are walked and dominance-verified.
 
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=VERIFY
 
-// Targets: dominance-in-types for Tvar in attributes + operation properties.
+// Targets: dominance-in-types for Tvar in result types, attributes, and operation properties.
+
+// Valid: tlambda binder dominates nested type uses within its body.
+builtin.module {
+  %F = "tlam.tlambda"() ({
+  ^bb0(%T: !tlam.type):
+    %v = "tlam.vlambda"() ({
+    ^bb0(%x: !value<%T>):
+      "tlam.vreturn"(%x) : (!value<%T>) -> ()
+    }) : () -> !tlam.fun<!value<%T>, !value<%T>>
+    "tlam.treturn"(%v)
+      : (!tlam.fun<!value<%T>, !value<%T>>) -> ()
+  }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+}
+
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "tlam.tlambda"() ({
+// VERIFY:   ^bb0(%1: !tlam.type):
+// VERIFY:     %2 = "tlam.vlambda"() ({
+// VERIFY:     ^bb1(%3: !value<%1>):
+// VERIFY:       "tlam.vreturn"(%3) : (!value<%1>) -> ()
+// VERIFY:     }) : () -> !tlam.fun<!value<%1>, !value<%1>>
+// VERIFY:     "tlam.treturn"(%2) : (!tlam.fun<!value<%1>, !value<%1>>) -> ()
+// VERIFY:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
+// VERIFY: }
+
+// -----
+
+// Invalid: forward reference in result type.
+builtin.module {
+  %x = "arith.constant"() <{value = 0 : i32}> : () -> i32
+  %v = "builtin.unrealized_conversion_cast"(%x) : (i32) -> !value<%T>
+  %T = "test.make_type"() : () -> !tlam.type
+}
+
+// VERIFY: ssa-dominance: value Value{{.*}} does not dominate its use in op `builtin.unrealized_conversion_cast`
+
+// -----
 
 // Valid: dominating type value referenced from a nested attribute parameter.
 builtin.module {
@@ -25,6 +62,28 @@ builtin.module {
 }
 
 // VERIFY: ssa-dominance: value Value{{.*}} does not dominate its use in op `test.use`
+
+// -----
+
+// Valid: AttributeWalker reaches tvars inside nested attribute lists.
+builtin.module {
+  %T = "test.make_type"() : () -> !tlam.type
+  "test.use"() {nested = [!value<%T>, [!tlam.forall<!value<%T>>, !value<%T>]]} : () -> ()
+}
+
+// VERIFY: builtin.module {
+// VERIFY:   %0 = "test.make_type"() : () -> !tlam.type
+// VERIFY:   "test.use"() {nested = [!value<%0>, [!tlam.forall<!value<%0>>, !value<%0>]]} : () -> ()
+// VERIFY: }
+
+// -----
+
+// Invalid: forward reference in nested attribute list.
+builtin.module {
+  // expected-error @below {{ssa-dominance: value Value(!tlam.type) does not dominate its use in op `test.use`}}
+  "test.use"() {nested = [!value<%T>, [!tlam.forall<!value<%T>>, !value<%T>]]} : () -> ()
+  %T = "test.make_type"() : () -> !tlam.type
+}
 
 // -----
 

@@ -32,6 +32,53 @@ builtin.module {
 
 // -----
 
+// Invalid: tlambda body must not be empty.
+builtin.module {
+  %F = "tlam.tlambda"() ({
+  ^bb0(%T: !tlam.type):
+  }) : () -> !tlam.forall<i64>
+}
+
+// CHECK: tlambda: body block must not be empty (needs a terminator)
+
+// -----
+
+// Invalid: vlambda body must not be empty.
+builtin.module {
+  %f = "tlam.vlambda"() ({
+  ^bb0(%x: i32):
+  }) : () -> !tlam.fun<i32, i32>
+}
+
+// CHECK: vlambda: body block must not be empty (needs a terminator)
+
+// -----
+
+// Invalid: tlambda must have exactly one binder arg.
+builtin.module {
+  %F = "tlam.tlambda"() ({
+  ^bb0:
+    %v = "test.make_i64"() : () -> i64
+    "tlam.treturn"(%v) : (i64) -> ()
+  }) : () -> !tlam.forall<i64>
+}
+
+// CHECK: tlambda: must have exactly one block with one arg
+
+// -----
+
+// Invalid: vlambda block arg type must match function input, even if return type matches.
+builtin.module {
+  %f = "tlam.vlambda"() ({
+  ^bb0(%x: i32):
+    "tlam.vreturn"(%x) : (i32) -> ()
+  }) : () -> !tlam.fun<i64, i32>
+}
+
+// CHECK: vlambda: one block with one arg of input type required
+
+// -----
+
 // Invalid: tlambda block arg wrong type.
 builtin.module {
   %F = "tlam.tlambda"() ({
