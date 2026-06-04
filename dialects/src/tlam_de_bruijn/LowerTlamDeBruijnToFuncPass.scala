@@ -126,6 +126,17 @@ final class LowerTlamDeBruijnToFuncPass(ctx: MLContext)
     //   - vapply  -> func.call_indirect
     //   - vreturn -> func.return
     // ---------------------------
+    def hasEnclosingFunc(op: Operation): Boolean =
+      var curRegion = op.containerBlock.flatMap(_.containerRegion)
+      var curParent = curRegion.flatMap(_.containerOperation)
+      while curParent.isDefined do
+        curParent.get match
+          case _: Func => return true
+          case parent  =>
+            curRegion = parent.containerBlock.flatMap(_.containerRegion)
+            curParent = curRegion.flatMap(_.containerOperation)
+      false
+
     val p = GreedyRewritePatternApplier(
       Seq(
         pattern { case app: VApply =>
@@ -142,12 +153,20 @@ final class LowerTlamDeBruijnToFuncPass(ctx: MLContext)
                   s"lower-tlam-to-func: expected callee of call_indirect to have builtin.function_type, got $other"
                 )
 
-          CallIndirect(
-            callee = funV.asInstanceOf[Operand[FunctionType]],
-            callee_operands = Seq(argV), // arguments only
-            _results = ft.outputs
-              .map(Result(_)), // result types from function type
-          )
+          funV.owner match
+            case Some(c: Constant) if hasEnclosingFunc(app) =>
+              Call(
+                callee = c.value,
+                _operands = Seq(argV),
+                _results = ft.outputs.map(Result(_)),
+              )
+            case _ =>
+              CallIndirect(
+                callee = funV.asInstanceOf[Operand[FunctionType]],
+                callee_operands = Seq(argV), // arguments only
+                _results = ft.outputs
+                  .map(Result(_)), // result types from function type
+              )
         },
         pattern { case vr: VReturn =>
           Return(Seq(vr.operands.head))
