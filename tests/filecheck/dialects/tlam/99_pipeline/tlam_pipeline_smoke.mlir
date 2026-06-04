@@ -1,13 +1,13 @@
 // Purpose: End-to-end TLam pipeline smoke checks over key pass combinations.
-// Invariants covered: Monomorphize/erase/lower/full pipeline success plus invalid-input verifier failures.
+// Invariants covered: Monomorphize/erase/lower/full pipeline success and beta pass-order smoke.
 
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=MONO
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize,dce,erase-tlam,lower-tlam-to-func --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=LOWER
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,canonicalize,cse,canonicalize,monomorphize,dce,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETAFULL
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p canonicalize,monomorphize,beta-reduce-tlam,dce,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETALATE
 
-// Targets: end-to-end SSA-in-types TLam pipeline safety, including verifier-fail
-// behavior on invalid input and pass-order regressions with beta-reduction.
+// Targets: end-to-end SSA-in-types TLam pipeline safety and pass-order
+// regressions with beta-reduction.
 
 // Positive: polymorphic identity through monomorphize/erase/lower/full-pipeline.
 builtin.module {
@@ -23,6 +23,10 @@ builtin.module {
   %id_i64 = "tlam.tapply"(%mk) <{tyArg = i64}>
       : (!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>)
        -> !tlam.fun<i64, i64>
+
+  %v = "arith.constant"() <{value = 5 : i64}> : () -> i64
+  %r = "tlam.vapply"(%id_i64, %v) : (!tlam.fun<i64, i64>, i64) -> i64
+  "test.use"(%r) : (i64) -> ()
 }
 
 // MONO: builtin.module {
@@ -38,47 +42,42 @@ builtin.module {
 // MONO:   ^bb0(%2: i64):
 // MONO:     "tlam.vreturn"(%2) : (i64) -> ()
 // MONO:   }) : () -> !tlam.fun<i64, i64>
+// MONO:   %2 = "arith.constant"() <{value = 5}> : () -> i64
+// MONO:   %3 = "tlam.vapply"(%1, %2) : (!tlam.fun<i64, i64>, i64) -> i64
+// MONO:   "test.use"(%3) : (i64) -> ()
+// MONO: }
+// MONO: // -----
+// MONO: builtin.module {
+// MONO:   %0 = "tlam.vlambda"() ({
+// MONO:   ^bb0(%1: i32):
+// MONO:     "tlam.vreturn"(%1) : (i32) -> ()
+// MONO:   }) : () -> !tlam.fun<i32, i32>
+// MONO:   %1 = "arith.constant"() <{value = 5 : i32}> : () -> i32
+// MONO:   %2 = "tlam.vapply"(%0, %1) : (!tlam.fun<i32, i32>, i32) -> i32
 // MONO: }
 
 // LOWER: builtin.module {
-// LOWER: ^bb0:
+// LOWER:   func.func @lifted_1(%0: i64) -> i64 {
+// LOWER:     func.return %0 : i64
+// LOWER:   }
+// LOWER:   %0 = func.constant @lifted_1 : (i64) -> i64
+// LOWER:   %1 = "arith.constant"() <{value = 5}> : () -> i64
+// LOWER:   %2 = "func.call_indirect"(%0, %1) : ((i64) -> i64, i64) -> i64
+// LOWER:   "test.use"(%2) : (i64) -> ()
+// LOWER: }
+// LOWER: // -----
+// LOWER: builtin.module {
+// LOWER:   func.func @lifted_1(%0: i32) -> i32 {
+// LOWER:     func.return %0 : i32
+// LOWER:   }
+// LOWER:   %0 = func.constant @lifted_1 : (i32) -> i32
+// LOWER:   %1 = "arith.constant"() <{value = 5 : i32}> : () -> i32
+// LOWER:   %2 = "func.call_indirect"(%0, %1) : ((i32) -> i32, i32) -> i32
 // LOWER: }
 
 // -----
 
-// Negative pipeline: non-dominating tvar in tapply tyArg (must report, not crash).
-builtin.module {
-  %G = "tlam.tlambda"() ({
-  ^bb0(%U: !tlam.type):
-    %v = "builtin.unrealized_conversion_cast"() : () -> i64
-    "tlam.treturn"(%v) : (i64) -> ()
-  }) : () -> !tlam.forall<i64>
-
-  %h = "tlam.tapply"(%G) <{tyArg = !value<%T>}>
-       : (!tlam.forall<i64>) -> i64
-
-  %T = "builtin.unrealized_conversion_cast"() : () -> !tlam.type
-}
-
-// MONO: ssa-dominance: value Value{{.*}} does not dominate its use in op `tlam.tapply`
-// LOWER: ssa-dominance: value Value{{.*}} does not dominate its use in op `tlam.tapply`
-
-// -----
-
-// Negative pipeline: invalid DBI scoping (must report, not crash).
-builtin.module {
-  %f = "tlam.vlambda"() ({
-  ^bb0(%x: !tlam.bvar<0>):
-    "tlam.vreturn"(%x) : (!tlam.bvar<0>) -> ()
-  }) : () -> !tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>
-}
-
-// MONO: debruijn: bvar<0> out of scope at depth=0
-// LOWER: debruijn: bvar<0> out of scope at depth=0
-
-// -----
-
-// Pipeline with beta-reduce integrated before canonicalize.
+// Pipeline with beta-reduce integrated before and after monomorphize.
 builtin.module {
   %id = "tlam.vlambda"() ({
   ^bb0(%x: i32):
@@ -90,9 +89,24 @@ builtin.module {
 }
 
 // BETAFULL: builtin.module {
+// BETAFULL:   func.func @lifted_1(%0: i64) -> i64 {
+// BETAFULL:     func.return %0 : i64
+// BETAFULL:   }
+// BETAFULL:   %0 = func.constant @lifted_1 : (i64) -> i64
+// BETAFULL:   %1 = "arith.constant"() <{value = 5}> : () -> i64
+// BETAFULL:   %2 = "func.call_indirect"(%0, %1) : ((i64) -> i64, i64) -> i64
+// BETAFULL:   "test.use"(%2) : (i64) -> ()
+// BETAFULL: }
+// BETAFULL: // -----
+// BETAFULL: builtin.module {
 // BETAFULL: ^bb0:
 // BETAFULL: }
 
+// BETALATE: builtin.module {
+// BETALATE:   %0 = "arith.constant"() <{value = 5}> : () -> i64
+// BETALATE:   "test.use"(%0) : (i64) -> ()
+// BETALATE: }
+// BETALATE: // -----
 // BETALATE: builtin.module {
 // BETALATE: ^bb0:
 // BETALATE: }

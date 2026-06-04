@@ -246,7 +246,8 @@ object Monomorphize:
   ): Operation =
     op match
       case v: VLambda =>
-        val newFunTyTA = inst(v.res.typ, binderOpt, tyArg)
+        val newBody = specializeRegion(v.body, binderOpt, tyArg)
+        val newFunTyTA = instAndRemapAttr(v.res.typ, binderOpt, tyArg)
         val newFunTy = newFunTyTA match
           case f: TlamFunType => f
           case other          =>
@@ -261,7 +262,6 @@ object Monomorphize:
           newRes.asInstanceOf[Value[Attribute]],
         )
 
-        val newBody = specializeRegion(v.body, binderOpt, tyArg)
         copySpecializedAttributes(v, VLambda(newBody, newRes), binderOpt, tyArg)
 
       case vr: VReturn =>
@@ -300,7 +300,8 @@ object Monomorphize:
         )
 
       case tl: TLambda =>
-        val newForAllTA = inst(tl.res.typ, binderOpt, tyArg)
+        val newBody = specializeRegion(tl.body, binderOpt, tyArg)
+        val newForAllTA = instAndRemapAttr(tl.res.typ, binderOpt, tyArg)
         val newForAll = newForAllTA match
           case fa: TlamForAllType => fa
           case other              =>
@@ -315,7 +316,6 @@ object Monomorphize:
           newRes.asInstanceOf[Value[Attribute]],
         )
 
-        val newBody = specializeRegion(tl.body, binderOpt, tyArg)
         copySpecializedAttributes(
           tl,
           TLambda(newBody, newRes),

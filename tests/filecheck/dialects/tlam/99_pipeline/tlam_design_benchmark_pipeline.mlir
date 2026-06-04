@@ -52,8 +52,11 @@ builtin.module {
   }
 }
 
-// LOWER-NOT: tlam
+// LOWER-NOT: "tlam.
+// LOWER-NOT: !tlam.
 // LOWER: func.func @polymorphic_identity_specialization
-// LOWER-NOT: tlam
+// LOWER-NOT: "tlam.
+// LOWER-NOT: !tlam.
 // LOWER: func.func @tensor_shape_identity
-// LOWER-NOT: tlam
+// LOWER-NOT: "tlam.
+// LOWER-NOT: !tlam.

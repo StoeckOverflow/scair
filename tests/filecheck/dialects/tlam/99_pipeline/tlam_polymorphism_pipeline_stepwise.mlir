@@ -3,6 +3,7 @@
 
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETA
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,monomorphize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=MONO
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,monomorphize --verify-diagnostics | scair-opt --allow-unregistered-dialect --split-input-file --verify-diagnostics
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,monomorphize,dce,erase-tlam --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=ERASE
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,monomorphize,dce,erase-tlam,lower-tlam-to-func --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=LOWER
 
@@ -227,8 +228,8 @@ builtin.module {
 // MONO:     %4 = "tlam.vlambda"() ({
 // MONO:     ^bb1(%5: !value<%3>):
 // MONO:       "tlam.vreturn"(%5) : (!value<%3>) -> ()
-// MONO:     }) : () -> !tlam.fun<!value<%4>, !value<%4>>
-// MONO:     "tlam.treturn"(%4) : (!tlam.fun<!value<%4>, !value<%4>>) -> ()
+// MONO:     }) : () -> !tlam.fun<!value<%3>, !value<%3>>
+// MONO:     "tlam.treturn"(%4) : (!tlam.fun<!value<%3>, !value<%3>>) -> ()
 // MONO:   }) : () -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<0>>>
 // MONO:   %3 = "tlam.vlambda"() ({
 // MONO:   ^bb0(%4: i64):
