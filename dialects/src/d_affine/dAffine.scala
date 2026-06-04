@@ -530,7 +530,42 @@ final case class If(
     elseRegion: Region,
     res: Seq[Result[Attribute]],
 ) extends DerivedOperation["d_affine.if"]
-    with NoTerminator derives OpDefs
+    with NoTerminator derives OpDefs:
+
+  private def verifyRegion(name: String, region: Region): OK[Unit] =
+    if region.blocks.size != 1 then
+      Err(s"d_affine.if: expected $name region to contain a single block")
+    else
+      val block = region.blocks.head
+      block.operations.lastOption match
+        case Some(y: Yield) =>
+          if y.args.size != res.size then
+            Err(
+              s"d_affine.if: expected $name d_affine.yield to have ${res.size} operands, got ${y.args.size}"
+            )
+          else
+            val mismatch = y.args.zip(res).zipWithIndex.collectFirst {
+              case ((arg, r), idx) if arg.typ != r.typ =>
+                (idx, r.typ, arg.typ)
+            }
+            mismatch match
+              case Some((idx, expected, got)) =>
+                Err(
+                  s"d_affine.if: $name yield/result type mismatch at position $idx; expected $expected, got $got"
+                )
+              case None =>
+                OK(())
+        case Some(other) if res.nonEmpty =>
+          Err(s"d_affine.if: expected $name region terminator d_affine.yield, got `${other.name}`")
+        case None if res.nonEmpty =>
+          Err(s"d_affine.if: expected non-empty $name region terminated by d_affine.yield")
+        case _ =>
+          OK(())
+
+  override def customVerify(): OK[Operation] =
+    verifyRegion("then", thenRegion).flatMap(_ =>
+      verifyRegion("else", elseRegion).map(_ => this)
+    )
 
 final case class Parallel(
     mapOperands: Seq[Operand[IndexType]],
