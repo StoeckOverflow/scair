@@ -75,5 +75,9 @@ builtin.module {
       "tlam_dbi.vreturn"(%x) : (!tlam_dbi.bvar<3>) -> ()
     }) : () -> (!tlam_dbi.fun<!tlam_dbi.bvar<3>, !tlam_dbi.bvar<3>>)
     "tlam_dbi.treturn"(%id) : (!tlam_dbi.fun<!tlam_dbi.bvar<3>, !tlam_dbi.bvar<3>>) -> ()
-  }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<3>, !tlam_dbi.bvar<3>>>)
+	  }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<3>, !tlam_dbi.bvar<3>>>)
 }
+
+// MONO: debruijn-dbi: bvar<3> out of scope at depth=1
+// MONO2: debruijn-dbi: bvar<3> out of scope at depth=1
+// DCE: debruijn-dbi: bvar<3> out of scope at depth=1

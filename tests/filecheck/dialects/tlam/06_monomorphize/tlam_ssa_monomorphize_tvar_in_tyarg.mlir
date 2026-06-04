@@ -48,5 +48,7 @@ builtin.module {
 
   %bad = "tlam.tapply"(%mk) <{tyArg = !tlam.forall<!value<%Y>>}>
       : (!tlam.forall<!tlam.forall<!tlam.fun<!tlam.bvar<0>, !tlam.bvar<1>>>>)
-       -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, i32>>
+	       -> !tlam.forall<!tlam.fun<!tlam.bvar<0>, i32>>
 }
+
+// MONO: tapply: result{{.*}} != instantiated

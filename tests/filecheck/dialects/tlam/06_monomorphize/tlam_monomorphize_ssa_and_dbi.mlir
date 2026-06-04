@@ -130,3 +130,5 @@ builtin.module {
       : (!tlam.forall<!tlam.forall<!tlam.bvar<1>>>) -> !tlam.forall<i32>
   "test.use"(%s0) : (!tlam.forall<i32>) -> ()
 }
+
+// MONO: tlambda: last op must be tlam.treturn

@@ -1,4 +1,5 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn | filecheck %s -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn | scair-opt --allow-unregistered-dialect --verify-diagnostics --split-input-file
 
 // Monomorphize with two different type arguments.
 builtin.module {

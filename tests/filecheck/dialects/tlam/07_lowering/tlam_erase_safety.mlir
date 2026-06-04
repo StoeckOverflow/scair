@@ -68,6 +68,8 @@ builtin.module {
       "tlam.vreturn"(%x) : (i32) -> ()
     }) : () -> !tlam.fun<i32, i32>
     "test.use"(%id) : (!tlam.fun<i32, i32>) -> ()
-  }) : () -> !tlam.forall<!tlam.fun<i32, i32>>
-  "test.use"(%mk) : (!tlam.forall<!tlam.fun<i32, i32>>) -> ()
+	  }) : () -> !tlam.forall<!tlam.fun<i32, i32>>
+	  "test.use"(%mk) : (!tlam.forall<!tlam.fun<i32, i32>>) -> ()
 }
+
+// ERASESAFE: tlambda: last op must be tlam.treturn

@@ -31,9 +31,11 @@ builtin.module {
     "test.op"() : () -> ()
   }) : () -> (!tlam_dbi.fun<i32, i32>)
   %a = "arith.constant"() <{value = 1 : i32}> : () -> (i32)
-  %y = "tlam_dbi.vapply"(%f, %a) : (!tlam_dbi.fun<i32, i32>, i32) -> (i32)
-  "test.use"(%y) : (i32) -> ()
+	  %y = "tlam_dbi.vapply"(%f, %a) : (!tlam_dbi.fun<i32, i32>, i32) -> (i32)
+	  "test.use"(%y) : (i32) -> ()
 }
+
+// CHECK: vlambda: last op must be tlam.vreturn
 
 // -----
 

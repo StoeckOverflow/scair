@@ -81,9 +81,11 @@ builtin.module {
 // Invalid: forward reference in nested attribute list.
 builtin.module {
   // expected-error @below {{ssa-dominance: value Value(!tlam.type) does not dominate its use in op `test.use`}}
-  "test.use"() {nested = [!value<%T>, [!tlam.forall<!value<%T>>, !value<%T>]]} : () -> ()
-  %T = "test.make_type"() : () -> !tlam.type
+	  "test.use"() {nested = [!value<%T>, [!tlam.forall<!value<%T>>, !value<%T>]]} : () -> ()
+	  %T = "test.make_type"() : () -> !tlam.type
 }
+
+// VERIFY: ssa-dominance: value Value{{.*}} does not dominate its use in op `test.use`
 
 // -----
 

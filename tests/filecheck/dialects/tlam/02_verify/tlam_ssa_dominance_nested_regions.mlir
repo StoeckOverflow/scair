@@ -47,3 +47,6 @@ builtin.module {
     "scf.yield"() : () -> ()
   }) : () -> ()
 }
+
+// VERIFY: ssa-dominance: value Value{{.*}} does not dominate its use in op `test.use`
+// PIPE: ssa-dominance: value Value{{.*}} does not dominate its use in op `test.use`

@@ -1,4 +1,5 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn | filecheck %s -DFILE=%s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p monomorphize-tlam-de-bruijn | scair-opt --allow-unregistered-dialect --verify-diagnostics --split-input-file
 
 // Regression: specialization under nested binders keeps bvar<1>/bvar<0> structure.
 builtin.module {

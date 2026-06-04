@@ -3,8 +3,11 @@
 
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=MONO
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize,dce,erase-tlam,lower-tlam-to-func --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=LOWER
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p monomorphize,dce,erase-tlam,lower-tlam-to-func --verify-diagnostics | scair-opt --allow-unregistered-dialect --split-input-file --verify-diagnostics
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,canonicalize,cse,canonicalize,monomorphize,dce,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETAFULL
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p beta-reduce-tlam,canonicalize,cse,canonicalize,monomorphize,dce,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | scair-opt --allow-unregistered-dialect --split-input-file --verify-diagnostics
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p canonicalize,monomorphize,beta-reduce-tlam,dce,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | filecheck %s -DFILE=%s --check-prefix=BETALATE
+// RUN: scair-opt %s --allow-unregistered-dialect --split-input-file -p canonicalize,monomorphize,beta-reduce-tlam,dce,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize --verify-diagnostics | scair-opt --allow-unregistered-dialect --split-input-file --verify-diagnostics
 
 // Targets: end-to-end SSA-in-types TLam pipeline safety and pass-order
 // regressions with beta-reduction.
