@@ -154,8 +154,20 @@ object AttributeWalker:
     payload match
       case a: Attribute   => cloneValueAttributes(a)
       case xs: Seq[?]     => xs.map(clonePayload)
+      case m: Map[?, ?]   => m.map { case (k, v) => k -> clonePayload(v) }
       case opt: Option[?] => opt.map(clonePayload)
       case other          => other
+
+  private def foreachPayloadValueAttribute(
+      payload: Any,
+      f: ValueAttribute => Unit,
+  ): Unit =
+    payload match
+      case a: Attribute   => foreachValueAttribute(a)(f)
+      case xs: Seq[?]     => xs.foreach(foreachPayloadValueAttribute(_, f))
+      case m: Map[?, ?]   => m.values.foreach(foreachPayloadValueAttribute(_, f))
+      case opt: Option[?] => opt.foreach(foreachPayloadValueAttribute(_, f))
+      case _              => ()
 
   def cloneValueAttributes(a: Attribute): Attribute =
     a match
@@ -185,14 +197,7 @@ object AttributeWalker:
       params: Seq[Attribute | Seq[Attribute]],
       f: ValueAttribute => Unit,
   ): Unit =
-    params.foreach {
-      case a: Attribute => foreachValueAttribute(a)(f)
-      case xs: Seq[?]   =>
-        xs.foreach {
-          case a: Attribute => foreachValueAttribute(a)(f)
-          case _            => ()
-        }
-    }
+    params.foreach(foreachPayloadValueAttribute(_, f))
 
   def foreachValueAttribute(a: Attribute)(f: ValueAttribute => Unit): Unit =
     a match
@@ -202,6 +207,8 @@ object AttributeWalker:
     a match
       case pa: ParametrizedAttribute =>
         foreachValueAttributeInParams(pa.parameters, f)
+      case da: DataAttribute[?] =>
+        foreachPayloadValueAttribute(da.data, f)
       case _ => ()
 
   def remapTypeUsesInPlace(
