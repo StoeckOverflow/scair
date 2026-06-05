@@ -129,3 +129,46 @@ class DeepCopyTest extends AnyFlatSpec:
     copiedAttrRefs.head should not be attrRef
     copiedPropRefs.head.getVal() shouldBe copiedResult
     copiedAttrRefs.head.getVal() shouldBe copiedResult
+
+  it should "not alias cloned nested value attribute wrappers" in:
+    val result = Result(I32)
+    val originalRefs = Seq.fill(6)(ValueAttribute(result))
+    val op = TestOp(
+      results = Seq(result),
+      properties = Map(
+        "prop" -> FunctionType(
+          inputs = Seq(
+            FunctionType(
+              inputs = Seq(ValueRefType(originalRefs(0))),
+              outputs = Seq(ValueRefType(originalRefs(1))),
+            ),
+          ),
+          outputs = Seq(
+            FunctionType(
+              inputs = Seq(ValueRefType(originalRefs(2))),
+              outputs = Seq(ValueRefType(originalRefs(3))),
+            )
+          ),
+        )
+      ),
+      attributes = LinkedHashMap(
+        "attr" -> FunctionType(
+          inputs = Seq(ValueRefType(originalRefs(4))),
+          outputs = Seq(ValueRefType(originalRefs(5))),
+        )
+      ),
+    )
+
+    val copy = op.deepCopy.asInstanceOf[TestOp]
+    val copiedResult = copy.results.head
+    val copiedRefs =
+      AttributeWalker.valueAttributesOf(copy.properties("prop")) ++
+        AttributeWalker.valueAttributesOf(copy.attributes("attr"))
+
+    copiedResult should not be result
+    copiedRefs should have size originalRefs.size
+    copiedRefs.foreach { copiedRef =>
+      originalRefs.exists(originalRef => copiedRef eq originalRef) shouldBe false
+      copiedRef.getVal() shouldBe copiedResult
+      copiedRef.getVal() should not be result
+    }
