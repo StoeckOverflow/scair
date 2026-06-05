@@ -816,6 +816,22 @@ def getAttrConstructor[T: Type](
     $constructorCall
   }
 
+def getAttrRebuildConstructor[T: Type](
+    attrDef: AttributeDef,
+    parameters: Expr[Seq[Attribute | Seq[Attribute]]],
+)(using
+    Quotes
+): Expr[T] =
+  val attributes =
+    '{
+      $parameters.map {
+        case a: Attribute => a
+        case other =>
+          throw new Exception(s"Expected attribute parameter, got $other")
+      }
+    }
+  getAttrConstructor[T](attrDef, attributes)
+
 def ADTFlatAttrInputMacro[Def <: AttributeDef: Type](
     attrInputDefs: Seq[AttributeParamDef],
     adtAttrExpr: Expr[?],
@@ -853,6 +869,9 @@ def deriveAttrDefs[T <: Attribute: Type](using
       }
       def parameters(attr: T): Seq[Attribute | Seq[Attribute]] = ${
         parametersMacro(attrDef, '{ attr })
+      }
+      def rebuild(attr: T, parameters: Seq[Attribute | Seq[Attribute]]): T = ${
+        getAttrRebuildConstructor[T](attrDef, '{ parameters })
       }
   }
 

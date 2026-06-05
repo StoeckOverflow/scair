@@ -30,6 +30,11 @@ final case class tlamFunType(in: TypeAttribute, out: TypeAttribute)
       tlamType:
   override def name: String = "tlam_dbi.fun"
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(in, out)
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    tlamFunType(
+      parameters(0).asInstanceOf[TypeAttribute],
+      parameters(1).asInstanceOf[TypeAttribute],
+    )
 
 given AttributeCompanion[tlamFunType]:
   override def name = "tlam_dbi.fun"

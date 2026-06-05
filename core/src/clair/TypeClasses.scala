@@ -36,6 +36,7 @@ trait AttributeCustomParser[T <: Attribute]:
 
 trait AttrDefs[T <: Attribute] extends AttributeCompanion[T]:
   def parameters(attr: T): Seq[Attribute | Seq[Attribute]]
+  def rebuild(attr: T, parameters: Seq[Attribute | Seq[Attribute]]): T
   override def parse[$: P](using Parser): P[T]
 
 object AttrDefs:

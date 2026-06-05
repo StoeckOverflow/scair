@@ -30,6 +30,11 @@ final case class dTensorVectorType(param: DimParam, elem: TypeAttribute)
     extends dTensorType:
   override def name: String = "dtensor.vector"
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(param, elem)
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    dTensorVectorType(
+      parameters(0).asInstanceOf[ValueAttribute],
+      parameters(1).asInstanceOf[TypeAttribute],
+    )
 
   override def customVerify(): OK[Unit] =
     dTensorTypeUtil.checkParam(param).flatMap(_ =>
@@ -57,6 +62,12 @@ final case class dTensorMatrixType(
 
   override def parameters: Seq[Attribute | Seq[Attribute]] =
     Seq(rows, cols, elem)
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    dTensorMatrixType(
+      parameters(0).asInstanceOf[ValueAttribute],
+      parameters(1).asInstanceOf[ValueAttribute],
+      parameters(2).asInstanceOf[TypeAttribute],
+    )
 
   override def customVerify(): OK[Unit] =
     dTensorTypeUtil.checkParam(rows).flatMap(_ =>
@@ -87,6 +98,11 @@ final case class dTensorTensorType(
 
   override def parameters: Seq[Attribute | Seq[Attribute]] =
     Seq(params, elem)
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    dTensorTensorType(
+      parameters(0).asInstanceOf[Seq[ValueAttribute]],
+      parameters(1).asInstanceOf[TypeAttribute],
+    )
 
   override def printParameters(p: Printer): Unit =
     p.print("<[")

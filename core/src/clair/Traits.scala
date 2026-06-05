@@ -25,6 +25,9 @@ transparent trait DerivedAttribute[name <: String]
   override val parameters: Seq[Attribute | Seq[Attribute]] =
     defs.parameters(this)
 
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    defs.rebuild(this, parameters)
+
 trait AssemblyFormat[format <: String]
 
 transparent trait DerivedOperation[name <: String] extends Operation:

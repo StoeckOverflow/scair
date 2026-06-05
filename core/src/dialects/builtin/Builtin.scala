@@ -236,6 +236,13 @@ case class RankedTensorType(
   override def parameters: Seq[Attribute | Seq[Attribute]] =
     shape +: elementType +: encoding.toSeq
 
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    RankedTensorType(
+      parameters(1).asInstanceOf[Attribute],
+      parameters(0).asInstanceOf[ArrayAttribute[IntData]],
+      parameters.drop(2).headOption.map(_.asInstanceOf[Attribute]),
+    )
+
   override def getNumDims = shape.attrValues.length
   override def getShape = shape.attrValues.map(_.data.toLong)
 
@@ -276,6 +283,12 @@ final case class StridedLayoutAttr(
   override def parameters: Seq[Attribute | Seq[Attribute]] =
     Seq(offset, strides)
 
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    StridedLayoutAttr(
+      parameters(0).asInstanceOf[IntData],
+      parameters(1).asInstanceOf[ArrayAttribute[IntData]],
+    )
+
   override def customPrint(p: Printer): Unit =
     given indentLevel: Int = 0
     p.print("strided<[")
@@ -301,6 +314,13 @@ final case class RankedMemrefType(
 
   override def parameters: Seq[Attribute | Seq[Attribute]] =
     shape +: elementType +: encoding.toSeq
+
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    RankedMemrefType(
+      parameters(1).asInstanceOf[Attribute],
+      parameters(0).asInstanceOf[ArrayAttribute[IntData]],
+      parameters.drop(2).headOption.map(_.asInstanceOf[Attribute]),
+    )
 
   override def getNumDims = shape.attrValues.length
   override def getShape = shape.attrValues.map(_.data.toLong)
@@ -365,6 +385,12 @@ final case class SymbolRefAttr(
   override def parameters: Seq[Attribute | Seq[Attribute]] =
     Seq(rootRef, nestedRefs)
 
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    SymbolRefAttr(
+      parameters(0).asInstanceOf[StringData],
+      parameters(1).asInstanceOf[Seq[StringData]],
+    )
+
   override def customPrint(p: Printer) =
     p.printListF(
       rootRef +: nestedRefs,
@@ -384,6 +410,11 @@ final case class DenseArrayAttr(
 
   override def name: String = "builtin.dense_array"
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(typ, data)
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    DenseArrayAttr(
+      parameters(0).asInstanceOf[IntegerType | FloatType],
+      parameters(1).asInstanceOf[Seq[IntegerAttr] | Seq[FloatAttr]],
+    )
 
   override def customVerify(): OK[Unit] =
     if !data.forall(_ match
@@ -425,6 +456,12 @@ final case class FunctionType(
 
   override def parameters: Seq[Attribute | Seq[Attribute]] =
     Seq(inputs, outputs)
+
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    FunctionType(
+      parameters(0).asInstanceOf[Seq[Attribute]],
+      parameters(1).asInstanceOf[Seq[Attribute]],
+    )
 
   override def customPrint(p: Printer) =
     p.print("(")

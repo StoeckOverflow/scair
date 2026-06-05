@@ -14,6 +14,7 @@ object Monomorphize:
     payload match
       case a: Attribute   => cloneAttr(a)
       case xs: Seq[?]     => xs.map(clonePayload)
+      case m: Map[?, ?]   => m.map { case (k, v) => k -> clonePayload(v) }
       case opt: Option[?] =>
         opt.map(clonePayload)
       case other => other
@@ -25,18 +26,10 @@ object Monomorphize:
     attr match
       case va: ValueAttribute =>
         new ValueAttribute(va.getVal())
-      case p: Product =>
-        val ctorOpt =
-          attr.getClass.getConstructors
-            .find(_.getParameterCount == p.productArity)
-        ctorOpt match
-          case Some(ctor) =>
-            val args =
-              p.productIterator.map(payloadMapper).map(_.asInstanceOf[Object])
-                .toArray
-            ctor.newInstance(args*).asInstanceOf[Attribute]
-          case None =>
-            attr
+      case p: ParametrizedAttribute =>
+        p.rebuild(p.parameters.map(payloadMapper).asInstanceOf[
+          Seq[Attribute | Seq[Attribute]]
+        ])
       case _ =>
         attr
 
@@ -54,6 +47,7 @@ object Monomorphize:
     payload match
       case a: Attribute   => instAttr(a, binderOpt, tyArg)
       case xs: Seq[?]     => xs.map(instPayload(_, binderOpt, tyArg))
+      case m: Map[?, ?]   => m.map { case (k, v) => k -> instPayload(v, binderOpt, tyArg) }
       case opt: Option[?] =>
         opt.map(instPayload(_, binderOpt, tyArg))
       case other => other

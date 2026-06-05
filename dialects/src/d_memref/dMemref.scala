@@ -133,6 +133,11 @@ final case class dMemrefVectorType(param: DimParam, elem: TypeAttribute)
     extends dMemrefType:
   override def name: String = "d_memref.vector"
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(param, elem)
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    dMemrefVectorType(
+      parameters(0).asInstanceOf[DimParam],
+      parameters(1).asInstanceOf[TypeAttribute],
+    )
 
   override def customVerify(): OK[Unit] =
     dMemrefTypeUtil.checkParam(param).flatMap(_ =>
@@ -158,6 +163,12 @@ final case class dMemrefMatrixType(
 ) extends dMemrefType:
   override def name: String = "d_memref.matrix"
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(rows, cols, elem)
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    dMemrefMatrixType(
+      parameters(0).asInstanceOf[DimParam],
+      parameters(1).asInstanceOf[DimParam],
+      parameters(2).asInstanceOf[TypeAttribute],
+    )
 
   override def customVerify(): OK[Unit] =
     dMemrefTypeUtil.checkParam(rows).flatMap(_ =>
@@ -191,6 +202,21 @@ final case class dMemrefMemrefType(
     Seq(params, elem) ++
       offset.map(dMemrefTypeUtil.layoutParamAttribute) ++
       strides.toSeq.map(_.map(dMemrefTypeUtil.layoutParamAttribute))
+
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    val rebuiltOffset =
+      if offset.isDefined then Some(parameters(2).asInstanceOf[LayoutParam])
+      else None
+    val rebuiltStrides =
+      if strides.isDefined then
+        Some(parameters(3).asInstanceOf[Seq[LayoutParam]])
+      else None
+    dMemrefMemrefType(
+      parameters(0).asInstanceOf[Seq[DimParam]],
+      parameters(1).asInstanceOf[TypeAttribute],
+      rebuiltOffset,
+      rebuiltStrides,
+    )
 
   override def printParameters(p: Printer): Unit =
     given indentLevel: Int = 0

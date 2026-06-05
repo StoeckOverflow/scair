@@ -96,3 +96,36 @@ class DeepCopyTest extends AnyFlatSpec:
             !(b.results.head eq ca1.results.head) =>
         ()
     }
+
+  it should "deep copy nested value attributes in metadata" in:
+    val result = Result(I32)
+    val propRef = ValueAttribute(result)
+    val attrRef = ValueAttribute(result)
+    val op = TestOp(
+      results = Seq(result),
+      properties = Map(
+        "prop" -> FunctionType(
+          inputs = Seq(ValueRefType(propRef)),
+          outputs = Seq(I32),
+        )
+      ),
+      attributes = LinkedHashMap(
+        "attr" -> FunctionType(
+          inputs = Seq(ValueRefType(attrRef)),
+          outputs = Seq(I64),
+        )
+      ),
+    )
+
+    val copy = op.deepCopy.asInstanceOf[TestOp]
+    val copiedResult = copy.results.head
+    val copiedPropRefs = AttributeWalker.valueAttributesOf(copy.properties("prop"))
+    val copiedAttrRefs = AttributeWalker.valueAttributesOf(copy.attributes("attr"))
+
+    copiedResult should not be result
+    copiedPropRefs should have size 1
+    copiedAttrRefs should have size 1
+    copiedPropRefs.head should not be propRef
+    copiedAttrRefs.head should not be attrRef
+    copiedPropRefs.head.getVal() shouldBe copiedResult
+    copiedAttrRefs.head.getVal() shouldBe copiedResult

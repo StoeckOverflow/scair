@@ -63,6 +63,8 @@ abstract trait ParametrizedAttribute() extends Attribute:
 
   def parameters: Seq[Attribute | Seq[Attribute]]
 
+  def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute = this
+
   override def printParameters(p: Printer): Unit =
     if parameters.size > 0 then
       p.printListF(
@@ -122,6 +124,9 @@ final case class ValueRefType(ref: ValueAttribute)
 
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(ref)
 
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    ValueRefType(parameters.head.asInstanceOf[ValueAttribute])
+
 object DataAttribute:
   // Make all DataAttributes implicitely convertible to their held data.
   given [D]: Conversion[DataAttribute[D], D] = _.data
@@ -174,22 +179,9 @@ object AttributeWalker:
       case va: ValueAttribute =>
         new ValueAttribute(va.getVal())
       case p: ParametrizedAttribute =>
-        p match
-          case product: Product =>
-            val ctorOpt =
-              a.getClass.getConstructors
-                .find(_.getParameterCount == product.productArity)
-            ctorOpt match
-              case Some(ctor) =>
-                val args =
-                  product.productIterator.map(clonePayload)
-                    .map(_.asInstanceOf[Object])
-                    .toArray
-                ctor.newInstance(args*).asInstanceOf[Attribute]
-              case None =>
-                a
-          case _ =>
-            a
+        p.rebuild(p.parameters.map(clonePayload).asInstanceOf[
+          Seq[Attribute | Seq[Attribute]]
+        ])
       case _ =>
         a
 

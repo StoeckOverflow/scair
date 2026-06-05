@@ -31,6 +31,11 @@ final case class TlamFunType(in: TypeAttribute, out: TypeAttribute)
       TlamType:
   override def name: String = "tlam.fun"
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(in, out)
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    TlamFunType(
+      parameters(0).asInstanceOf[TypeAttribute],
+      parameters(1).asInstanceOf[TypeAttribute],
+    )
 
 given AttributeCompanion[TlamFunType]:
   override def name = "tlam.fun"
@@ -51,6 +56,8 @@ final case class TlamForAllType(body: TypeAttribute)
     with ParametrizedAttribute:
   override def name: String = "tlam.forall"
   override def parameters: Seq[Attribute | Seq[Attribute]] = Seq(body)
+  override def rebuild(parameters: Seq[Attribute | Seq[Attribute]]): Attribute =
+    TlamForAllType(parameters.head.asInstanceOf[TypeAttribute])
 
 given AttributeCompanion[TlamForAllType]:
   override def name = "tlam.forall"
