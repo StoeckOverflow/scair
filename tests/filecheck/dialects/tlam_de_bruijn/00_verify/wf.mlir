@@ -155,7 +155,7 @@ builtin.module {
   }) : () -> (!tlam_dbi.fun<i32, i32>)
 }
 // CHECK: // -----
-// CHECK: vlambda: last op must be tlam.vreturn, got 'test.op'
+// CHECK: vlambda: last op must be tlam_dbi.vreturn, got 'test.op'
 
 // -----
 
@@ -165,7 +165,7 @@ builtin.module {
     "test.op"() : () -> ()
   }) : () -> (!tlam_dbi.forall<i32>)
 }
-// CHECK: tlambda: last op must be tlam.treturn, got 'test.op'
+// CHECK: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
 
 // -----
 
@@ -291,7 +291,7 @@ builtin.module {
     "test.op"() : () -> ()
   }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<i32, i32>>)
 }
-// CHECK: tlambda: last op must be tlam.treturn, got 'test.op'
+// CHECK: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
 
 // -----
 

@@ -23,7 +23,7 @@ final case class VLambda(
               Err(s"vlambda: return type mismatch, expected ${funTy
                   .out}, got ${ret.typ}")
           case Some(other) =>
-            Err(s"vlambda: last op must be tlam.vreturn, got '${other.name}'")
+            Err(s"vlambda: last op must be tlam_dbi.vreturn, got '${other.name}'")
           case None =>
             Err("vlambda: body block must not be empty (needs a terminator)")
       case _ =>
@@ -55,7 +55,7 @@ final case class TLambda(
                     .typ}"
               )
           case Some(other) =>
-            Err(s"tlambda: last op must be tlam.treturn, got '${other.name}'")
+            Err(s"tlambda: last op must be tlam_dbi.treturn, got '${other.name}'")
           case None =>
             Err("tlambda: body block must not be empty (needs a terminator)")
       case _ =>

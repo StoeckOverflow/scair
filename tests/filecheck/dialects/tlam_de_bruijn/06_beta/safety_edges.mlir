@@ -23,9 +23,9 @@ builtin.module {
 
 // -----
 
-// MUST NOT REDUCE: malformed lambda body (missing tlam.vreturn) - rejected by verifier, no crash.
+// MUST NOT REDUCE: malformed lambda body (missing tlam_dbi.vreturn) - rejected by verifier, no crash.
 builtin.module {
-  // expected-error @below {{vlambda: last op must be tlam.vreturn}}
+  // expected-error @below {{vlambda: last op must be tlam_dbi.vreturn}}
   %f = "tlam_dbi.vlambda"() ({
   ^bb0(%x: i32):
     "test.op"() : () -> ()
@@ -35,7 +35,7 @@ builtin.module {
 	  "test.use"(%y) : (i32) -> ()
 }
 
-// CHECK: vlambda: last op must be tlam.vreturn
+// CHECK: vlambda: last op must be tlam_dbi.vreturn
 
 // -----
 

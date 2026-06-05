@@ -47,6 +47,16 @@ object TlamDeBruijnIndicesCheck extends VerifierCheck:
               case e: Err => break(e)
               case _      => ()
           }
+          op.properties.values.foreach { a =>
+            checkMaybeType(a, depth) match
+              case e: Err => break(e)
+              case _      => ()
+          }
+          op.attributes.values.foreach { a =>
+            checkMaybeType(a, depth) match
+              case e: Err => break(e)
+              case _      => ()
+          }
 
           // binder-aware recursion
           op match
@@ -111,7 +121,7 @@ object TlamDeBruijnIndicesCheck extends VerifierCheck:
               Err(s"vlambda: return type mismatch, expected ${funTy
                   .out}, got ${ret.typ}")
           case Some(other) =>
-            Err(s"vlambda: last op must be tlam.vreturn, got '${other.name}'")
+            Err(s"vlambda: last op must be tlam_dbi.vreturn, got '${other.name}'")
           case None =>
             Err("vlambda: body block must not be empty (needs a terminator)")
       case _ =>

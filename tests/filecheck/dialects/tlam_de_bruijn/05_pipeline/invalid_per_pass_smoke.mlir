@@ -15,8 +15,8 @@ builtin.module {
     "test.op"() : () -> ()
   }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<i32, i32>>)
 }
-// VERIFY: tlambda: last op must be tlam.treturn, got 'test.op'
-// BETA: tlambda: last op must be tlam.treturn, got 'test.op'
-// MONO: tlambda: last op must be tlam.treturn, got 'test.op'
-// ERASE: tlambda: last op must be tlam.treturn, got 'test.op'
-// LOWER: tlambda: last op must be tlam.treturn, got 'test.op'
+// VERIFY: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
+// BETA: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
+// MONO: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
+// ERASE: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
+// LOWER: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
