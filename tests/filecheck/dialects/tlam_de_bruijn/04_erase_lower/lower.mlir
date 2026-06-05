@@ -1,4 +1,5 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func | scair-opt --allow-unregistered-dialect --verify-diagnostics
 
 builtin.module {
   %0 = "tlam_dbi.tlambda"() ({

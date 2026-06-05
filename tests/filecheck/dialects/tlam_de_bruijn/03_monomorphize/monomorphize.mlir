@@ -1,4 +1,4 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p monomorphize-tlam-de-bruijn | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p monomorphize-tlam-de-bruijn | filecheck %s
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p monomorphize-tlam-de-bruijn | scair-opt --allow-unregistered-dialect --verify-diagnostics
 
 builtin.module {

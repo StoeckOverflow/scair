@@ -1,4 +1,5 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p erase-tlam-de-bruijn | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p erase-tlam-de-bruijn | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p erase-tlam-de-bruijn | scair-opt --allow-unregistered-dialect --verify-diagnostics
 
 // Regression: erase-tlam must not erase a binder that would leave free DBI types behind.
 builtin.module {
