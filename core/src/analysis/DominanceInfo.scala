@@ -72,6 +72,46 @@ final class DominanceInfo(root: Operation):
         // No owner => can't prove dominance.
         false
 
+  /** Returns true if SSA value 'v' is available at the entry of 'userBlock'.
+    *
+    * This is deliberately stricter than operation-use dominance for operation
+    * results in the same block: no operation result in a block dominates that
+    * block's argument types.
+    */
+  def valueDominatesBlockEntry(
+      v: Value[Attribute],
+      userBlock: Block,
+  ): Boolean =
+    v.owner match
+      case Some(defBlock: Block) =>
+        (for
+          defRegion <- defBlock.containerRegion
+          userRegion <- userBlock.containerRegion
+        yield
+          if defRegion eq userRegion then
+            blockDominates(defRegion, defBlock, userBlock)
+          else
+            userRegion.containerOperation
+              .exists(ownerOp => valueDominates(v, ownerOp))
+        ).getOrElse(false)
+
+      case Some(defOp: Operation) =>
+        (for
+          defBlock <- defOp.containerBlock
+          defRegion <- defBlock.containerRegion
+          userRegion <- userBlock.containerRegion
+        yield
+          if defRegion eq userRegion then
+            if defBlock eq userBlock then false
+            else blockDominates(defRegion, defBlock, userBlock)
+          else
+            userRegion.containerOperation
+              .exists(ownerOp => valueDominates(v, ownerOp))
+        ).getOrElse(false)
+
+      case _ =>
+        false
+
   // ----------------------------
   // Internal representation
   // ----------------------------

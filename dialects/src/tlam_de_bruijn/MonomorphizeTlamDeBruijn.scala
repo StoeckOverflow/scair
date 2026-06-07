@@ -72,19 +72,16 @@ object MonomorphizeTlamDeBruijn:
   )(using
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
   ): Block =
-    val newArgTypes: Seq[Attribute] =
-      b.arguments.iterator.map { a =>
-        a.typ match
-          case t: TypeAttribute => instAt(t, tyArg, depth)
-          case other            => other
-      }.toSeq
-
-    Block(
-      argumentsTypes = newArgTypes,
-      (newArgs: Iterable[Value[Attribute]]) =>
-        valueMapper.addAll(b.arguments.zip(newArgs))
-        b.operations.map(op => cloneOpSpec(op, tyArg, depth)),
+    val block = Block.cloneArgumentTypes(
+      b.arguments,
+      Seq.empty,
+      {
+        case t: TypeAttribute => instAt(t, tyArg, depth)
+        case other            => other
+      },
     )
+    block.addOps(b.operations.map(op => cloneOpSpec(op, tyArg, depth)).toSeq)
+    block
 
   private def mapOperand(
       v: Value[Attribute]
@@ -307,8 +304,7 @@ object MonomorphizeTlamDeBruijn:
                           tapplies.foreach { other =>
                             if (other ne ta) &&
                               other.containerBlock.contains(blk) &&
-                              (other.fun eq ta.fun) &&
-                              other.tyArg == tyArg
+                              (other.fun eq ta.fun) && other.tyArg == tyArg
                             then
                               RewriteMethods.replaceValue(
                                 other.res.asInstanceOf[Value[Attribute]],

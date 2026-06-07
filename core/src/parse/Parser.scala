@@ -170,6 +170,8 @@ private final class Scope(
     var unresolvedValueRefs: mutable.Map[String, mutable.ArrayBuffer[
       ValueAttribute
     ]] = AnyRefMap.empty[String, mutable.ArrayBuffer[ValueAttribute]],
+    var eagerlyResolvedValueRefs: mutable.Set[ValueAttribute] = mutable.Set
+      .empty[ValueAttribute],
     var blockMap: mutable.Map[String, Block] = AnyRefMap.empty[String, Block],
     var forwardBlocks: mutable.Set[String] = mutable.Set.empty[String],
 ):
@@ -194,12 +196,16 @@ private final class Scope(
   ): Unit =
     unresolvedValueRefs.remove(name).foreach(_.foreach { va =>
       val oldValue = va.getVal()
+      val eager = eagerlyResolvedValueRefs.remove(va)
       // Drain uses in place to avoid snapshot allocations on hot parse paths.
-      while oldValue.typeUses.nonEmpty do
-        val tu = oldValue.typeUses.head
-        oldValue.typeUses -= tu
+      if oldValue.typeUses.isEmpty && eager then
         va.replaceValue(oldValue, resolvedValue)
-        resolvedValue.typeUses += TypeUse(tu.owner, va)
+      else
+        while oldValue.typeUses.nonEmpty do
+          val tu = oldValue.typeUses.head
+          oldValue.typeUses -= tu
+          va.replaceValue(oldValue, resolvedValue)
+          resolvedValue.typeUses += TypeUse(tu.owner, va)
     })
 
   inline def defineValueP[$: P](
@@ -223,6 +229,14 @@ private final class Scope(
 
   inline def addUnresolvedValueRef(name: String, ref: ValueAttribute): Unit =
     unresolvedValueRefs.getOrElseUpdate(name, mutable.ArrayBuffer.empty) += ref
+
+  inline def eagerlyResolveUnregisteredValueRefs(a: Attribute): Unit =
+    AttributeWalker.foreachValueAttribute(a) { va =>
+      va.getVal().typ match
+        case StringData(data) if data.startsWith("unresolved:%") =>
+          eagerlyResolvedValueRefs += va
+        case _ => ()
+    }
 
   inline def getValue(name: String): Option[Value[Attribute]] =
     valueMap.get(name)
@@ -682,8 +696,7 @@ private def populateBlockArgsP[$: P](
   args.foldLeft(Pass(Seq.empty[BlockArgument[Attribute]]))((l, r) =>
     (l ~ p.scopes.top.defineBlockArgumentP(r._1, r._2)).map(_ :+ _)
   ).map(args =>
-    block.arguments ++= args
-    block.arguments.foreach(_.owner = Some(block))
+    block.addArguments(args)
     block
   )
 
@@ -698,8 +711,9 @@ def blockP[$: P](using Parser) = P(
 )
 
 private def blockLabelP[$: P](using p: Parser) =
-  (blockIdP.flatMap(p.scopes.top.defineBlockP) ~
-    (blockArgListP.orElse(Seq.empty))).flatMap(populateBlockArgsP) ~ ":"
+  blockIdP.flatMap(p.scopes.top.defineBlockP)
+    .flatMap(block => blockArgListP(block).orElse(Seq.empty).map(_ => block)) ~
+    ":"
 
 def successorListP[$: P](using Parser) = P(
   "[" ~ successorP.rep(sep = ",") ~ "]"
@@ -730,30 +744,35 @@ def regionP[$: P](
       ) ~/ "}" ~/ p.exitRegionP
 ).map(Region(_))
 
-def dependentEntryArgsP[$: P](using p: Parser): P[Seq[BlockArgument[
-  Attribute
-]]] = P(
-  "(" ~
-    (valueIdP.flatMap(name =>
-      ":" ~ typeP.flatMap(typ => p.scopes.top.defineBlockArgumentP(name, typ))
-    )).rep(sep = ",") ~
-    ")"
+private def dependentBlockArgumentP[$: P](using
+    p: Parser
+): P[BlockArgument[Attribute]] = P(
+  valueIdP.flatMap(name =>
+    ":" ~ typeP.flatMap(typ =>
+      p.scopes.top.eagerlyResolveUnregisteredValueRefs(typ)
+      p.scopes.top.defineBlockArgumentP(name, typ)
+    )
+  )
+)
+
+def dependentEntryArgsP[$: P](using
+    Parser
+): P[Seq[BlockArgument[Attribute]]] = P(
+  "(" ~ dependentBlockArgumentP.rep(sep = ",") ~ ")"
 )
 
 def regionWithEntryArgsP[$: P](
     entryArgs: Seq[BlockArgument[Attribute]]
 )(using Parser): P[Region] = P(
-  "{" ~/
-    (operationP.rep ~ blockP.rep).map((entryOps, otherBlocks) =>
-      val entry = Block.fromArguments(entryArgs, entryOps)
-      val blocks =
-        if entry.operations.isEmpty && entry.arguments.isEmpty then otherBlocks
-        else entry +: otherBlocks
-      val region = Region(blocks)
-      blocks.foreach(_.containerRegion = Some(region))
-      region
-    ) ~/
-    "}"
+  "{" ~/ (operationP.rep ~ blockP.rep).map((entryOps, otherBlocks) =>
+    val entry = Block.fromArguments(entryArgs, entryOps)
+    val blocks =
+      if entry.operations.isEmpty && entry.arguments.isEmpty then otherBlocks
+      else entry +: otherBlocks
+    val region = Region(blocks)
+    blocks.foreach(_.containerRegion = Some(region))
+    region
+  ) ~/ "}"
 )
 
 // [x] - value-id-and-type ::= value-id `:` type
@@ -768,9 +787,12 @@ def valueIdAndTypeP[$: P](using Parser) = P(valueIdP ~ ":" ~ typeP)
 private def valueIdAndTypeListP[$: P](using Parser) =
   P(valueIdAndTypeP.rep(sep = ",")).orElse(Seq.empty)
 
-private def blockArgListP[$: P](using Parser) =
+private def blockArgListP[$: P](block: Block)(using Parser) =
   P(
-    "(" ~ valueIdAndTypeP.rep(sep = ",") ~ ")"
+    "(" ~ dependentBlockArgumentP.map(arg =>
+      block.addArgument(arg)
+      arg
+    ).rep(sep = ",") ~ ")"
   )
 
 // [x] dictionary-properties ::= `<` dictionary-attribute `>`

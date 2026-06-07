@@ -144,21 +144,26 @@ object Block:
       operations: Iterable[Operation],
       typeMapper: Attribute => Attribute = (attr: Attribute) => attr,
   )(using
-      valueMapper: mutable.Map[Value[Attribute], Value[Attribute]],
+      valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
   ): Block =
     val oldArgs = oldArguments.toSeq
-    val block =
-      Block(
-        oldArgs.map(arg =>
-          AttributeWalker.cloneValueAttributes(typeMapper(arg.typ))
-        ),
-        operations,
-      )
-    valueMapper addAll oldArgs.zip(block.arguments)
-    block.arguments.foreach(arg =>
-      AttributeWalker.remapTypeUsesInPlace(arg.typ)
+    val newArgs = oldArgs.map(arg =>
+      Value(AttributeWalker.cloneValueAttributes(typeMapper(arg.typ)))
     )
-    block
+    valueMapper addAll oldArgs.zip(newArgs)
+    newArgs.foreach(arg => AttributeWalker.remapTypeUsesInPlace(arg.typ))
+    Block.fromArguments(newArgs, operations)
+
+  def cloneAndRemapArgumentTypes(
+      argumentTypes: Iterable[Attribute],
+      operations: Iterable[Operation],
+  )(using
+      valueMapper: mutable.Map[Value[Attribute], Value[Attribute]]
+  ): Block =
+    val clonedTypes =
+      argumentTypes.map(AttributeWalker.cloneValueAttributes).toSeq
+    clonedTypes.foreach(AttributeWalker.remapTypeUsesInPlace)
+    Block(clonedTypes, operations)
 
 /** A basic block.
   *
@@ -193,6 +198,8 @@ case class Block private (
     else a.owner = Some(this)
   )
 
+  arguments.foreach(arg => TypeUseTracking.registerBlockArgument(this, arg))
+
   var containerRegion: Option[Region] = None
 
   private def attachOp(op: Operation): Unit =
@@ -219,6 +226,18 @@ case class Block private (
     val oplen = operations.length
     for op <- newOps do attachOp(op)
     operations.insertAll(oplen, newOps)
+
+  def addArgument(arg: Value[Attribute]): Unit =
+    if arg.owner != None then
+      throw new Exception(
+        s"Block argument '${arg.typ}' already has an owner: ${arg.owner.get}"
+      )
+    arguments += arg
+    arg.owner = Some(this)
+    TypeUseTracking.registerBlockArgument(this, arg)
+
+  def addArguments(args: Seq[Value[Attribute]]): Unit =
+    args.foreach(addArgument)
 
   def insertOpBefore(
       existingOp: Operation,

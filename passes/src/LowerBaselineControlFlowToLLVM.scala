@@ -18,10 +18,14 @@ private final class Builder(val funcOp: func.Func):
   private val state = FunctionLoweringState(funcOp)
   private val blocks = mutable.ArrayBuffer.empty[Block]
   private val cfg = LoopCFGBuilder(blocks)
-  private var current: Block = Block(funcOp.body.blocks.head.arguments.map(_.typ), Seq.empty)
+
+  private var current: Block =
+    Block.cloneArgumentTypes(funcOp.body.blocks.head.arguments, Seq.empty)(using
+      state.valueMap
+    )
+
   blocks += current
   state.blockMap(funcOp.body.blocks.head) = current
-  state.valueMap.addAll(funcOp.body.blocks.head.arguments.zip(current.arguments))
 
   private def emit(op: Operation): Unit = current.addOp(op)
   private def remap(v: Value[Attribute]): Value[Attribute] = state.remap(v)
@@ -37,6 +41,11 @@ private final class Builder(val funcOp: func.Func):
 
   private def deepCopyOp(op: Operation): Operation = state.deepCopyOp(op)
 
+  private def freshBlock(argumentTypes: Seq[Attribute]): Block =
+    Block.cloneAndRemapArgumentTypes(argumentTypes, Seq.empty)(using
+      state.valueMap
+    )
+
   private def lowerBoundWith(
       operands: Seq[Value[Attribute]],
       map: AffineMapAttr,
@@ -49,7 +58,7 @@ private final class Builder(val funcOp: func.Func):
     }
 
   private def lowerSimpleOp(
-      op: Operation,
+      op: Operation
   ): Unit =
     op match
       case nested: For =>
@@ -63,14 +72,23 @@ private final class Builder(val funcOp: func.Func):
 
   private def lowerIf(op: scf.IfOp): Unit =
     if op.thenRegion.blocks.size != 1 || op.elseRegion.blocks.size != 1 then
-      throw new Exception("lower-baseline-control-flow-to-llvm only supports single-block scf.if")
-    val thenBlock = Block(Seq.empty, Seq.empty)
-    val elseBlock = Block(Seq.empty, Seq.empty)
-    val merge = Block(op.results.map(_.typ), Seq.empty)
+      throw new Exception(
+        "lower-baseline-control-flow-to-llvm only supports single-block scf.if"
+      )
+    val thenBlock = freshBlock(Seq.empty)
+    val elseBlock = freshBlock(Seq.empty)
+    val merge = freshBlock(op.results.map(_.typ))
     cfg.appendBlock(thenBlock)
     cfg.appendBlock(elseBlock)
     cfg.appendBlock(merge)
-    cfg.emitCondBr(current, remap(op.condition), Seq.empty, Seq.empty, thenBlock, elseBlock)
+    cfg.emitCondBr(
+      current,
+      remap(op.condition),
+      Seq.empty,
+      Seq.empty,
+      thenBlock,
+      elseBlock,
+    )
 
     def lowerRegion(src: Block, dest: Block): Unit =
       current = dest
@@ -89,7 +107,8 @@ private final class Builder(val funcOp: func.Func):
     state.valueMap.addAll(op.results.zip(merge.arguments))
 
   private def hasNestedLoopShape(op: For): Boolean =
-    if op.inits.size != 1 || op.res.size != 1 || op.body.blocks.size != 1 then false
+    if op.inits.size != 1 || op.res.size != 1 || op.body.blocks.size != 1 then
+      false
     else
       op.body.blocks.head.operations.toSeq match
         case ops if ops.size >= 2 =>
@@ -104,17 +123,17 @@ private final class Builder(val funcOp: func.Func):
     val innerBody = inner.body.blocks.head
     lowerBound(op.lowerBoundOperands, op.lowerBoundMap).map { outerLb =>
       val init = remap(op.inits.head)
-      val outerHeader = Block(Seq(llvmIndexType, init.typ), Seq.empty)
+      val outerHeader = freshBlock(Seq(llvmIndexType, init.typ))
       cfg.appendBlock(outerHeader)
-      val outerBodyEntry = Block(Seq.empty, Seq.empty)
+      val outerBodyEntry = freshBlock(Seq.empty)
       cfg.appendBlock(outerBodyEntry)
-      val innerHeader = Block(Seq(llvmIndexType, init.typ), Seq.empty)
+      val innerHeader = freshBlock(Seq(llvmIndexType, init.typ))
       cfg.appendBlock(innerHeader)
-      val innerBodyEntry = Block(Seq.empty, Seq.empty)
+      val innerBodyEntry = freshBlock(Seq.empty)
       cfg.appendBlock(innerBodyEntry)
-      val outerLatch = Block(Seq.empty, Seq.empty)
+      val outerLatch = freshBlock(Seq.empty)
       cfg.appendBlock(outerLatch)
-      val exit = Block(Seq.empty, Seq.empty)
+      val exit = freshBlock(Seq.empty)
       cfg.appendBlock(exit)
 
       // The nested-loop lowering uses block arguments only for true loop-carried
@@ -140,9 +159,13 @@ private final class Builder(val funcOp: func.Func):
       )
 
       current = outerBodyEntry
-      state.valueMap.addAll(
-        Seq(outerBody.arguments.head -> outerIv, outerBody.arguments(1) -> outerAcc)
-      )
+      state.valueMap
+        .addAll(
+          Seq(
+            outerBody.arguments.head -> outerIv,
+            outerBody.arguments(1) -> outerAcc,
+          )
+        )
       prefixOps.foreach(op => lowerSimpleOp(op))
       val innerLb = lowerBoundWith(
         inner.lowerBoundOperands,
@@ -175,14 +198,15 @@ private final class Builder(val funcOp: func.Func):
       )
 
       current = innerBodyEntry
-      state.valueMap.addAll(
-        Seq(
-          outerBody.arguments.head -> outerIv,
-          outerBody.arguments(1) -> outerAcc,
-          innerBody.arguments.head -> innerIv,
-          innerBody.arguments(1) -> innerAcc,
+      state.valueMap
+        .addAll(
+          Seq(
+            outerBody.arguments.head -> outerIv,
+            outerBody.arguments(1) -> outerAcc,
+            innerBody.arguments.head -> innerIv,
+            innerBody.arguments(1) -> innerAcc,
+          )
         )
-      )
       var yielded: Option[Value[Attribute]] = None
       innerBody.operations.foreach {
         case y: Yield => yielded = Some(remap(y.arguments.head))
@@ -209,16 +233,17 @@ private final class Builder(val funcOp: func.Func):
 
   private def lowerFor(op: For): Option[Value[Attribute]] =
     if hasNestedLoopShape(op) then lowerNestedFor(op)
-    else if op.inits.size != 1 || op.res.size != 1 || op.body.blocks.size != 1 then None
+    else if op.inits.size != 1 || op.res.size != 1 || op.body.blocks.size != 1
+    then None
     else
       lowerBound(op.lowerBoundOperands, op.lowerBoundMap).map { lb =>
         val init = remap(op.inits.head)
         val bodyBlock = op.body.blocks.head
-        val header = Block(Seq(llvmIndexType, init.typ), Seq.empty)
+        val header = freshBlock(Seq(llvmIndexType, init.typ))
         cfg.appendBlock(header)
-        val body = Block(Seq.empty, Seq.empty)
+        val body = freshBlock(Seq.empty)
         cfg.appendBlock(body)
-        val exit = Block(Seq.empty, Seq.empty)
+        val exit = freshBlock(Seq.empty)
         cfg.appendBlock(exit)
         cfg.emitBr(current, Seq(lb, init), header)
         val iv = header.arguments.head
@@ -232,9 +257,10 @@ private final class Builder(val funcOp: func.Func):
         val cmp = cfg.emitICmpSlt(header, iv, ub)
         cfg.emitCondBr(header, cmp, Seq.empty, Seq.empty, body, exit)
         current = body
-        state.valueMap.addAll(
-          Seq(bodyBlock.arguments.head -> iv, bodyBlock.arguments(1) -> acc)
-        )
+        state.valueMap
+          .addAll(
+            Seq(bodyBlock.arguments.head -> iv, bodyBlock.arguments(1) -> acc)
+          )
         var yielded: Option[Value[Attribute]] = None
         bodyBlock.operations.foreach {
           case y: Yield => yielded = Some(remap(y.arguments.head))
@@ -250,16 +276,18 @@ private final class Builder(val funcOp: func.Func):
       }
 
   private def lowerMultiResultFor(op: For): Option[Seq[Value[Attribute]]] =
-    if op.body.blocks.size != 1 || op.inits.isEmpty || op.inits.size != op.res.size then None
+    if op.body.blocks.size != 1 || op.inits.isEmpty ||
+      op.inits.size != op.res.size
+    then None
     else
       lowerBound(op.lowerBoundOperands, op.lowerBoundMap).map { lb =>
         val initVals = op.inits.map(remap)
         val bodyBlock = op.body.blocks.head
-        val header = Block(Seq(llvmIndexType) ++ initVals.map(_.typ), Seq.empty)
+        val header = freshBlock(Seq(llvmIndexType) ++ initVals.map(_.typ))
         cfg.appendBlock(header)
-        val body = Block(Seq.empty, Seq.empty)
+        val body = freshBlock(Seq.empty)
         cfg.appendBlock(body)
-        val exit = Block(op.res.map(_.typ), Seq.empty)
+        val exit = freshBlock(op.res.map(_.typ))
         cfg.appendBlock(exit)
         cfg.emitBr(current, Seq(lb) ++ initVals, header)
         val iv = header.arguments.head
@@ -287,16 +315,17 @@ private final class Builder(val funcOp: func.Func):
       }
 
   private def lowerVoidFor(
-      op: For,
+      op: For
   ): Boolean =
-    if op.inits.nonEmpty || op.res.nonEmpty || op.body.blocks.size != 1 then false
+    if op.inits.nonEmpty || op.res.nonEmpty || op.body.blocks.size != 1 then
+      false
     else
       val bodyBlock = op.body.blocks.head
-      val header = Block(Seq(llvmIndexType), Seq.empty)
+      val header = freshBlock(Seq(llvmIndexType))
       cfg.appendBlock(header)
-      val body = Block(Seq.empty, Seq.empty)
+      val body = freshBlock(Seq.empty)
       cfg.appendBlock(body)
-      val exit = Block(Seq.empty, Seq.empty)
+      val exit = freshBlock(Seq.empty)
       cfg.appendBlock(exit)
 
       val lb = lowerBoundWith(
@@ -306,7 +335,7 @@ private final class Builder(val funcOp: func.Func):
         current,
       )
       lb match
-        case None => false
+        case None        => false
         case Some(lbVal) =>
           cfg.emitBr(current, Seq(lbVal), header)
           val iv = header.arguments.head
@@ -317,16 +346,17 @@ private final class Builder(val funcOp: func.Func):
             header,
           )
           ub match
-            case None => false
+            case None        => false
             case Some(ubVal) =>
               val cmp = cfg.emitICmpSlt(header, iv, ubVal)
               cfg.emitCondBr(header, cmp, Seq.empty, Seq.empty, body, exit)
               current = body
-              state.valueMap.addAll(
-                Seq(bodyBlock.arguments.head -> iv)
-              )
+              state.valueMap
+                .addAll(
+                  Seq(bodyBlock.arguments.head -> iv)
+                )
               bodyBlock.operations.toSeq.foreach {
-                case _: Yield =>
+                case _: Yield    =>
                 case nested: For =>
                   lowerLoop(nested)
                 case other =>
@@ -339,22 +369,26 @@ private final class Builder(val funcOp: func.Func):
               true
 
   private def lowerLoop(
-      op: For,
+      op: For
   ): Unit =
-    if op.inits.isEmpty && op.res.isEmpty then
-      lowerVoidFor(op)
+    if op.inits.isEmpty && op.res.isEmpty then lowerVoidFor(op)
     else if op.res.size > 1 then
-      lowerMultiResultFor(op).foreach(vals => state.valueMap.addAll(op.results.zip(vals)))
-    else
-      lowerFor(op).foreach(v => state.valueMap(op.results.head) = v)
+      lowerMultiResultFor(op)
+        .foreach(vals => state.valueMap.addAll(op.results.zip(vals)))
+    else lowerFor(op).foreach(v => state.valueMap(op.results.head) = v)
 
   def lower(): func.Func =
     funcOp.body.blocks.head.operations.foreach {
-      case loop: For => lowerLoop(loop)
+      case loop: For      => lowerLoop(loop)
       case ifOp: scf.IfOp => lowerIf(ifOp)
-      case other     => lowerSimpleOp(other)
+      case other          => lowerSimpleOp(other)
     }
-    val lowered = func.Func(funcOp.sym_name, funcOp.function_type, funcOp.sym_visibility, Region(blocks.toSeq))
+    val lowered = func.Func(
+      funcOp.sym_name,
+      funcOp.function_type,
+      funcOp.sym_visibility,
+      Region(blocks.toSeq),
+    )
     lowered.attributes.addAll(funcOp.attributes)
     lowered
 
@@ -369,7 +403,9 @@ private val LowerFunc = pattern {
 // Lowers baseline affine control flow to explicit LLVM CFG.
 // Example: `affine.for` / `affine.yield`
 //   -> `llvm.br`, `llvm.cond_br`, and block arguments carrying loop state.
-final class LowerBaselineControlFlowToLLVM(ctx: MLContext) extends WalkerPass(ctx):
+final class LowerBaselineControlFlowToLLVM(ctx: MLContext)
+    extends WalkerPass(ctx):
   override val name: String = "lower-baseline-control-flow-to-llvm"
+
   override val walker: PatternRewriteWalker =
     PatternRewriteWalker(GreedyRewritePatternApplier(Seq(LowerFunc)))

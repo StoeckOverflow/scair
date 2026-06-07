@@ -11,11 +11,15 @@ trait LoopLikeAdapter:
   def loopOp: Operation
   def loopRegions: Seq[Region]
   def topLevelOps: Seq[Operation]
+
   def isDefinedOutsideLoop(
       v: Value[Attribute],
       hoistedOps: Set[Operation],
   ): Boolean
-  def rebuildWithHoisted(opsToHoist: Seq[Operation]): (Seq[Operation], Operation)
+
+  def rebuildWithHoisted(
+      opsToHoist: Seq[Operation]
+  ): (Seq[Operation], Operation)
 
 object LoopInvariantCodeMotion:
 
@@ -38,7 +42,7 @@ object LoopInvariantCodeMotion:
 
     loop.topLevelOps.foreach { op =>
       if shouldMove(op) &&
-          op.operands.forall(v => loop.isDefinedOutsideLoop(v, hoistedOps.toSet))
+        op.operands.forall(v => loop.isDefinedOutsideLoop(v, hoistedOps.toSet))
       then
         hoistable += op
         hoistedOps += op
@@ -46,7 +50,8 @@ object LoopInvariantCodeMotion:
 
     hoistable.toSeq
 
-final case class DAffineForLoopAdapter(loop: d_affine.For) extends LoopLikeAdapter:
+final case class DAffineForLoopAdapter(loop: d_affine.For)
+    extends LoopLikeAdapter:
   override def loopOp: Operation = loop
   override def loopRegions: Seq[Region] = Seq(loop.body)
 
@@ -75,15 +80,16 @@ final case class DAffineForLoopAdapter(loop: d_affine.For) extends LoopLikeAdapt
     val hoistedValueMap = mutable.Map.empty[Value[Attribute], Value[Attribute]]
 
     val hoistedCopies = opsToHoist.map { op =>
-      val copied = op.deepCopy(using mutable.Map.empty[Block, Block], hoistedValueMap)
+      val copied = op
+        .deepCopy(using mutable.Map.empty[Block, Block], hoistedValueMap)
       hoistedValueMap.addAll(op.results.zip(copied.results))
       copied
     }
 
-    val newBody = Block(bodyBlock.arguments.map(_.typ), Seq.empty)
-    val blockMap = mutable.Map[Block, Block](bodyBlock -> newBody)
     val valueMap = mutable.Map.empty[Value[Attribute], Value[Attribute]]
-    valueMap.addAll(bodyBlock.arguments.zip(newBody.arguments))
+    val newBody = Block
+      .cloneArgumentTypes(bodyBlock.arguments, Seq.empty)(using valueMap)
+    val blockMap = mutable.Map[Block, Block](bodyBlock -> newBody)
     valueMap.addAll(hoistedValueMap)
 
     bodyBlock.operations.foreach { op =>

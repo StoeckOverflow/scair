@@ -35,6 +35,20 @@ object SSADominanceCheck extends VerifierCheck:
       then OK(())
       else fail(s"value $v does not dominate its use in op `${user.name}`")
 
+    def checkValueAtBlockArgumentType(
+        v: Value[Attribute],
+        block: Block,
+        argIndex: Int,
+    ): OK[Unit] =
+      v.owner match
+        case Some(ownerBlock: Block) if ownerBlock eq block =>
+          val refIndex = block.arguments.indexWhere(_ eq v)
+          if refIndex >= 0 && refIndex < argIndex then OK(())
+          else fail(s"value $v does not dominate block argument type")
+        case _ =>
+          if dom.valueDominatesBlockEntry(v, block) then OK(())
+          else fail(s"value $v does not dominate block argument type")
+
     def walkAttr(a: Attribute, user: Operation): OK[Unit] =
       boundary[OK[Unit]] {
         AttributeWalker.foreachValueAttribute(a) { va =>
@@ -78,9 +92,25 @@ object SSADominanceCheck extends VerifierCheck:
         OK(())
       }
 
+    def checkBlockArgumentTypeUses(block: Block): OK[Unit] =
+      boundary[OK[Unit]] {
+        block.arguments.zipWithIndex.foreach { (arg, i) =>
+          AttributeWalker.foreachValueAttribute(arg.typ) { va =>
+            checkValueAtBlockArgumentType(va.getVal(), block, i) match
+              case e: Err => break(e: OK[Unit])
+              case _      => ()
+          }
+        }
+        OK(())
+      }
+
     def walkRegion(r: Region): OK[Unit] =
       boundary[OK[Unit]] {
         r.blocks.foreach { b =>
+          checkBlockArgumentTypeUses(b) match
+            case e: Err => break(e: OK[Unit])
+            case _      => ()
+
           b.operations.foreach { op =>
             // Check operand dominance at this use site
             op.operands.foreach { v =>
@@ -89,17 +119,17 @@ object SSADominanceCheck extends VerifierCheck:
                 case _      => ()
             }
 
-            // Check dominance for type uses in types/attributes
-            checkOpTypeAndAttrUses(op) match
-              case e: Err => break(e: OK[Unit])
-              case _      => ()
-
             // Recurse into nested regions
             op.regions.foreach { rr =>
               walkRegion(rr) match
                 case e: Err => break(e: OK[Unit])
                 case _      => ()
             }
+
+            // Check dominance for type uses in types/attributes
+            checkOpTypeAndAttrUses(op) match
+              case e: Err => break(e: OK[Unit])
+              case _      => ()
           }
         }
         OK(())

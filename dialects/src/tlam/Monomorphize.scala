@@ -27,9 +27,12 @@ object Monomorphize:
       case va: ValueAttribute =>
         new ValueAttribute(va.getVal())
       case p: ParametrizedAttribute =>
-        p.rebuild(p.parameters.map(payloadMapper).asInstanceOf[
-          Seq[Attribute | Seq[Attribute]]
-        ])
+        p.rebuild(
+          p.parameters.map(payloadMapper)
+            .asInstanceOf[
+              Seq[Attribute | Seq[Attribute]]
+            ]
+        )
       case _ =>
         attr
 
@@ -45,9 +48,10 @@ object Monomorphize:
       tyArg: TypeAttribute,
   ): Any =
     payload match
-      case a: Attribute   => instAttr(a, binderOpt, tyArg)
-      case xs: Seq[?]     => xs.map(instPayload(_, binderOpt, tyArg))
-      case m: Map[?, ?]   => m.map { case (k, v) => k -> instPayload(v, binderOpt, tyArg) }
+      case a: Attribute => instAttr(a, binderOpt, tyArg)
+      case xs: Seq[?]   => xs.map(instPayload(_, binderOpt, tyArg))
+      case m: Map[?, ?] =>
+        m.map { case (k, v) => k -> instPayload(v, binderOpt, tyArg) }
       case opt: Option[?] =>
         opt.map(instPayload(_, binderOpt, tyArg))
       case other => other
@@ -208,11 +212,12 @@ object Monomorphize:
       valueMapper: mutable.Map[Value[Attribute], Value[Attribute]],
   ): Region =
     val blockPairs = r.blocks.map { oldBlock =>
-      val newArgTypes =
-        oldBlock.arguments
-          .map(arg => specializeBlockArgType(arg.typ, binderOpt, tyArg))
       val newBlock =
-        Block(argumentsTypes = newArgTypes, operations = Seq.empty[Operation])
+        Block.cloneArgumentTypes(
+          oldBlock.arguments,
+          Seq.empty,
+          arg => specializeBlockArgType(arg, binderOpt, tyArg),
+        )
       blockMapper.update(oldBlock, newBlock)
       oldBlock.arguments.zip(newBlock.arguments).foreach {
         case (oldArg, newArg) =>
@@ -513,10 +518,7 @@ object Monomorphize:
                       cache += (blk, ta.fun, ta.tyArg) -> repl
                       changed = true
                     }
-              else
-                rewriteOneTApply(ta, tl).foreach { _ =>
-                  changed = true
-                }
+              else rewriteOneTApply(ta, tl).foreach { _ => changed = true }
             case None =>
               ()
         }
