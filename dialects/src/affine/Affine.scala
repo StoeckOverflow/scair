@@ -50,7 +50,10 @@ case class For(
   override def customPrint(printer: Printer): Unit =
     val block = body.blocks.head
     val iv = block.arguments.head
-    def printMapOperands(map: AffineMapAttr, operands: Seq[Operand[IndexType]]): Unit =
+    def printMapOperands(
+        map: AffineMapAttr,
+        operands: Seq[Operand[IndexType]],
+    ): Unit =
       val dimCount = map.affineMap.dimensions.size
       val dimOperands = operands.take(dimCount)
       val symbolOperands = operands.drop(dimCount)
@@ -62,11 +65,17 @@ case class For(
         printer.printList(symbolOperands)
         printer.print("]")
     printer.print(name, " ", iv, " = ", lowerBoundMap, "(")
-    printer.printList(lowerBoundOperands.take(lowerBoundMap.affineMap.dimensions.size))
+    printer
+      .printList(
+        lowerBoundOperands.take(lowerBoundMap.affineMap.dimensions.size)
+      )
     printer.print(")")
     if lowerBoundOperands.size > lowerBoundMap.affineMap.dimensions.size then
       printer.print("[")
-      printer.printList(lowerBoundOperands.drop(lowerBoundMap.affineMap.dimensions.size))
+      printer
+        .printList(
+          lowerBoundOperands.drop(lowerBoundMap.affineMap.dimensions.size)
+        )
       printer.print("]")
     printer.print(" to ")
     if upperBoundMap.affineMap.affineExprs.size > 1 then printer.print("min ")
@@ -76,9 +85,11 @@ case class For(
     if inits.nonEmpty then
       printer.print(" iter_args(")
       val iterArgs = block.arguments.tail
-      printer.printListF(iterArgs.zip(inits), pair =>
-        val (iterArg, init) = pair
-        printer.print(iterArg, " = ", init)
+      printer.printListF(
+        iterArgs.zip(inits),
+        pair =>
+          val (iterArg, init) = pair
+          printer.print(iterArg, " = ", init),
       )
       printer.print(")")
       printer.print(" -> (")
@@ -89,50 +100,66 @@ case class For(
     printer.withIndent(printer.print("}"))
 
 given OperationCustomParser[For]:
+
   def parse[$: P](resNames: Seq[String])(using p: Parser): P[For] =
     P(
-      operandNameP ~ "=" ~ attrOfP[AffineMapAttr] ~ "(" ~ operandNameP.rep(
-        sep = ","
-      ) ~ ")" ~ "to" ~ attrOfP[AffineMapAttr] ~ "(" ~ operandNameP.rep(
-        sep = ","
-      ) ~ ")" ~ "step" ~ attrOfP[IntegerAttr] ~ ("iter_args" ~ "(" ~
-        (operandNameP ~ "=" ~ operandNameP ~ ":" ~ typeP).rep(
+      operandNameP ~ "=" ~ attrOfP[AffineMapAttr] ~ "(" ~
+        operandNameP.rep(
           sep = ","
-        ) ~ ")").?
+        ) ~ ")" ~ "to" ~ attrOfP[AffineMapAttr] ~ "(" ~
+        operandNameP.rep(
+          sep = ","
+        ) ~ ")" ~ "step" ~ attrOfP[IntegerAttr] ~
+        ("iter_args" ~ "(" ~
+          (operandNameP ~ "=" ~ operandNameP ~ (":" ~ typeP).?).rep(
+            sep = ","
+          ) ~ ")" ~ ("->" ~ "(" ~ typeP.rep(sep = ",") ~ ")").?).?
     ).flatMap((ivName, lbMap, lbNames, ubMap, ubNames, step, iterArgsOpt) =>
-      lbNames
-        .foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
+      lbNames.foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
+        acc.flatMap(seq => operandP(n, IndexType()).map(seq :+ _))
+      ).flatMap(lbOps =>
+        ubNames.foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
           acc.flatMap(seq => operandP(n, IndexType()).map(seq :+ _))
-        )
-        .flatMap(lbOps =>
-          ubNames
-            .foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
-              acc.flatMap(seq => operandP(n, IndexType()).map(seq :+ _))
+        ).flatMap(ubOps =>
+          val (iterArgs, explicitResultTypes) =
+            iterArgsOpt.getOrElse((Seq.empty, None))
+          val explicitIterTypes = iterArgs.map(_._3)
+          val iterTypes =
+            if explicitIterTypes.forall(_.isDefined) then
+              Some(explicitIterTypes.flatten)
+            else explicitResultTypes
+          if iterTypes.isEmpty then
+            Fail("affine.for: iter_args require explicit types")
+          else if resNames.size != iterArgs.size then
+            Fail(
+              s"affine.for: expected ${iterArgs.size} result names to match iter_args arity, got ${resNames
+                  .size}"
             )
-            .flatMap(ubOps =>
-              val iterArgs = iterArgsOpt.getOrElse(Seq.empty)
-              val iterArgNamesAndTys =
-                iterArgs.map((iterName, _, ty) => (iterName, ty))
-              if resNames.size != iterArgs.size then
-                Fail(
-                  s"affine.for: expected ${iterArgs.size} result names to match iter_args arity, got ${resNames.size}"
-                )
-              else
-                iterArgs.foldLeft(Pass(Seq.empty[Operand[Attribute]])) {
-                  case (acc, (_, initName, ty)) =>
-                    acc.flatMap(seq =>
-                      operandP(initName, ty.asInstanceOf[TypeAttribute]).map(seq :+ _)
-                    )
-                }.flatMap(inits =>
-                  resNames
-                    .zip(iterArgs.map(_._3))
-                    .foldLeft(Pass(Seq.empty[Result[Attribute]])) {
-                      case (acc, (resName, ty)) =>
-                        acc.flatMap(seq =>
-                          resultP(resName, ty.asInstanceOf[TypeAttribute]).map(seq :+ _)
-                        )
-                    }.flatMap(results =>
-                      regionP(Seq(ivName -> IndexType()) ++ iterArgNamesAndTys).map(body =>
+          else if explicitResultTypes.exists(_ != iterTypes.get) then
+            Fail(
+              s"affine.for: printed result types must match iter_args types"
+            )
+          else
+            val iterArgNamesAndTys =
+              iterArgs.map(_._1).zip(iterTypes.get)
+            iterArgs.zip(iterTypes.get)
+              .foldLeft(Pass(Seq.empty[Operand[Attribute]])) {
+                case (acc, ((_, initName, _), ty)) =>
+                  acc.flatMap(seq =>
+                    operandP(initName, ty.asInstanceOf[TypeAttribute])
+                      .map(seq :+ _)
+                  )
+              }.flatMap(inits =>
+                resNames.zip(iterTypes.get)
+                  .foldLeft(Pass(Seq.empty[Result[Attribute]])) {
+                    case (acc, (resName, ty)) =>
+                      acc.flatMap(seq =>
+                        resultP(resName, ty.asInstanceOf[TypeAttribute])
+                          .map(seq :+ _)
+                      )
+                  }.flatMap(results =>
+                    regionP(Seq(ivName -> IndexType()) ++ iterArgNamesAndTys)
+                      .map(body =>
                         For(
                           lbOps,
                           ubOps,
@@ -144,10 +171,10 @@ given OperationCustomParser[For]:
                           body,
                         )
                       )
-                    )
-                )
-            )
+                  )
+              )
         )
+      )
     )
 
 /*≡==---==≡≡≡≡≡==---=≡≡*\

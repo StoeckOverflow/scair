@@ -1,4 +1,5 @@
 // RUN: scair-opt %s -p lower-refined-control-flow-to-llvm | filecheck %s
+// RUN: scair-opt %s -p lower-refined-control-flow-to-llvm | scair-opt --allow-unregistered-dialect --verify-diagnostics
 
 builtin.module {
   func.func @dynamic_step_lowering(%lb: index, %ub: index, %step_nat: !dtensor.posnat, %init: index) -> index {
@@ -13,5 +14,5 @@ builtin.module {
 
 // CHECK-LABEL: func.func @dynamic_step_lowering
 // CHECK: ^bb{{.*}}(%[[IV:.*]]: index, %{{.*}}: index):
-// CHECK: "llvm.add"(%[[IV]], %{{.*}}) : (index, index) -> i64
+// CHECK: "llvm.add"(%[[IV]], %{{.*}}) : (index, index) -> index
 // CHECK-NOT: d_affine.apply

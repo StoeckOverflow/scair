@@ -80,10 +80,11 @@ private final class Builder(val funcOp: func.Func):
       op: d_affine.For,
       remapper: Value[Attribute] => Value[Attribute],
       block: Block,
+      like: Value[Attribute],
   ): Value[Attribute] =
     op.stepOperands.headOption match
       case Some(dynamicStep) => remapper(dynamicStep)
-      case None => cfg.emitIndexConstant(block, op.step.value.value)
+      case None => cfg.emitIndexConstantLike(block, op.step.value.value, like)
 
   private def lowerSimpleOp(
       op: Operation
@@ -329,6 +330,7 @@ private final class Builder(val funcOp: func.Func):
           inner,
           v => innerHeaderMap.toMap.getOrElse(v, remap(v)),
           current,
+          innerIv,
         )
         val nextIv = cfg.emitAdd(current, innerIv, step)
         cfg.emitBr(
@@ -339,7 +341,7 @@ private final class Builder(val funcOp: func.Func):
       }
 
       current = outerLatch
-      val outerStep = lowerStepWith(op, remap, current)
+      val outerStep = lowerStepWith(op, remap, current, innerOuterIv)
       val nextOuter = cfg.emitAdd(current, innerOuterIv, outerStep)
       cfg.emitBr(current, Seq(nextOuter, innerAcc), outerHeader)
 
@@ -383,7 +385,7 @@ private final class Builder(val funcOp: func.Func):
           case other             => lowerSimpleOp(other)
         }
         yielded.foreach { y =>
-          val step = lowerStepWith(op, remap, current)
+          val step = lowerStepWith(op, remap, current, iv)
           val nextIv = cfg.emitAdd(current, iv, step)
           cfg.emitBr(current, Seq(nextIv, y), header)
         }
@@ -425,7 +427,7 @@ private final class Builder(val funcOp: func.Func):
           case y: d_affine.Yield => yielded = y.args.map(remap)
           case other             => lowerSimpleOp(other)
         }
-        val step = lowerStepWith(op, remap, current)
+        val step = lowerStepWith(op, remap, current, iv)
         val nextIv = cfg.emitAdd(current, iv, step)
         cfg.emitBr(current, Seq(nextIv) ++ yielded, header)
         current = exit
@@ -480,7 +482,7 @@ private final class Builder(val funcOp: func.Func):
                 case other =>
                   lowerSimpleOp(other)
               }
-              val step = lowerStepWith(op, remap, current)
+              val step = lowerStepWith(op, remap, current, iv)
               val nextIv = cfg.emitAdd(current, iv, step)
               cfg.emitBr(current, Seq(nextIv), header)
               current = exit
@@ -536,7 +538,8 @@ private final class Builder(val funcOp: func.Func):
                 case _: affine.Yield =>
                 case other           => lowerSimpleOp(other)
               }
-              val step = cfg.emitIndexConstant(current, op.step.value.value)
+              val step =
+                cfg.emitIndexConstantLike(current, op.step.value.value, iv)
               val nextIv = cfg.emitAdd(current, iv, step)
               cfg.emitBr(current, Seq(nextIv), header)
               current = exit
@@ -577,7 +580,8 @@ private final class Builder(val funcOp: func.Func):
             case y: affine.Yield => yielded = y.arguments.map(remap)
             case other           => lowerSimpleOp(other)
           }
-          val step = cfg.emitIndexConstant(current, op.step.value.value)
+          val step =
+            cfg.emitIndexConstantLike(current, op.step.value.value, iv)
           val nextIv = cfg.emitAdd(current, iv, step)
           cfg.emitBr(current, Seq(nextIv) ++ yielded, header)
           current = exit
@@ -620,13 +624,26 @@ private final class Builder(val funcOp: func.Func):
       case other =>
         lowerSimpleOp(other)
     }
+    val loweredFunctionType =
+      AttributeWalker.cloneValueAttributes(funcOp.function_type)
+        .asInstanceOf[FunctionType]
+    AttributeWalker
+      .remapTypeUsesInPlace(loweredFunctionType)(using
+        state.valueMap
+      )
     val lowered = func.Func(
       funcOp.sym_name,
-      funcOp.function_type,
+      loweredFunctionType,
       funcOp.sym_visibility,
       Region(blocks.toSeq),
     )
-    lowered.attributes.addAll(funcOp.attributes)
+    lowered.attributes
+      .addAll(
+        funcOp.attributes.view.mapValues(AttributeWalker.cloneValueAttributes)
+      )
+    lowered.attributes.values.foreach(attr =>
+      AttributeWalker.remapTypeUsesInPlace(attr)(using state.valueMap)
+    )
     lowered
 
 private def lowerFunc(op: func.Func): Option[func.Func] =

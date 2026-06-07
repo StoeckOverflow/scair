@@ -383,13 +383,26 @@ private final class Builder(val funcOp: func.Func):
       case ifOp: scf.IfOp => lowerIf(ifOp)
       case other          => lowerSimpleOp(other)
     }
+    val loweredFunctionType =
+      AttributeWalker.cloneValueAttributes(funcOp.function_type)
+        .asInstanceOf[FunctionType]
+    AttributeWalker
+      .remapTypeUsesInPlace(loweredFunctionType)(using
+        state.valueMap
+      )
     val lowered = func.Func(
       funcOp.sym_name,
-      funcOp.function_type,
+      loweredFunctionType,
       funcOp.sym_visibility,
       Region(blocks.toSeq),
     )
-    lowered.attributes.addAll(funcOp.attributes)
+    lowered.attributes
+      .addAll(
+        funcOp.attributes.view.mapValues(AttributeWalker.cloneValueAttributes)
+      )
+    lowered.attributes.values.foreach(attr =>
+      AttributeWalker.remapTypeUsesInPlace(attr)(using state.valueMap)
+    )
     lowered
 
 private val LowerFunc = pattern {

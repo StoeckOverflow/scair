@@ -1,4 +1,5 @@
 // RUN: scair-opt %s --passes lower-dmemref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi | filecheck %s
+// RUN: scair-opt %s --passes lower-dmemref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi | scair-opt --verify-diagnostics
 
 builtin.module {
   func.func @refined_rank1(

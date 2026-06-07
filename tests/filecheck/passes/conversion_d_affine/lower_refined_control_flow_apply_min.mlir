@@ -1,4 +1,5 @@
 // RUN: scair-opt %s --allow-unregistered-dialect -p lower-refined-control-flow-to-llvm | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect -p lower-refined-control-flow-to-llvm | scair-opt --allow-unregistered-dialect --verify-diagnostics
 
 builtin.module {
   func.func @apply_and_single_expr_min_lower(%a: index, %b: index) -> (index, index) {
@@ -10,12 +11,12 @@ builtin.module {
 
 // CHECK-LABEL: func.func @apply_and_single_expr_min_lower
 // CHECK-SAME: %[[A:[0-9]+]]: index, %[[B:[0-9]+]]: index
-// CHECK: %[[TWO:[0-9]+]] = "llvm.mlir.constant"() <{value = 2}> : () -> i64
-// CHECK: %[[TWOB:[0-9]+]] = "llvm.mul"(%[[TWO]], %[[B]]) : (i64, index) -> i64
-// CHECK: %[[APPLIED:[0-9]+]] = "llvm.add"(%[[A]], %[[TWOB]]) : (index, i64) -> i64
-// CHECK: %[[NEGONE:[0-9]+]] = "llvm.mlir.constant"() <{value = -1}> : () -> i64
-// CHECK: %[[NEGB:[0-9]+]] = "llvm.mul"(%[[B]], %[[NEGONE]]) : (index, i64) -> i64
-// CHECK: %[[MINNED:[0-9]+]] = "llvm.add"(%[[A]], %[[NEGB]]) : (index, i64) -> i64
-// CHECK: func.return %[[APPLIED]], %[[MINNED]] : i64, i64
+// CHECK: %[[TWO:[0-9]+]] = "llvm.mlir.constant"() <{value = 2 : index}> : () -> index
+// CHECK: %[[TWOB:[0-9]+]] = "llvm.mul"(%[[TWO]], %[[B]]) : (index, index) -> index
+// CHECK: %[[APPLIED:[0-9]+]] = "llvm.add"(%[[A]], %[[TWOB]]) : (index, index) -> index
+// CHECK: %[[NEGONE:[0-9]+]] = "llvm.mlir.constant"() <{value = -1 : index}> : () -> index
+// CHECK: %[[NEGB:[0-9]+]] = "llvm.mul"(%[[B]], %[[NEGONE]]) : (index, index) -> index
+// CHECK: %[[MINNED:[0-9]+]] = "llvm.add"(%[[A]], %[[NEGB]]) : (index, index) -> index
+// CHECK: func.return %[[APPLIED]], %[[MINNED]] : index, index
 // CHECK-NOT: d_affine.apply
 // CHECK-NOT: d_affine.min

@@ -17,6 +17,9 @@ def asI1(v: Value[Attribute]): Operand[IntegerType] =
 def llvmIndexAttr(v: BigInt): IntegerAttr =
   IntegerAttr(IntData(v), llvmIndexType)
 
+def indexLikeAttr(v: BigInt, typ: IntegerType | IndexType): IntegerAttr =
+  IntegerAttr(IntData(v), typ)
+
 def overflowNSWNuw: ArrayAttribute[StringData] =
   ArrayAttribute(Seq(StringData("nsw"), StringData("nuw")))
 
@@ -29,30 +32,73 @@ def identityOrConstBound(
     val dims = map.affineMap.dimensions
     map.affineMap.affineExprs.head match
       case AffineConstantExpr(v) => Some(Left(v))
-      case AffineDimExpr(name) =>
+      case AffineDimExpr(name)   =>
         val idx = dims.indexOf(name)
-        if idx < 0 || idx >= operands.size then None else Some(Right(operands(idx)))
+        if idx < 0 || idx >= operands.size then None
+        else Some(Right(operands(idx)))
       case _ => None
 
 def explainUnsupportedAffineExpr(expr: AffineExpr): Option[String] =
   expr match
     case _: AffineConstantExpr | _: AffineDimExpr | _: AffineSymExpr => None
-    case AffineBinaryOpExpr(AffineBinaryOp.Add | AffineBinaryOp.Minus, lhs, rhs) =>
-      explainUnsupportedAffineExpr(lhs).orElse(explainUnsupportedAffineExpr(rhs))
+    case AffineBinaryOpExpr(
+          AffineBinaryOp.Add | AffineBinaryOp.Minus,
+          lhs,
+          rhs,
+        ) =>
+      explainUnsupportedAffineExpr(lhs)
+        .orElse(explainUnsupportedAffineExpr(rhs))
     case AffineBinaryOpExpr(AffineBinaryOp.Multiply, lhs, rhs) =>
       (lhs, rhs) match
         case (_: AffineConstantExpr, _) => explainUnsupportedAffineExpr(rhs)
         case (_, _: AffineConstantExpr) => explainUnsupportedAffineExpr(lhs)
-        case _                          => Some("multiplication is only supported when one operand is a constant")
-    case AffineBinaryOpExpr(AffineBinaryOp.CeilDiv | AffineBinaryOp.FloorDiv | AffineBinaryOp.Mod, _, _) =>
-      Some("ceildiv, floordiv, and mod affine expressions are not supported by refined CFG lowering")
+        case _                          =>
+          Some(
+            "multiplication is only supported when one operand is a constant"
+          )
+    case AffineBinaryOpExpr(
+          AffineBinaryOp.CeilDiv | AffineBinaryOp.FloorDiv | AffineBinaryOp.Mod,
+          _,
+          _,
+        ) =>
+      Some(
+        "ceildiv, floordiv, and mod affine expressions are not supported by refined CFG lowering"
+      )
 
 def explainUnsupportedAffineMap(map: AffineMapAttr): Option[String] =
   if map.affineMap.affineExprs.size != 1 then
-    Some(s"expected single-result affine map, got ${map.affineMap.affineExprs.size} results")
+    Some(
+      s"expected single-result affine map, got ${map.affineMap.affineExprs.size} results"
+    )
   else explainUnsupportedAffineExpr(map.affineMap.affineExprs.head)
 
 final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
+
+  private def indexLikeType(v: Value[Attribute]): IntegerType | IndexType =
+    v.typ match
+      case t: IndexType   => t
+      case t: IntegerType => t
+      case _              => llvmIndexType
+
+  private def preferredIndexType(
+      values: Seq[Value[Attribute]]
+  ): IntegerType | IndexType =
+    values.collectFirst {
+      case v if v.typ.isInstanceOf[IndexType] =>
+        v.typ.asInstanceOf[IndexType]
+    }.getOrElse(
+      values.collectFirst {
+        case v if v.typ.isInstanceOf[IntegerType] =>
+          v.typ.asInstanceOf[IntegerType]
+      }.getOrElse(llvmIndexType)
+    )
+
+  private def arithmeticResultType(
+      lhs: Value[Attribute],
+      rhs: Value[Attribute],
+  ): IntegerType | IndexType =
+    preferredIndexType(Seq(lhs, rhs))
+
   def appendBlock(block: Block): Unit =
     blocks += block
 
@@ -60,6 +106,22 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
     val c = llvm.Constant(llvmIndexAttr(v), Result(llvmIndexType))
     block.addOp(c)
     c.res
+
+  def emitIndexConstant(
+      block: Block,
+      v: BigInt,
+      typ: IntegerType | IndexType,
+  ): Value[Attribute] =
+    val c = llvm.Constant(indexLikeAttr(v, typ), Result(typ))
+    block.addOp(c)
+    c.res
+
+  def emitIndexConstantLike(
+      block: Block,
+      v: BigInt,
+      like: Value[Attribute],
+  ): Value[Attribute] =
+    emitIndexConstant(block, v, indexLikeType(like))
 
   def emitICmpSlt(
       block: Block,
@@ -98,7 +160,7 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
     val add = llvm.Add(
       asLLVMIndex(lhs),
       asLLVMIndex(rhs),
-      Result(llvmIndexType),
+      Result(arithmeticResultType(lhs, rhs)),
     )
     block.addOp(add)
     add.res
@@ -111,13 +173,13 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
     val mul = llvm.Mul(
       asLLVMIndex(lhs),
       asLLVMIndex(rhs),
-      Result(llvmIndexType),
+      Result(arithmeticResultType(lhs, rhs)),
     )
     block.addOp(mul)
     mul.res
 
   def emitNeg(block: Block, value: Value[Attribute]): Value[Attribute] =
-    val minusOne = emitIndexConstant(block, -1)
+    val minusOne = emitIndexConstantLike(block, -1, value)
     emitMul(block, value, minusOne)
 
   def emitSub(
@@ -132,31 +194,44 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
       expr: AffineExpr,
       dims: Map[String, Value[Attribute]],
       syms: Map[String, Value[Attribute]],
+      preferredType: IntegerType | IndexType,
   ): Option[Value[Attribute]] =
     expr match
-      case AffineConstantExpr(v) => Some(emitIndexConstant(block, v))
-      case AffineDimExpr(name)   => dims.get(name)
-      case AffineSymExpr(name)   => syms.get(name)
+      case AffineConstantExpr(v) =>
+        Some(emitIndexConstant(block, v, preferredType))
+      case AffineDimExpr(name)                              => dims.get(name)
+      case AffineSymExpr(name)                              => syms.get(name)
       case AffineBinaryOpExpr(AffineBinaryOp.Add, lhs, rhs) =>
         for
-          l <- materializeAffineExpr(block, lhs, dims, syms)
-          r <- materializeAffineExpr(block, rhs, dims, syms)
+          l <- materializeAffineExpr(block, lhs, dims, syms, preferredType)
+          r <- materializeAffineExpr(block, rhs, dims, syms, preferredType)
         yield emitAdd(block, l, r)
       case AffineBinaryOpExpr(AffineBinaryOp.Minus, lhs, rhs) =>
         for
-          l <- materializeAffineExpr(block, lhs, dims, syms)
-          r <- materializeAffineExpr(block, rhs, dims, syms)
+          l <- materializeAffineExpr(block, lhs, dims, syms, preferredType)
+          r <- materializeAffineExpr(block, rhs, dims, syms, preferredType)
         yield emitSub(block, l, r)
-      case AffineBinaryOpExpr(AffineBinaryOp.Multiply, AffineConstantExpr(k), rhs) =>
-        materializeAffineExpr(block, rhs, dims, syms).map(r =>
-          emitMul(block, emitIndexConstant(block, k), r)
-        )
-      case AffineBinaryOpExpr(AffineBinaryOp.Multiply, lhs, AffineConstantExpr(k)) =>
-        materializeAffineExpr(block, lhs, dims, syms).map(l =>
-          emitMul(block, l, emitIndexConstant(block, k))
-        )
+      case AffineBinaryOpExpr(
+            AffineBinaryOp.Multiply,
+            AffineConstantExpr(k),
+            rhs,
+          ) =>
+        materializeAffineExpr(block, rhs, dims, syms, preferredType)
+          .map(r => emitMul(block, emitIndexConstantLike(block, k, r), r))
+      case AffineBinaryOpExpr(
+            AffineBinaryOp.Multiply,
+            lhs,
+            AffineConstantExpr(k),
+          ) =>
+        materializeAffineExpr(block, lhs, dims, syms, preferredType)
+          .map(l => emitMul(block, l, emitIndexConstantLike(block, k, l)))
       case AffineBinaryOpExpr(AffineBinaryOp.Multiply, _, _) => None
-      case AffineBinaryOpExpr(AffineBinaryOp.CeilDiv | AffineBinaryOp.FloorDiv | AffineBinaryOp.Mod, _, _) =>
+      case AffineBinaryOpExpr(
+            AffineBinaryOp.CeilDiv | AffineBinaryOp.FloorDiv | AffineBinaryOp
+              .Mod,
+            _,
+            _,
+          ) =>
         None
 
   def materializeAffineMap(
@@ -171,7 +246,13 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
       else
         val dims = map.affineMap.dimensions.zip(operands.take(dimCount)).toMap
         val syms = map.affineMap.symbols.zip(operands.drop(dimCount)).toMap
-        materializeAffineExpr(block, map.affineMap.affineExprs.head, dims, syms)
+        materializeAffineExpr(
+          block,
+          map.affineMap.affineExprs.head,
+          dims,
+          syms,
+          preferredIndexType(operands),
+        )
 
   def materializeAffineSet(
       block: Block,
@@ -186,9 +267,22 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
         val dims = set.affineSet.dimensions.zip(operands.take(dimCount)).toMap
         val syms = set.affineSet.symbols.zip(operands.drop(dimCount)).toMap
         val constraint = set.affineSet.affineConstraints.head
+        val preferredType = preferredIndexType(operands)
         for
-          lhs <- materializeAffineExpr(block, constraint.lhs, dims, syms)
-          rhs <- materializeAffineExpr(block, constraint.rhs, dims, syms)
+          lhs <- materializeAffineExpr(
+            block,
+            constraint.lhs,
+            dims,
+            syms,
+            preferredType,
+          )
+          rhs <- materializeAffineExpr(
+            block,
+            constraint.rhs,
+            dims,
+            syms,
+            preferredType,
+          )
         yield
           val pred = constraint.kind match
             case AffineConstraintKind.LessEqual    => llvm.ICmpPredicate.sle
@@ -201,12 +295,13 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
       operands: Seq[Value[Attribute]],
       dest: Block,
   ): Unit =
-    block.addOp(
-      llvm.Br(
-        operands.map(_.asInstanceOf[Operand[Attribute]]),
-        dest,
+    block
+      .addOp(
+        llvm.Br(
+          operands.map(_.asInstanceOf[Operand[Attribute]]),
+          dest,
+        )
       )
-    )
 
   def emitCondBr(
       block: Block,
@@ -216,12 +311,13 @@ final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
       trueDest: Block,
       falseDest: Block,
   ): Unit =
-    block.addOp(
-      llvm.CondBr(
-        asI1(cond),
-        trueArgs.map(_.asInstanceOf[Operand[Attribute]]),
-        falseArgs.map(_.asInstanceOf[Operand[Attribute]]),
-        trueDest,
-        falseDest,
+    block
+      .addOp(
+        llvm.CondBr(
+          asI1(cond),
+          trueArgs.map(_.asInstanceOf[Operand[Attribute]]),
+          falseArgs.map(_.asInstanceOf[Operand[Attribute]]),
+          trueDest,
+          falseDest,
+        )
       )
-    )
