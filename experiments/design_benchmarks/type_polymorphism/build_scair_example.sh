@@ -18,8 +18,8 @@ require_bin "$SCAIR_OPT"
 
 mono_pipeline_for_variant() {
   case "$1" in
-    debruijn) echo "monomorphize-tlam-de-bruijn" ;;
-    value_dependent) echo "monomorphize" ;;
+    debruijn) echo "monomorphize-tlam-de-bruijn,dce" ;;
+    value_dependent) echo "monomorphize,dce" ;;
     *)
       echo "error: unknown variant: $1" >&2
       exit 1
@@ -30,10 +30,10 @@ mono_pipeline_for_variant() {
 full_pipeline_for_variant() {
   case "$1" in
     debruijn)
-      echo "monomorphize-tlam-de-bruijn,beta-reduce-tlam-de-bruijn,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,reconcile-unrealized-casts,canonicalize"
+      echo "monomorphize-tlam-de-bruijn,dce,erase-tlam-de-bruijn,lower-tlam-de-bruijn-to-func,reconcile-unrealized-casts,canonicalize"
       ;;
     value_dependent)
-      echo "monomorphize,beta-reduce-tlam,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize"
+      echo "monomorphize,beta-reduce-tlam,dce,erase-tlam,lower-tlam-to-func,reconcile-unrealized-casts,canonicalize"
       ;;
     *)
       echo "error: unknown variant: $1" >&2
@@ -128,13 +128,31 @@ run_pipeline() {
   local status=0
 
   set +e
-  "$SCAIR_OPT" "$src" --allow-unregistered-dialect --passes "$passes" \
-    > "$out" 2> "$log"
-  status=$?
+  "$SCAIR_OPT" "$src" --allow-unregistered-dialect --verify-diagnostics --passes "$passes" \
+    2> "$log" \
+    | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' \
+    > "$out"
+  status="${PIPESTATUS[0]}"
   set -e
 
   if [[ $status -ne 0 ]]; then
     printf 'pass_status=fail\n' >> "$log"
+  fi
+  printf '%s\n' "$status"
+}
+
+verify_final_ir() {
+  local ir="$1"
+  local log="$2"
+  local status=0
+
+  set +e
+  "$SCAIR_OPT" "$ir" --allow-unregistered-dialect > /dev/null 2>> "$log"
+  status=$?
+  set -e
+
+  if [[ $status -ne 0 ]]; then
+    printf 'final_verify_status=fail\n' >> "$log"
   fi
   printf '%s\n' "$status"
 }
@@ -259,6 +277,7 @@ SUMMARY_MD="$OUT_DIR/summary.md"
 SUMMARY_CSV="$OUT_DIR/metrics.csv"
 DESIGN_CSV="$OUT_DIR/design_metrics.csv"
 METRICS_JSON="$OUT_DIR/metrics.json"
+FAILURES=0
 
 write_summary_header "$SUMMARY_MD" "Type Polymorphism Design Benchmark Summary"
 write_metrics_csv_header "$SUMMARY_CSV"
@@ -279,24 +298,29 @@ for case_spec in "${CASES[@]}"; do
   start_ns="$(now_ns)"
   mono_status="$(run_pipeline "$src" "$(mono_pipeline_for_variant "$variant")" "$mono_ir" "$mono_log" "$start_ns")"
   final_status=1
+  final_verify_status=1
   if [[ "$mono_status" == "0" ]]; then
     final_status="$(run_pipeline "$src" "$(full_pipeline_for_variant "$variant")" "$final_ir" "$final_log" "$start_ns")"
+    if [[ "$final_status" == "0" ]]; then
+      final_verify_status="$(verify_final_ir "$final_ir" "$final_log")"
+    fi
   else
     : > "$final_ir"
   fi
   end_ns="$(now_ns)"
   compile_ms="$(format_ms "$start_ns" "$end_ns")"
 
-  if [[ "$mono_status" == "0" && "$final_status" == "0" ]]; then
-    pass_status="ok"
-  else
-    pass_status="fail"
-  fi
-
   generated_specializations="$(count_generated_specializations "$mono_ir")"
   leftover_poly="$(count_leftover_polymorphic_ops "$final_ir")"
   leftover_tlam="$(count_leftover_tlam_ops "$final_ir")"
   notes="$(case_notes "$bench" "$variant")"
+
+  if [[ "$mono_status" == "0" && "$final_status" == "0" && "$final_verify_status" == "0" && "$leftover_poly" == "0" && "$leftover_tlam" == "0" ]]; then
+    pass_status="ok"
+  else
+    pass_status="fail"
+    FAILURES=$((FAILURES + 1))
+  fi
 
   append_design_row \
     "$DESIGN_CSV" \
@@ -328,6 +352,11 @@ for case_spec in "${CASES[@]}"; do
     "$leftover_tlam" \
     "$notes"
 done
+
+if [[ "$FAILURES" -ne 0 ]]; then
+  echo "error: type polymorphism design benchmark recorded $FAILURES failing case(s)" >&2
+  exit 1
+fi
 
 python3 - "$DESIGN_CSV" "$METRICS_JSON" <<'PY'
 import csv
