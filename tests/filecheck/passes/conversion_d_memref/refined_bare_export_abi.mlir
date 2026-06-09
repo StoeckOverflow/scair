@@ -3,23 +3,23 @@
 
 builtin.module {
   func.func @refined_rank1(
-    %n_nat : !d_tensor.nat,
-    %buf : !d_memref.memref<[%n_nat], f32>
+    %n_size : !d_tensor.size,
+    %buf : !d_memref.memref<[%n_size], f32>
   ) attributes {scair.emit_bare_interface = true} {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
-    %x = d_memref.load %buf[%c0] : !d_memref.memref<[%n_nat], f32> -> f32
-    d_memref.store %x, %buf[%c0] : f32, !d_memref.memref<[%n_nat], f32>
+    %x = d_memref.load %buf[%c0] : !d_memref.memref<[%n_size], f32> -> f32
+    d_memref.store %x, %buf[%c0] : f32, !d_memref.memref<[%n_size], f32>
     func.return
   }
 
   func.func @refined_rank2(
-    %m_nat : !d_tensor.nat,
-    %n_nat : !d_tensor.nat,
-    %buf : !d_memref.memref<[%m_nat, %n_nat], f32>
+    %m_size : !d_tensor.size,
+    %n_size : !d_tensor.size,
+    %buf : !d_memref.memref<[%m_size, %n_size], f32>
   ) attributes {scair.emit_bare_interface = true} {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
-    %x = d_memref.load %buf[%c0, %c0] : !d_memref.memref<[%m_nat, %n_nat], f32> -> f32
-    d_memref.store %x, %buf[%c0, %c0] : f32, !d_memref.memref<[%m_nat, %n_nat], f32>
+    %x = d_memref.load %buf[%c0, %c0] : !d_memref.memref<[%m_size, %n_size], f32> -> f32
+    d_memref.store %x, %buf[%c0, %c0] : f32, !d_memref.memref<[%m_size, %n_size], f32>
     func.return
   }
 }

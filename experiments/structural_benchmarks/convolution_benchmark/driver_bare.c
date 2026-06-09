@@ -12,9 +12,9 @@
 #endif
 
 extern void conv2d_dynamic(
-    int64_t n_nat, int64_t cin_nat, int64_t h_nat, int64_t w_nat,
-    int64_t cout_nat, int64_t kh_nat, int64_t kw_nat,
-    int64_t oh_nat, int64_t ow_nat,
+    int64_t n_size, int64_t cin_size, int64_t h_size, int64_t w_size,
+    int64_t cout_size, int64_t kh_size, int64_t kw_size,
+    int64_t oh_size, int64_t ow_size,
     float *Xflat,
     float *Kflat,
     float *Yflat);

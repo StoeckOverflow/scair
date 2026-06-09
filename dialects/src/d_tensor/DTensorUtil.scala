@@ -13,7 +13,7 @@ object DTensorTypeUtil:
 
   final case class NatProductFactors(factors: Seq[NatProductFactor])
 
-  private def resolveNatBase(
+  private def resolveSizeWitnessBase(
       v: Value[Attribute],
       seen: Set[Value[Attribute]] = Set.empty,
   ): OK[Value[Attribute]] =
@@ -21,39 +21,27 @@ object DTensorTypeUtil:
       Err("shape SSA parameter contains a cyclic !value<...> reference")
     else
       v.typ match
-        case _: DTensorNatLikeType => OK(v)
-        case ValueRefType(ref) => resolveNatBase(ref.getVal(), seen + v)
+        case _: DTensorSizeWitnessType => OK(v)
+        case ValueRefType(ref) => resolveSizeWitnessBase(ref.getVal(), seen + v)
         case other             =>
           Err(
-            s"shape SSA parameter must have type !d_tensor.nat or !d_tensor.posnat, got ${renderAttr(other)}"
+            s"shape SSA parameter must have type !d_tensor.size or !d_tensor.pos_size, got ${renderAttr(other)}"
           )
 
-  def resolveNatValue(v: Value[Attribute]): OK[Value[Attribute]] =
-    resolveNatBase(v)
+  def resolveSizeWitnessValue(v: Value[Attribute]): OK[Value[Attribute]] =
+    resolveSizeWitnessBase(v)
 
-  def resolveNatFromIndexValue(v: Value[Attribute]): OK[Value[Attribute]] =
+  def resolveSizeWitnessFromIndexValue(v: Value[Attribute]): OK[Value[Attribute]] =
     v.typ match
-      case _: IndexType =>
-        v.owner match
-          case Some(ShapeToIndex(nat, _)) => resolveNatBase(nat)
-          case _                          =>
-            val ownerName = v.owner match
-              case Some(op: Operation) => op.name
-              case Some(_: Block)      => "<block-arg>"
-              case None                => "<unknown>"
-            Err(
-              s"index value does not carry d_tensor shape provenance; expected producer `d_tensor.shape.to_index`, got `$ownerName`"
-            )
-      case ValueRefType(ref) => resolveNatFromIndexValue(ref.getVal())
+      case ValueRefType(ref) => resolveSizeWitnessFromIndexValue(ref.getVal())
+      case _: DTensorSizeWitnessType => resolveSizeWitnessBase(v)
       case other             =>
         Err(
-          s"expected index value for shape provenance resolution, got ${renderAttr(other)}"
+          s"expected d_tensor size witness for shape provenance resolution, got ${renderAttr(other)}"
         )
 
-  def resolveNatProvenance(v: Value[Attribute]): OK[Value[Attribute]] =
-    resolveNatValue(v) match
-      case ok @ OK(_) => ok
-      case _          => resolveNatFromIndexValue(v)
+  def resolveSizeWitnessProvenance(v: Value[Attribute]): OK[Value[Attribute]] =
+    resolveSizeWitnessValue(v)
 
   def renderAttr(a: Attribute): String =
     val out = java.io.StringWriter()
@@ -63,7 +51,7 @@ object DTensorTypeUtil:
     out.toString
 
   def checkParam(param: ValueAttribute): OK[Unit] =
-    resolveNatBase(param.getVal()).map(_ => ())
+    resolveSizeWitnessBase(param.getVal()).map(_ => ())
 
   def elemOK(elem: TypeAttribute): Boolean =
     elem match
@@ -85,14 +73,14 @@ object DTensorTypeUtil:
       rhs: Seq[ValueAttribute],
   ): Boolean =
     lhs.size == rhs.size && lhs.zip(rhs).forall((l, r) =>
-      (resolveNatBase(l.getVal()), resolveNatBase(r.getVal())) match
+      (resolveSizeWitnessBase(l.getVal()), resolveSizeWitnessBase(r.getVal())) match
         case (OK(lv), OK(rv)) => lv eq rv
         case _                => false
     )
 
   private def natConstValue(v: Value[Attribute]): Option[BigInt] =
     v.owner match
-      case Some(NatConst(IntegerAttr(IntData(k), _), _)) => Some(k)
+      case Some(SizeConstant(IntegerAttr(IntData(k), _), _)) => Some(k)
       case _                                             => None
 
   private def appendConstProduct(
@@ -106,17 +94,17 @@ object DTensorTypeUtil:
           factors.dropRight(1) :+ NatProductFactor.Const(prev * value)
         case _ => factors :+ NatProductFactor.Const(value)
 
-  def orderedNatProductFactors(
+  def orderedSizeProductFactors(
       v: Value[Attribute]
   ): OK[NatProductFactors] =
-    resolveNatBase(v).flatMap(base =>
+    resolveSizeWitnessBase(v).flatMap(base =>
       natConstValue(base) match
         case Some(k) => OK(NatProductFactors(appendConstProduct(Seq.empty, k)))
         case None =>
           base.owner match
-            case Some(NatMul(lhs, rhs, _)) =>
-              orderedNatProductFactors(lhs).flatMap(lhsFactors =>
-                orderedNatProductFactors(rhs).map(rhsFactors =>
+            case Some(SizeMul(lhs, rhs, _)) =>
+              orderedSizeProductFactors(lhs).flatMap(lhsFactors =>
+                orderedSizeProductFactors(rhs).map(rhsFactors =>
                   NatProductFactors(
                     (lhsFactors.factors ++ rhsFactors.factors).foldLeft(
                       Seq.empty[NatProductFactor]
@@ -131,7 +119,7 @@ object DTensorTypeUtil:
             case _ => OK(NatProductFactors(Seq(NatProductFactor.Atom(base))))
     )
 
-  def sameOrderedNatProduct(
+  def sameOrderedSizeProduct(
       lhs: Value[Attribute],
       rhs: Seq[Value[Attribute]],
   ): OK[Boolean] =
@@ -139,7 +127,7 @@ object DTensorTypeUtil:
       OK(NatProductFactors(Seq.empty))
     ) { case (acc, dim) =>
       acc.flatMap(factors =>
-        orderedNatProductFactors(dim).map(dimFactors =>
+        orderedSizeProductFactors(dim).map(dimFactors =>
           NatProductFactors(
             (factors.factors ++ dimFactors.factors).foldLeft(
               Seq.empty[NatProductFactor]
@@ -153,7 +141,7 @@ object DTensorTypeUtil:
       )
     }
 
-    orderedNatProductFactors(lhs).flatMap(lhsFactors =>
+    orderedSizeProductFactors(lhs).flatMap(lhsFactors =>
       rhsFactors.map(rhsFactors =>
         lhsFactors.factors.size == rhsFactors.factors.size &&
           lhsFactors.factors.zip(rhsFactors.factors).forall {

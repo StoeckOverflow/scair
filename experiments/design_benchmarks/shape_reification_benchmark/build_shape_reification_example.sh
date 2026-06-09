@@ -192,7 +192,7 @@ process_dependent
   echo
   echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo
-  echo "| Variant | Stage | tensor.dim | d_tensor.dim | shape.to_index | index arith | shape mgmt ops | total ops | LOC | Removed delta | Ratio | Notes |"
+  echo "| Variant | Stage | tensor.dim | d_tensor.dim | size witness erasure | index arith | shape mgmt ops | total ops | LOC | Removed delta | Ratio | Notes |"
   echo "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"
   tail -n +2 "$METRICS" | while IFS=, read -r variant stage toolchain status artifact tensor_dim memref_dim d_tensor_dim d_memref_dim shape_to_index nat_ops shape_ops casts arith_const arith_index alloc_shape shape_mgmt ops loc delta ratio notes; do
     echo "| \`$variant\` | \`$stage\` | $tensor_dim | $d_tensor_dim | $shape_to_index | $arith_index | $shape_mgmt | $ops | $loc | $delta | $ratio | $notes |"
@@ -202,7 +202,7 @@ process_dependent
   echo "- The ordinary identical-SSA case shows the fair baseline where upstream CSE can merge repeated syntactically identical \`tensor.dim\` queries."
   echo "- The ordinary same-shaped/different-SSA case keeps separate \`tensor.dim\` queries and repeated \`m*n\` size arithmetic because the equality contract is not represented in stock tensor types."
   echo "- The dependent route carries \`%m/%n\` in the tensor type, so \`dependent-dim-query-elim\` rewrites all repeated \`d_tensor.dim\` queries to shared nat provenance before ordinary cleanup runs."
-  echo "- After cleanup, the dependent route should retain two \`shape.to_index\` materializations and one shared \`m*n\` computation for the fanout chain."
+  echo "- After cleanup, the dependent route should retain two \`size witness erasure\` materializations and one shared \`m*n\` computation for the fanout chain."
 } > "$SUMMARY"
 
 echo "Shape reification benchmark complete."

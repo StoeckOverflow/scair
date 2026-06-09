@@ -2,8 +2,7 @@
 
 builtin.module {
   %k0 = "test.arg"() : () -> index
-  %k1_nat = "d_tensor.nat.param"() : () -> !d_tensor.posnat
-  %k1 = "d_tensor.shape.to_index"(%k1_nat) : (!d_tensor.posnat) -> index
+  %k1 = "arith.constant"() <{value = 4 : index}> : () -> index
   %k = "arith.muli"(%k0, %k1) : (index, index) -> index
   %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
   %init = "arith.constant"() <{value = 0 : index}> : () -> index
@@ -16,6 +15,6 @@ builtin.module {
 }
 
 // CHECK: %[[K:[0-9]+]] = "arith.muli"
-// CHECK-NOT: d_tensor.nat.mul
-// CHECK: %[[CLAMPED:[0-9]+]] = "arith.minsi"(%{{[0-9]+}}, %[[K]])
+// CHECK-NOT: d_tensor.size.mul
+// CHECK: %[[CLAMPED:[0-9]+]] = d_affine.min #map{{[0-9]*}} (%{{[0-9]+}})[%[[K]]] : (index)[index] -> index
 // CHECK: d_affine.for %{{[0-9]+}} = #map(%{{[0-9]+}}) to #map(%[[CLAMPED]]) step 1 : i32 iter_args

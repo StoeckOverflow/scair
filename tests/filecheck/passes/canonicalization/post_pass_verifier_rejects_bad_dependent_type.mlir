@@ -2,8 +2,8 @@
 
 builtin.module {
   func.func @post_pass_bad_result_dims(
-    %m : !d_tensor.nat,
-    %n : !d_tensor.nat,
+    %m : !d_tensor.size,
+    %n : !d_tensor.size,
     %lhs : !d_tensor.tensor<[%m, %n], f32>,
     %rhs : !d_tensor.tensor<[%m, %n], f32>
   ) -> !d_tensor.tensor<[%n, %m], f32> {

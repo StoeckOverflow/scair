@@ -78,4 +78,4 @@ before and after cleanup:
 - ordinary identical-SSA dims shrink with upstream CSE
 - ordinary different-SSA dims and per-value `m*n` computations remain separate
 - dependent dims are rewritten to shared `%m/%n` provenance, after which ordinary cleanup removes
-  redundant casts, repeated `shape.to_index` ops, and repeated `m*n` computations
+  redundant casts, repeated `size witness erasure` ops, and repeated `m*n` computations

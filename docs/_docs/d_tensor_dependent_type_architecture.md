@@ -23,14 +23,14 @@ the `DTensor` dialect. It is about `!d_tensor.*` types such as
 
 ## What this dialect does
 
-`DTensor` represents tensor dimensions as SSA-backed natural-number values and
-stores references to those values inside tensor type attributes.
+`DTensor` represents tensor dimensions as SSA-backed shape witnesses and stores
+references to those values inside tensor type attributes.
 
 For example:
 
 ```mlir
-%m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-%n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+%m = "d_tensor.size.param"() : () -> !d_tensor.size
+%n = "d_tensor.size.param"() : () -> !d_tensor.size
 %t = "d_tensor.empty"() : () -> !d_tensor.tensor<[%m, %n], f32>
 ```
 
@@ -39,13 +39,13 @@ in the result type of `%t`. This lets the type say that the tensor is shaped by
 these exact SSA witnesses, rather than by anonymous dynamic dimensions.
 
 The dialect provides:
-- nat-like shape types: `!d_tensor.nat`, `!d_tensor.posnat`
+- size-witness shape types: `!d_tensor.size`, `!d_tensor.pos_size`
 - dependent tensor types: `!d_tensor.vector`, `!d_tensor.matrix`,
   `!d_tensor.tensor`
-- nat-producing operations such as `d_tensor.nat.const`, `d_tensor.nat.add`, and
-  `d_tensor.nat.mul`
-- bridge operations between nat witnesses and executable index values, such as
-  `d_tensor.shape.to_index`
+- shape-witness operations such as `d_tensor.size.constant`,
+  `d_tensor.size.add`, and `d_tensor.size.mul`
+- rare boundary import plus late erasure from shape witnesses to executable
+  `index` values
 - tensor operations whose verification consumes dependent shape provenance,
   such as `d_tensor.add`, `d_tensor.matmul`, `d_tensor.cast`, and
   `d_tensor.expand_shape`
@@ -59,7 +59,7 @@ the operations and operands that recover those dimensions.
 
 `DTensor` makes selected shape facts explicit:
 - two tensors can share the same `%m/%n` dimension witnesses;
-- a loop bound can be tied to an explicit `d_tensor.nat.mul` product;
+- a loop bound can be tied to an explicit `d_tensor.size.mul` product;
 - `d_tensor.dim` can recover an already-known type-carried witness;
 - later passes can consume those witnesses before proof erasure or lowering.
 
@@ -96,29 +96,29 @@ final case class DTensorTensorType(
 
 `DTensorOps.scala` defines the operations that construct and consume this
 provenance:
-- `NatParam`, `NatConst`, `NatAdd`, `NatMul`
-- `ShapeToIndex`, `IndexToNat`, `NatRefinePositive`
+- `SizeParam`, `SizeConstant`, `SizeAdd`, `SizeMul`
+- `SizeImport`, `SizePositiveProof`, `SizeRefinePositive`
 - `Empty`, `Fill`, `Dim`
 - `Add`, `Mul`, `Matmul`, `Cast`, `ExpandShape`
 
 `DTensorUtil.scala` contains the shared semantic helpers used by both type and
 operation verification:
-- `resolveNatValue`
-- `resolveNatFromIndexValue`
-- `resolveNatProvenance`
+- `resolveSizeWitnessValue`
+- `resolveSizeWitnessFromIndexValue`
+- `resolveSizeWitnessProvenance`
 - `checkParam`
 - `sameDims`
-- `orderedNatProductFactors`
-- `sameOrderedNatProduct`
+- `orderedSizeProductFactors`
+- `sameOrderedSizeProduct`
 
 ## Core representation rule
 
-A valid `DTensor` dimension parameter must resolve to `!d_tensor.nat` or
-`!d_tensor.posnat`.
+A valid `DTensor` dimension parameter must resolve to `!d_tensor.size` or
+`!d_tensor.pos_size`.
 
 The helper `DTensorTypeUtil.checkParam` accepts:
-1. direct nat-like SSA values;
-2. `ValueRefType` wrappers that eventually point to nat-like SSA values.
+1. direct size-witness SSA values;
+2. `ValueRefType` wrappers that eventually point to size-witness SSA values.
 
 This second case matters for operations such as `d_tensor.dim`, whose result type
 is a `!value<...>` reference to the selected embedded dimension.
@@ -171,7 +171,7 @@ to:
 ```
 
 This behavior is what lets CSE and canonicalization work on dependent shape
-values. If CSE merges two identical `d_tensor.nat.add` operations, any tensor
+values. If CSE merges two identical `d_tensor.size.add` operations, any tensor
 type that referenced the losing result is rewritten to reference the kept
 result.
 
@@ -190,7 +190,7 @@ DCE and CSE follow the same rule. An operation result may be erased only if it
 has no ordinary uses and no type uses. This prevents dangling refs such as:
 
 ```mlir
-%m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+%m = "d_tensor.size.param"() : () -> !d_tensor.size
 %t = "test.make"() : () -> !d_tensor.tensor<[%m], f32>
 ```
 
@@ -221,7 +221,7 @@ is used in a type at a join block:
   %c = "arith.constant"() <{value = true}> : () -> i1
   "test.cond_br"(%c) [^bb1, ^bb2] : (i1) -> ()
 ^bb1:
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %m = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
   "test.br"() [^bb2] : () -> ()
 ^bb2:
   %t = "test.use"() : () -> !d_tensor.tensor<[%m], f32>
@@ -247,7 +247,7 @@ region-owning operation or only on a non-dominating path.
 Function examples normally express dynamic dimensions as entry block arguments:
 
 ```mlir
-func.func @ew_add(%m: !d_tensor.nat, %n: !d_tensor.nat) {
+func.func @ew_add(%m: !d_tensor.size, %n: !d_tensor.size) {
   %a = "d_tensor.empty"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %b = "d_tensor.empty"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %c = "d_tensor.add"(%a, %b)
@@ -259,7 +259,7 @@ func.func @ew_add(%m: !d_tensor.nat, %n: !d_tensor.nat) {
 
 ## Shape equality rule
 
-Basic `DTensor` shape equality is SSA identity after nat resolution.
+Basic `DTensor` shape equality is SSA identity after shape-witness resolution.
 
 The helper:
 
@@ -279,19 +279,19 @@ cheap verification for:
 - `d_tensor.matmul`
 
 `d_tensor.expand_shape` is the main operation with a product-aware rule. It uses
-`sameOrderedNatProduct` to check that a source dimension equals the ordered
+`sameOrderedSizeProduct` to check that a source dimension equals the ordered
 product of a group of result dimensions. Product matching follows explicit
-`d_tensor.nat.mul` chains and exact constants. It is not a general Presburger or
+`d_tensor.size.mul` chains and exact constants. It is not a general Presburger or
 symbolic-shape solver.
 
 ## Verifier responsibilities
 
 Local `DTensor` verification handles dialect-specific facts:
-- dimension params resolve to nat-like values;
+- dimension params resolve to size-witness values;
 - tensor element types are supported scalar element types;
-- `d_tensor.nat.const` is non-negative, and positive constants are strictly
+- `d_tensor.size.constant` is non-negative, and positive constants are strictly
   positive;
-- positive nat operations justify their result type from their operands;
+- positive size-witness operations justify their result type from their operands;
 - `d_tensor.dim` returns a `!value<...>` pointing at the selected embedded
   dimension;
 - elementwise ops require equal element type and pairwise SSA-identical shape;
@@ -299,7 +299,7 @@ Local `DTensor` verification handles dialect-specific facts:
   result outer dimensions;
 - `d_tensor.cast` preserves rank, element type, and exact dependent dimensions;
 - `d_tensor.expand_shape` checks reassociation structure and explicit ordered
-  nat-product equality.
+  size-product equality.
 
 Global ScaIR verification handles SSA well-formedness:
 - ordinary operand dominance;
@@ -311,8 +311,8 @@ the default `SSADominanceCheck`.
 
 ## Behavior on non-ideal input
 
-- A dimension ref that does not resolve to `!d_tensor.nat` or
-  `!d_tensor.posnat` is rejected.
+- A dimension ref that does not resolve to `!d_tensor.size` or
+  `!d_tensor.pos_size` is rejected.
 - A non-dominating embedded dimension ref is rejected by
   `SSADominanceCheck`.
 - `d_tensor.add`, `d_tensor.mul`, and `d_tensor.cast` reject mismatched shape
@@ -333,13 +333,13 @@ Representative consumers include:
   deep RAUW to update embedded dims;
 - `dependent-dim-query-elim`, which rewrites `d_tensor.dim` to type-carried
   provenance;
-- tiling fact providers that consume `d_tensor.nat.mul` product facts and refined
+- tiling fact providers that consume `d_tensor.size.mul` product facts and refined
   positivity, and that expose representable affine full-tile guards before the
   shared tiling planner chooses exact, guarded, or separable tiling;
 - `dependent-tail-min-simplify`, which removes generated tail/min guards when a
-  matching nat-product proof is still available;
-- `canonicalize-d-tensor-nat-products`, which normalizes explicit product facts;
-- `erase-d-tensor-nat-proofs-to-index`, which erases nat proof structure after
+  matching size-product proof is still available;
+- `canonicalize-d-tensor-size-products`, which normalizes explicit product facts;
+- `erase-d-tensor-size-witnesses-to-index`, which erases shape-witness proof structure after
   proof-consuming passes no longer need it.
 
 Typical proof-consuming ordering is:
@@ -348,12 +348,12 @@ Typical proof-consuming ordering is:
 canonicalize,
 cse,
 dce,
-canonicalize-d-tensor-nat-products,
+canonicalize-d-tensor-size-products,
 dependent-exact-tile or dependent-tail-min-simplify,
 canonicalize,
 cse,
 dce,
-erase-d-tensor-nat-proofs-to-index
+erase-d-tensor-size-witnesses-to-index
 ```
 
 Static affine-compatible routes insert `d-affine-to-affine-compatible` before
@@ -375,7 +375,7 @@ not yet fully generalized:
 - Generic replacement is whole-value replacement. Predicate-scoped replacement
   of embedded type refs is not yet defined.
 - Shape reasoning is intentionally explicit and limited. `sameDims` is SSA
-  identity, and product reasoning requires represented `d_tensor.nat.mul`
+  identity, and product reasoning requires represented `d_tensor.size.mul`
   provenance.
 
 These gaps do not invalidate the current tested `DTensor` path, where dependent

@@ -1,19 +1,19 @@
-package scair.passes.dependent_natmul_tiling
+package scair.passes.dependent_size_product_tiling
 
 import scair.ir.Operation
-import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
+import scair.passes.analysis.SizeProductFacts.FactorSelectionPolicy
 import scair.passes.tiling.ValueDependentTiling
 
-private[dependent_natmul_tiling] enum TailPolicy:
+private[dependent_size_product_tiling] enum TailPolicy:
   case Exact
   case Guarded
   case Separable
 
-private[dependent_natmul_tiling] enum ProductLoopKind:
+private[dependent_size_product_tiling] enum ProductLoopKind:
   case ReductionOnly
   case AnyProductLoop
 
-private[dependent_natmul_tiling] object DependentNatmulTilingTransform:
+private[dependent_size_product_tiling] object DependentSizeProductTilingTransform:
   private def mode(policy: TailPolicy): ValueDependentTiling.TailMode =
     policy match
       case TailPolicy.Exact     => ValueDependentTiling.TailMode.Exact
@@ -31,7 +31,7 @@ private[dependent_natmul_tiling] object DependentNatmulTilingTransform:
       factorPolicy: FactorSelectionPolicy = FactorSelectionPolicy.RightmostPositive,
       loopKind: ProductLoopKind = ProductLoopKind.ReductionOnly,
   ): Operation =
-    ValueDependentTiling.transformDAffineNatmulProduct(
+    ValueDependentTiling.transformDAffineSizeProductProduct(
       op,
       mode(tailPolicy),
       factorPolicy,

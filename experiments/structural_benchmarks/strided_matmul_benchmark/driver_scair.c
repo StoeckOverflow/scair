@@ -12,7 +12,7 @@
 #endif
 
 extern void matmul_strided(
-    int64_t n_nat, int64_t m_nat, int64_t k_nat,
+    int64_t n_size, int64_t m_size, int64_t k_size,
     int64_t a_stride0, int64_t a_stride1,
     int64_t b_stride0, int64_t b_stride1,
     int64_t c_stride0, int64_t c_stride1,

@@ -1,5 +1,5 @@
 // Purpose: PyTorch-like symbolic-shape chain stressing deep RAUW after shape-canonicalize and full-pipeline safety.
-// - Existing big-chain tests cover representative paths -> add focused MLP-like chain with explicit nat.add(x,0)/nat.mul(x,1) folding + type-dim rewrite checks.
+// - Existing big-chain tests cover representative paths -> add focused MLP-like chain with explicit size.add(x,0)/size.mul(x,1) folding + type-dim rewrite checks.
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=VERIFY
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | scair-opt --allow-unregistered-dialect --verify-diagnostics --split-input-file
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize | filecheck %s -DFILE=%s --check-prefix=CANON
@@ -12,15 +12,15 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | scair-opt --allow-unregistered-dialect --verify-diagnostics --split-input-file
 
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %h = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %o = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
+  %m = "d_tensor.size.param"() : () -> !d_tensor.size
+  %k = "d_tensor.size.param"() : () -> !d_tensor.size
+  %n = "d_tensor.size.param"() : () -> !d_tensor.size
+  %h = "d_tensor.size.param"() : () -> !d_tensor.size
+  %z = "d_tensor.size.constant"() <{value = 0 : i32}> : () -> !d_tensor.size
+  %o = "d_tensor.size.constant"() <{value = 1 : i32}> : () -> !d_tensor.size
 
-  %k_norm = "d_tensor.nat.add"(%k, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %m_norm = "d_tensor.nat.mul"(%m, %o) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %k_norm = "d_tensor.size.add"(%k, %z) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+  %m_norm = "d_tensor.size.mul"(%m, %o) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 
   %x = "test.x"() : () -> !d_tensor.tensor<[%m_norm, %k_norm], f32>
   %w1 = "test.w1"() : () -> !d_tensor.tensor<[%k_norm, %h], f32>
@@ -46,14 +46,14 @@ builtin.module {
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// VERIFY:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// VERIFY:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// VERIFY:   %3 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// VERIFY:   %4 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-// VERIFY:   %5 = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
-// VERIFY:   %6 = "d_tensor.nat.add"(%1, %4) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// VERIFY:   %7 = "d_tensor.nat.mul"(%0, %5) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// VERIFY:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
+// VERIFY:   %2 = "d_tensor.size.param"() : () -> !d_tensor.size
+// VERIFY:   %3 = "d_tensor.size.param"() : () -> !d_tensor.size
+// VERIFY:   %4 = "d_tensor.size.constant"() <{value = 0 : i32}> : () -> !d_tensor.size
+// VERIFY:   %5 = "d_tensor.size.constant"() <{value = 1 : i32}> : () -> !d_tensor.size
+// VERIFY:   %6 = "d_tensor.size.add"(%1, %4) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+// VERIFY:   %7 = "d_tensor.size.mul"(%0, %5) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // VERIFY:   %8 = "test.x"() : () -> !d_tensor.tensor<[%7, %6], f32>
 // VERIFY:   %9 = "test.w1"() : () -> !d_tensor.tensor<[%6, %3], f32>
 // VERIFY:   %10 = "test.b1"() : () -> !d_tensor.tensor<[%7, %3], f32>
@@ -69,12 +69,12 @@ builtin.module {
 // VERIFY: }
 
 // CANON: builtin.module {
-// CANON:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON:   %3 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON:   %4 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-// CANON:   %5 = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
+// CANON:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON:   %2 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON:   %3 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON:   %4 = "d_tensor.size.constant"() <{value = 0 : i32}> : () -> !d_tensor.size
+// CANON:   %5 = "d_tensor.size.constant"() <{value = 1 : i32}> : () -> !d_tensor.size
 // CANON:   %6 = "test.x"() : () -> !d_tensor.tensor<[%0, %1], f32>
 // CANON:   %7 = "test.w1"() : () -> !d_tensor.tensor<[%1, %3], f32>
 // CANON:   %8 = "test.b1"() : () -> !d_tensor.tensor<[%0, %3], f32>
@@ -90,10 +90,10 @@ builtin.module {
 // CANON: }
 
 // PIPE: builtin.module {
-// PIPE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE:   %3 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// PIPE:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
+// PIPE:   %2 = "d_tensor.size.param"() : () -> !d_tensor.size
+// PIPE:   %3 = "d_tensor.size.param"() : () -> !d_tensor.size
 // PIPE:   %4 = "test.x"() : () -> !d_tensor.tensor<[%0, %1], f32>
 // PIPE:   %5 = "test.w1"() : () -> !d_tensor.tensor<[%1, %3], f32>
 // PIPE:   %6 = "test.b1"() : () -> !d_tensor.tensor<[%0, %3], f32>
@@ -109,14 +109,14 @@ builtin.module {
 // PIPE: }
 
 // CSE: builtin.module {
-// CSE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   %3 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   %4 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-// CSE:   %5 = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
-// CSE:   %6 = "d_tensor.nat.add"(%1, %4) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// CSE:   %7 = "d_tensor.nat.mul"(%0, %5) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CSE:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CSE:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CSE:   %2 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CSE:   %3 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CSE:   %4 = "d_tensor.size.constant"() <{value = 0 : i32}> : () -> !d_tensor.size
+// CSE:   %5 = "d_tensor.size.constant"() <{value = 1 : i32}> : () -> !d_tensor.size
+// CSE:   %6 = "d_tensor.size.add"(%1, %4) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+// CSE:   %7 = "d_tensor.size.mul"(%0, %5) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // CSE:   %8 = "test.x"() : () -> !d_tensor.tensor<[%7, %6], f32>
 // CSE:   %9 = "test.w1"() : () -> !d_tensor.tensor<[%6, %3], f32>
 // CSE:   %10 = "test.b1"() : () -> !d_tensor.tensor<[%7, %3], f32>
@@ -131,14 +131,14 @@ builtin.module {
 // CSE:   "test.keep_big_like"(%18) : (!d_tensor.tensor<[%7, %2], f32>) -> ()
 // CSE: }
 // DCE: builtin.module {
-// DCE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// DCE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// DCE:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// DCE:   %3 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// DCE:   %4 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-// DCE:   %5 = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
-// DCE:   %6 = "d_tensor.nat.add"(%1, %4) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// DCE:   %7 = "d_tensor.nat.mul"(%0, %5) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// DCE:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// DCE:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
+// DCE:   %2 = "d_tensor.size.param"() : () -> !d_tensor.size
+// DCE:   %3 = "d_tensor.size.param"() : () -> !d_tensor.size
+// DCE:   %4 = "d_tensor.size.constant"() <{value = 0 : i32}> : () -> !d_tensor.size
+// DCE:   %5 = "d_tensor.size.constant"() <{value = 1 : i32}> : () -> !d_tensor.size
+// DCE:   %6 = "d_tensor.size.add"(%1, %4) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+// DCE:   %7 = "d_tensor.size.mul"(%0, %5) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // DCE:   %8 = "test.x"() : () -> !d_tensor.tensor<[%7, %6], f32>
 // DCE:   %9 = "test.w1"() : () -> !d_tensor.tensor<[%6, %3], f32>
 // DCE:   %10 = "test.b1"() : () -> !d_tensor.tensor<[%7, %3], f32>

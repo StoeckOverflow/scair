@@ -5,9 +5,9 @@
 
 // collapse_shape materializes the canonical ordered product dimension.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %q = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "d_tensor.size.param"() : () -> !d_tensor.size
+  %n = "d_tensor.size.param"() : () -> !d_tensor.size
+  %q = "d_tensor.size.param"() : () -> !d_tensor.size
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %flat = "d_tensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 1 : i32]]}>
@@ -16,20 +16,20 @@ builtin.module {
 }
 
 // CANON-LABEL: builtin.module {
-// CANON-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[Q:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON-NEXT:   %[[M:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %[[N:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %[[Q:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
 // CANON-NEXT:   %[[A:[0-9]+]] = "test.a"() : () -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
-// CANON-NEXT:   %[[MN:[0-9]+]] = "d_tensor.nat.mul"(%[[M]], %[[N]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CANON-NEXT:   %[[MN:[0-9]+]] = "d_tensor.size.mul"(%[[M]], %[[N]]) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // CANON-NEXT:   %[[FLAT:[0-9]+]] = "d_tensor.collapse_shape"(%[[A]]) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> !d_tensor.tensor<[%[[MN]]], f32>
 // CANON-NEXT:   "test.keep"(%[[FLAT]]) : (!d_tensor.tensor<[%[[MN]]], f32>) -> ()
 // CANON-NEXT: }
 
 // PIPE-LABEL: builtin.module {
-// PIPE-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE-NEXT:   %[[M:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// PIPE-NEXT:   %[[N:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
 // PIPE-NEXT:   %[[A:[0-9]+]] = "test.a"() : () -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
-// PIPE-NEXT:   %[[MN:[0-9]+]] = "d_tensor.nat.mul"(%[[M]], %[[N]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// PIPE-NEXT:   %[[MN:[0-9]+]] = "d_tensor.size.mul"(%[[M]], %[[N]]) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // PIPE-NEXT:   %[[FLAT:[0-9]+]] = "d_tensor.collapse_shape"(%[[A]]) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> !d_tensor.tensor<[%[[MN]]], f32>
 // PIPE-NEXT:   "test.keep"(%[[FLAT]]) : (!d_tensor.tensor<[%[[MN]]], f32>) -> ()
 // PIPE-NEXT: }
@@ -38,12 +38,12 @@ builtin.module {
 
 // Multi-group collapse_shape materializes one ordered product per group.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %nt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tn = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %q0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %q1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %mt = "d_tensor.size.param"() : () -> !d_tensor.size
+  %tm = "d_tensor.size.param"() : () -> !d_tensor.size
+  %nt = "d_tensor.size.param"() : () -> !d_tensor.size
+  %tn = "d_tensor.size.param"() : () -> !d_tensor.size
+  %q0 = "d_tensor.size.param"() : () -> !d_tensor.size
+  %q1 = "d_tensor.size.param"() : () -> !d_tensor.size
   %tiled = "test.tiled"() : () -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
   %untiled = "d_tensor.collapse_shape"(%tiled)
     <{reassociation = [[0 : i32, 1 : i32], [2 : i32, 3 : i32]]}>
@@ -52,27 +52,27 @@ builtin.module {
 }
 
 // CANON-LABEL: builtin.module {
-// CANON-NEXT:   %[[MT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[TM:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[NT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[TN:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[Q0:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[Q1:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON-NEXT:   %[[MT:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %[[TM:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %[[NT:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %[[TN:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %[[Q0:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %[[Q1:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
 // CANON-NEXT:   %[[TILED:[0-9]+]] = "test.tiled"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>
-// CANON-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.mul"(%[[MT]], %[[TM]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// CANON-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.mul"(%[[NT]], %[[TN]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CANON-NEXT:   %[[M:[0-9]+]] = "d_tensor.size.mul"(%[[MT]], %[[TM]]) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+// CANON-NEXT:   %[[N:[0-9]+]] = "d_tensor.size.mul"(%[[NT]], %[[TN]]) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // CANON-NEXT:   %[[UNTILED:[0-9]+]] = "d_tensor.collapse_shape"(%[[TILED]]) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>) -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
 // CANON-NEXT:   "test.keep"(%[[UNTILED]]) : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> ()
 // CANON-NEXT: }
 
 // PIPE-LABEL: builtin.module {
-// PIPE-NEXT:   %[[MT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[TM:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[NT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[TN:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE-NEXT:   %[[MT:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// PIPE-NEXT:   %[[TM:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// PIPE-NEXT:   %[[NT:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// PIPE-NEXT:   %[[TN:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
 // PIPE-NEXT:   %[[TILED:[0-9]+]] = "test.tiled"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>
-// PIPE-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.mul"(%[[MT]], %[[TM]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// PIPE-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.mul"(%[[NT]], %[[TN]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// PIPE-NEXT:   %[[M:[0-9]+]] = "d_tensor.size.mul"(%[[MT]], %[[TM]]) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+// PIPE-NEXT:   %[[N:[0-9]+]] = "d_tensor.size.mul"(%[[NT]], %[[TN]]) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // PIPE-NEXT:   %[[UNTILED:[0-9]+]] = "d_tensor.collapse_shape"(%[[TILED]]) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>) -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
 // PIPE-NEXT:   "test.keep"(%[[UNTILED]]) : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> ()
 // PIPE-NEXT: }
@@ -81,10 +81,10 @@ builtin.module {
 
 // join_dim materializes exactly the joined pair product.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %q = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %mt = "d_tensor.size.param"() : () -> !d_tensor.size
+  %tm = "d_tensor.size.param"() : () -> !d_tensor.size
+  %n = "d_tensor.size.param"() : () -> !d_tensor.size
+  %q = "d_tensor.size.param"() : () -> !d_tensor.size
   %b = "test.b"() : () -> !d_tensor.tensor<[%mt, %tm, %n], f32>
   %c = "d_tensor.join_dim"(%b) <{dim = 0 : i32}>
     : (!d_tensor.tensor<[%mt, %tm, %n], f32>) -> !d_tensor.tensor<[%q, %n], f32>
@@ -92,22 +92,22 @@ builtin.module {
 }
 
 // CANON-LABEL: builtin.module {
-// CANON-NEXT:   %[[MT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[TM:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[Q:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON-NEXT:   %[[MT:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %[[TM:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %[[N:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %[[Q:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
 // CANON-NEXT:   %[[B:[0-9]+]] = "test.b"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[N]]], f32>
-// CANON-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.mul"(%[[MT]], %[[TM]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CANON-NEXT:   %[[M:[0-9]+]] = "d_tensor.size.mul"(%[[MT]], %[[TM]]) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // CANON-NEXT:   %[[C:[0-9]+]] = "d_tensor.join_dim"(%[[B]]) <{dim = 0 : i32}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[N]]], f32>) -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
 // CANON-NEXT:   "test.keep"(%[[C]]) : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> ()
 // CANON-NEXT: }
 
 // PIPE-LABEL: builtin.module {
-// PIPE-NEXT:   %[[MT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[TM:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE-NEXT:   %[[MT:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// PIPE-NEXT:   %[[TM:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
+// PIPE-NEXT:   %[[N:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
 // PIPE-NEXT:   %[[B:[0-9]+]] = "test.b"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[N]]], f32>
-// PIPE-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.mul"(%[[MT]], %[[TM]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// PIPE-NEXT:   %[[M:[0-9]+]] = "d_tensor.size.mul"(%[[MT]], %[[TM]]) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // PIPE-NEXT:   %[[C:[0-9]+]] = "d_tensor.join_dim"(%[[B]]) <{dim = 0 : i32}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[N]]], f32>) -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
 // PIPE-NEXT:   "test.keep"(%[[C]]) : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> ()
 // PIPE-NEXT: }

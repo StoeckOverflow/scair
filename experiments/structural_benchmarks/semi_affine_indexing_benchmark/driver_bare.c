@@ -16,8 +16,8 @@
 #endif
 
 extern void semi_affine_fill_and_sum(
-    int64_t rows_nat, int64_t cols_nat, int64_t stride0, int64_t stride1,
-    int64_t flat_nat, int64_t out_nat, float *flat, float *out);
+    int64_t rows_size, int64_t cols_size, int64_t stride0, int64_t stride1,
+    int64_t flat_size, int64_t out_size, float *flat, float *out);
 
 int main(int argc, char **argv) {
   SemiAffineConfig cfg;

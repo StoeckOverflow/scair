@@ -1,4 +1,4 @@
-package scair.passes.erase_d_tensor_nat_proofs_to_index
+package scair.passes.erase_d_tensor_size_witnesses_to_index
 
 import scair.MLContext
 import scair.dialects.arith
@@ -13,42 +13,42 @@ import scair.transformations.{
   pattern,
 }
 
-private def asIndex(v: Value[Attribute]): Operand[arith.AnyIntegerType] =
+private def asIntegerLike(v: Value[Attribute]): Operand[arith.AnyIntegerType] =
   v.asInstanceOf[Operand[arith.AnyIntegerType]]
 
-private val IndexToNatErase = pattern { case op: DTensor.IndexToNat =>
+private val SizeImportErase = pattern { case op: DTensor.SizeImport =>
   (Seq.empty[Operation], op.index)
 }
 
-private val NatRefinePositiveErase = pattern { case op: DTensor.NatRefinePositive =>
-  (Seq.empty[Operation], op.nat)
+private val SizePositiveProofErase = pattern { case op: DTensor.SizePositiveProof =>
+  (Seq.empty[Operation], op.proof)
 }
 
-private val NatConstToIndex = pattern { case op: DTensor.NatConst =>
+private val SizeRefinePositiveErase = pattern { case op: DTensor.SizeRefinePositive =>
+  (Seq.empty[Operation], op.size)
+}
+
+private val SizeConstantToIndex = pattern { case op: DTensor.SizeConstant =>
   arith.Constant(
     IntegerAttr(IntData(op.value.value.value), IndexType()),
     Result(IndexType()),
   )
 }
 
-private val NatMulToIndex = pattern { case op: DTensor.NatMul =>
+private val SizeMulToIndex = pattern { case op: DTensor.SizeMul =>
   arith.MulI(
-    asIndex(op.lhs),
-    asIndex(op.rhs),
+    asIntegerLike(op.lhs),
+    asIntegerLike(op.rhs),
     Result(IndexType()),
   )
 }
 
-private val NatAddToIndex = pattern { case op: DTensor.NatAdd =>
+private val SizeAddToIndex = pattern { case op: DTensor.SizeAdd =>
   arith.AddI(
-    asIndex(op.lhs),
-    asIndex(op.rhs),
+    asIntegerLike(op.lhs),
+    asIntegerLike(op.rhs),
     Result(IndexType()),
   )
-}
-
-private val ShapeToIndexErase = pattern { case op: DTensor.ShapeToIndex =>
-  (Seq.empty[Operation], op.nat)
 }
 
 private def proofConsumerLeft(op: Operation): Option[String] =
@@ -65,19 +65,19 @@ private def proofConsumerLeft(op: Operation): Option[String] =
   visit(op)
   found
 
-final class EraseDTensorNatProofsToIndex(ctx: MLContext) extends ModulePass(ctx):
-  override val name: String = "erase-d-tensor-nat-proofs-to-index"
+final class EraseDTensorSizeWitnessesToIndex(ctx: MLContext) extends ModulePass(ctx):
+  override val name: String = "erase-d-tensor-size-witnesses-to-index"
 
   private val walker: PatternRewriteWalker =
     PatternRewriteWalker(
       GreedyRewritePatternApplier(
         Seq(
-          IndexToNatErase,
-          NatRefinePositiveErase,
-          NatConstToIndex,
-          NatAddToIndex,
-          NatMulToIndex,
-          ShapeToIndexErase,
+          SizeImportErase,
+          SizeRefinePositiveErase,
+          SizePositiveProofErase,
+          SizeConstantToIndex,
+          SizeAddToIndex,
+          SizeMulToIndex,
         )
       )
     )
@@ -85,8 +85,8 @@ final class EraseDTensorNatProofsToIndex(ctx: MLContext) extends ModulePass(ctx)
   override def transform(op: Operation): Operation =
     proofConsumerLeft(op).foreach { consumer =>
       throw new Exception(
-        s"erase-d-tensor-nat-proofs-to-index cannot run while $consumer remains. " +
-          "Run proof-consuming passes first, then d-affine-to-affine-compatible or lower-refined-control-flow-to-llvm before erasing nat proofs."
+        s"erase-d-tensor-size-witnesses-to-index cannot run while $consumer remains. " +
+          "Run proof-consuming passes first, then d-affine-to-affine-compatible or lower-refined-control-flow-to-llvm before erasing size witness proofs."
       )
     }
     walker.rewrite(op)

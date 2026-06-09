@@ -1,15 +1,14 @@
 // RUN: scair-opt %s --allow-unregistered-dialect -p dependent-product-loop-exact-tile | filecheck %s
 
 builtin.module {
-  %k0 = "d_tensor.nat.const"() <{value = 16 : i32}> : () -> !d_tensor.nat
-  %k1 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-  %k = "d_tensor.nat.mul"(%k0, %k1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %ub = "d_tensor.shape.to_index"(%k) : (!d_tensor.nat) -> index
+  %k0 = "d_tensor.size.constant"() <{value = 16 : i32}> : () -> !d_tensor.size
+  %k1 = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
+  %k = "d_tensor.size.mul"(%k0, %k1) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
   %out = "test.memref"() : () -> memref<?xf32>
   %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
   %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 
-  d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%ub) step 1 : index {
+  d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k) step 1 : index {
     "memref.store"(%cst, %out, %p) : (f32, memref<?xf32>, index) -> ()
     d_affine.yield
   }
@@ -17,16 +16,14 @@ builtin.module {
 
 // CHECK: #map = affine_map<(d0)[] -> (d0)>
 // CHECK: #map1 = affine_map<(d0)[] -> (d0 + 3)>
-// CHECK: %[[K0:[0-9]+]] = "d_tensor.nat.const"() <{value = 16 : i32}> : () -> !d_tensor.nat
-// CHECK: %[[K1:[0-9]+]] = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-// CHECK: %[[K:[0-9]+]] = "d_tensor.nat.mul"(%[[K0]], %[[K1]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// CHECK: %[[UB:[0-9]+]] = "d_tensor.shape.to_index"(%[[K]]) : (!d_tensor.nat) -> index
+// CHECK: %[[K0:[0-9]+]] = "d_tensor.size.constant"() <{value = 16 : i32}> : () -> !d_tensor.size
+// CHECK: %[[K1:[0-9]+]] = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
+// CHECK: %[[K:[0-9]+]] = "d_tensor.size.mul"(%[[K0]], %[[K1]]) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // CHECK: %[[OUT:[0-9]+]] = "test.memref"() : () -> memref<?xf32>
 // CHECK: %[[C0:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
 // CHECK: %[[CST:[0-9]+]] = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 // CHECK: %[[TILE_C0:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
-// CHECK: %[[TILE_SIZE:[0-9]+]] = "d_tensor.shape.to_index"(%[[K1]]) : (!d_tensor.nat) -> index
-// CHECK: d_affine.for %[[TILE:[0-9]+]] = #map(%[[TILE_C0]]) to #map(%[[UB]]) step 3 : i32 {
+// CHECK: d_affine.for %[[TILE:[0-9]+]] = #map(%[[TILE_C0]]) to #map(%[[K]]) step 3 : i32 {
 // CHECK: d_affine.for %[[P:[0-9]+]] = #map(%[[TILE]]) to #map{{[0-9]+}}(%[[TILE]]) step 1 : i32
 // CHECK: "memref.store"(%[[CST]], %[[OUT]], %[[P]]) : (f32, memref<?xf32>, index) -> ()
 // CHECK-NOT: arith.addi

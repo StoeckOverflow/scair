@@ -14,19 +14,19 @@
 //   O = A * W : [BS, H]
 
 func.func @tf_mha_projection_gemm(
-    %B  : !d_tensor.nat,        // batch size
-    %S  : !d_tensor.nat,        // sequence length
-    %nh : !d_tensor.nat         // num_heads (symbolic)
+    %B  : !d_tensor.size,        // batch size
+    %S  : !d_tensor.size,        // sequence length
+    %nh : !d_tensor.size         // num_heads (symbolic)
 ) {
 
   // head_dim = 64 is a very common transformer choice
-  %hd64 = "d_tensor.nat.const"() <{value = 64 : i32}> : () -> !d_tensor.nat
+  %hd64 = "d_tensor.size.constant"() <{value = 64 : i32}> : () -> !d_tensor.size
 
   // BS = B * S  (flatten batch x sequence)
-  %BS = "d_tensor.nat.mul" (%B, %S) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %BS = "d_tensor.size.mul" (%B, %S) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 
   // H = num_heads * head_dim
-  %H  = "d_tensor.nat.mul" (%nh, %hd64) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %H  = "d_tensor.size.mul" (%nh, %hd64) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 
   // A: [BS, H]  (activations)
   %A = "d_tensor.empty" () : () -> !d_tensor.tensor<[%BS, %H], f32>
@@ -43,10 +43,10 @@ func.func @tf_mha_projection_gemm(
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   func.func @tf_mha_projection_gemm(%0: !d_tensor.nat, %1: !d_tensor.nat, %2: !d_tensor.nat) {
-// VERIFY:     %3 = "d_tensor.nat.const"() <{value = 64 : i32}> : () -> !d_tensor.nat
-// VERIFY:     %4 = "d_tensor.nat.mul"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// VERIFY:     %5 = "d_tensor.nat.mul"(%2, %3) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   func.func @tf_mha_projection_gemm(%0: !d_tensor.size, %1: !d_tensor.size, %2: !d_tensor.size) {
+// VERIFY:     %3 = "d_tensor.size.constant"() <{value = 64 : i32}> : () -> !d_tensor.size
+// VERIFY:     %4 = "d_tensor.size.mul"(%0, %1) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+// VERIFY:     %5 = "d_tensor.size.mul"(%2, %3) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // VERIFY:     %6 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%4, %5], f32>
 // VERIFY:     %7 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%5, %5], f32>
 // VERIFY:     %8 = "d_tensor.matmul"(%6, %7) : (!d_tensor.tensor<[%4, %5], f32>, !d_tensor.tensor<[%5, %5], f32>) -> !d_tensor.tensor<[%4, %5], f32>

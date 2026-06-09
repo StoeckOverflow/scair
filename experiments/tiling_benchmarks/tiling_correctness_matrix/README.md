@@ -8,7 +8,7 @@ complements the matmul runtime benchmark by making the compiler assumptions easy
 - `ordinary_tail`: ordinary `arith.muli` product; affine min tail must remain.
 - `non_divisible_ordinary`: ordinary static product with tile size 3 over product 10; affine min
   tail must remain.
-- `dependent_exact_dynamic`: explicit `d_tensor.nat.mul` with a `!d_tensor.posnat` factor; dynamic
+- `dependent_exact_dynamic`: explicit `d_tensor.size.mul` with a `!d_tensor.pos_size` factor; dynamic
   exact tile with no tail.
 - `dependent_static_affine`: static `nat.const` factor; exact tile and bridge to stock `affine.for`.
 - `runtime_checked_dynamic`: `cf.assert` positivity refinement; exact tile, assertion lowering, and

@@ -1,8 +1,8 @@
 #include "driver_common.h"
 
 extern void matmul_full_factorized_tiling(
-    int64_t m0_nat, int64_t m1_nat, int64_t n0_nat, int64_t n1_nat,
-    int64_t k0_nat, int64_t k1_nat, float *A, float *B, float *C);
+    int64_t m0_size, int64_t m1_size, int64_t n0_size, int64_t n1_size,
+    int64_t k0_size, int64_t k1_size, float *A, float *B, float *C);
 
 int main(int argc, char **argv) {
   int64_t iterations = 100;

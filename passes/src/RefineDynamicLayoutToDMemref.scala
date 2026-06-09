@@ -39,12 +39,12 @@ private def identityMap(map: AffineMapAttr, rank: Int): Boolean =
       case _ => false
     }
 
-private def staticNat(v: BigInt): (Seq[Operation], ValueAttribute) =
-  val c = DTensor.NatConst(i32Attr(v), Result(DTensor.DTensorNatType()))
+private def staticSizeWitness(v: BigInt): (Seq[Operation], ValueAttribute) =
+  val c = DTensor.SizeConstant(i32Attr(v), Result(DTensor.DTensorSizeType()))
   (Seq(c), ValueAttribute(c.res))
 
-private def dynamicNat(v: Operand[IndexType]): (Seq[Operation], ValueAttribute) =
-  val cast = DTensor.IndexToNat(v, Result(DTensor.DTensorNatType()))
+private def dynamicSizeWitness(v: Operand[IndexType]): (Seq[Operation], ValueAttribute) =
+  val cast = DTensor.SizeImport(v, Result(DTensor.DTensorSizeType()))
   (Seq(cast), ValueAttribute(cast.res))
 
 private def refineBaseMemrefType(
@@ -55,11 +55,11 @@ private def refineBaseMemrefType(
   val emitted = mutable.ArrayBuffer.empty[Operation]
   val dims = ty.shape.attrValues.map { dim =>
     if dim.data >= 0 then
-      val (ops, attr) = staticNat(dim.data)
+      val (ops, attr) = staticSizeWitness(dim.data)
       emitted ++= ops
       attr
     else
-      val (ops, attr) = dynamicNat(dynamicDims(dynIdx))
+      val (ops, attr) = dynamicSizeWitness(dynamicDims(dynIdx))
       dynIdx += 1
       emitted ++= ops
       attr
@@ -79,11 +79,11 @@ private def refineReinterpretType(
   var sizeIdx = 0
   val dims = ty.shape.attrValues.map { dim =>
     if dim.data >= 0 then
-      val (ops, attr) = staticNat(dim.data)
+      val (ops, attr) = staticSizeWitness(dim.data)
       emitted ++= ops
       attr
     else
-      val (ops, attr) = dynamicNat(sizes(sizeIdx))
+      val (ops, attr) = dynamicSizeWitness(sizes(sizeIdx))
       sizeIdx += 1
       emitted ++= ops
       attr
@@ -132,10 +132,10 @@ private def newFunctionArguments(
     oldArg.typ match
       case ranked: RankedMemrefType =>
         val dimArgs = ranked.shape.attrValues.indices.map(_ =>
-          BlockArgument(DTensor.DTensorNatType()).asInstanceOf[Value[Attribute]]
+          BlockArgument(DTensor.DTensorSizeType()).asInstanceOf[Value[Attribute]]
         )
         newArgs ++= dimArgs
-        signatureInputs ++= Seq.fill(dimArgs.size)(DTensor.DTensorNatType())
+        signatureInputs ++= Seq.fill(dimArgs.size)(DTensor.DTensorSizeType())
         val memArg =
           BlockArgument(refinedArgType(ranked, dimArgs)).asInstanceOf[Value[Attribute]]
         newArgs += memArg
@@ -162,7 +162,7 @@ private def materializeDimOperands(
           axisConst.result.asInstanceOf[Operand[IndexType]],
           Result(IndexType()),
         )
-        val nat = DTensor.IndexToNat(dim.result.asInstanceOf[Operand[IndexType]], Result(DTensor.DTensorNatType()))
+        val nat = DTensor.SizeImport(dim.result.asInstanceOf[Operand[IndexType]], Result(DTensor.DTensorSizeType()))
         emitted += axisConst
         emitted += dim
         emitted += nat
@@ -173,21 +173,21 @@ private def materializeDimOperands(
         param match
           case p: ValueAttribute =>
             p.getVal().typ match
-              case _: DTensor.DTensorNatLikeType =>
+              case _: DTensor.DTensorSizeWitnessType =>
                 p.getVal().asInstanceOf[Operand[Attribute]]
               case _: IndexType =>
-                val nat = DTensor.IndexToNat(
+                val nat = DTensor.SizeImport(
                   p.getVal().asInstanceOf[Operand[IndexType]],
-                  Result(DTensor.DTensorNatType()),
+                  Result(DTensor.DTensorSizeType()),
                 )
                 emitted += nat
                 nat.res.asInstanceOf[Operand[Attribute]]
               case ValueRefType(ref) =>
                 ref.getVal().asInstanceOf[Operand[Attribute]]
           case IntegerAttr(IntData(v), _) =>
-            val nat = DTensor.NatConst(
+            val nat = DTensor.SizeConstant(
               i32Attr(v),
-              Result(DTensor.DTensorNatType()),
+              Result(DTensor.DTensorSizeType()),
             )
             emitted += nat
             nat.res.asInstanceOf[Operand[Attribute]]

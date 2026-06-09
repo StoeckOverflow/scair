@@ -2,9 +2,9 @@ package scair.passes.analysis
 
 import scair.dialects.{d_tensor as DTensor}
 import scair.ir.*
-import scair.passes.NatProvenance
+import scair.passes.SizeWitnessProvenance
 
-object NatProductFacts:
+object SizeProductFacts:
   enum FactorSelectionPolicy:
     case RightmostPositive
     case LeftmostPositive
@@ -22,17 +22,17 @@ object NatProductFacts:
 
   final case class Factor(value: Value[Attribute], constValue: Option[BigInt]):
     def isPositive: Boolean =
-      constValue.exists(_ > 0) || NatProvenance.isPositive(value)
+      constValue.exists(_ > 0) || SizeWitnessProvenance.isPositive(value)
 
     def key: FactorKey =
       constValue match
-        case Some(k) if value.owner.exists(_.isInstanceOf[DTensor.NatConst]) =>
+        case Some(k) if value.owner.exists(_.isInstanceOf[DTensor.SizeConstant]) =>
           FactorKey.Const(k)
-        case _ => FactorKey.Atom(NatProvenance.resolveNat(value).getOrElse(value))
+        case _ => FactorKey.Atom(SizeWitnessProvenance.resolveSizeWitness(value).getOrElse(value))
 
   final case class ProductFactors(factors: Seq[Factor]):
     private def sameExplicitFactor(lhs: Factor, rhs: Factor): Boolean =
-      NatProvenance.equivalentNatOrConst(lhs.value, rhs.value) ||
+      SizeWitnessProvenance.equivalentSizeWitnessOrConst(lhs.value, rhs.value) ||
         ((lhs.key, rhs.key) match
           case (FactorKey.Const(l), FactorKey.Const(r)) => l == r
           case (FactorKey.Atom(l), FactorKey.Atom(r))   => l eq r
@@ -40,10 +40,10 @@ object NatProductFacts:
         )
 
     def containsEquivalentFactor(tileSize: Value[Attribute]): Boolean =
-      factors.exists(f => NatProvenance.equivalentNatOrConst(f.value, tileSize))
+      factors.exists(f => SizeWitnessProvenance.equivalentSizeWitnessOrConst(f.value, tileSize))
 
     def removeOneEquivalentFactor(tileSize: Value[Attribute]): Option[Seq[Factor]] =
-      val idx = factors.indexWhere(f => NatProvenance.equivalentNatOrConst(f.value, tileSize))
+      val idx = factors.indexWhere(f => SizeWitnessProvenance.equivalentSizeWitnessOrConst(f.value, tileSize))
       if idx < 0 then None else Some(factors.patch(idx, Nil, 1))
 
     def containsAllExplicitFactors(factorProduct: ProductFactors): Boolean =
@@ -93,7 +93,7 @@ object NatProductFacts:
       }.exists(_.isEmpty)
 
   def flattenProduct(v: Value[Attribute]): Option[ProductFactors] =
-    NatProvenance.resolveNat(v).map(nat => ProductFactors(flattenNat(nat)))
+    SizeWitnessProvenance.resolveSizeWitness(v).map(size => ProductFactors(flattenSizeProduct(size)))
 
   def factorMultiset(v: Value[Attribute]): Option[ProductFactors] =
     flattenProduct(v)
@@ -149,24 +149,24 @@ object NatProductFacts:
         var prelude = Seq.empty[Operation]
         var acc = first.value
         rest.foreach { factor =>
-          val mul = DTensor.NatMul(
-            acc.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
-            factor.value.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
-            Result(DTensor.DTensorNatType()),
+          val mul = DTensor.SizeMul(
+            acc.asInstanceOf[Operand[DTensor.DTensorSizeWitnessType]],
+            factor.value.asInstanceOf[Operand[DTensor.DTensorSizeWitnessType]],
+            Result(DTensor.DTensorSizeType()),
           )
           prelude = prelude :+ mul
           acc = mul.res
         }
         Some((prelude, acc))
 
-  private def flattenNat(v: Value[Attribute]): Seq[Factor] =
-    val base = NatProvenance.resolveNat(v).getOrElse(v)
-    NatProvenance.exactConst(base) match
-      case Some(k) if base.owner.exists(_.isInstanceOf[DTensor.NatConst]) =>
+  private def flattenSizeProduct(v: Value[Attribute]): Seq[Factor] =
+    val base = SizeWitnessProvenance.resolveSizeWitness(v).getOrElse(v)
+    SizeWitnessProvenance.exactConst(base) match
+      case Some(k) if base.owner.exists(_.isInstanceOf[DTensor.SizeConstant]) =>
         Seq(Factor(base, Some(k)))
       case _ =>
         base.owner match
-          case Some(DTensor.NatMul(lhs, rhs, _)) =>
-            flattenNat(lhs) ++ flattenNat(rhs)
+          case Some(DTensor.SizeMul(lhs, rhs, _)) =>
+            flattenSizeProduct(lhs) ++ flattenSizeProduct(rhs)
           case _ =>
-            Seq(Factor(base, NatProvenance.exactConst(base)))
+            Seq(Factor(base, SizeWitnessProvenance.exactConst(base)))

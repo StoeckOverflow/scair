@@ -27,7 +27,7 @@ tiling emitter itself is not route-specific.
 - `passes/src/tiling/ValueDependentTiling.scala`
   - shared domain extraction, fact providers, planner, body cloning, and loop
     emission for `affine.for` and `d_affine.for` tiling.
-- `passes/src/DependentNatmulTilingTransform.scala`
+- `passes/src/DependentSizeProductTilingTransform.scala`
   - compatibility facade used by product-loop pass wrappers.
 - `passes/src/DependentProductLoopExactTile.scala`
   - pass wrappers for exact and separable dependent product-loop tiling.
@@ -41,20 +41,20 @@ tiling emitter itself is not route-specific.
   - output/context loop tiling for ordinary and dependent loops.
 - `passes/src/DependentTailMinSimplify.scala`
   - removes provably unnecessary tail clamps after guarded tiling.
-- `passes/src/analysis/NatProductFacts.scala`
-  - product/factor reasoning for `d_tensor.nat.mul` provenance.
+- `passes/src/analysis/SizeProductFacts.scala`
+  - product/factor reasoning for `d_tensor.size.mul` provenance.
 - `passes/src/analysis/TailBoundFacts.scala`
   - recognizes `min(tile + tileSize, fullBound)` and proves when it can be
     removed.
-- `passes/src/NatProvenance.scala`
+- `passes/src/SizeWitnessProvenance.scala`
   - resolves nat provenance, constants, positivity, and simple affine
     projections.
-- `passes/src/RefinePositiveNatsFromAsserts.scala`
-  - turns dominating positive `cf.assert` facts into `!d_tensor.posnat`
+- `passes/src/RefinePositiveSizeWitnessesFromAsserts.scala`
+  - turns dominating positive `cf.assert` facts into `!d_tensor.pos_size`
     refinements consumed by tiling facts.
 - `passes/src/DAffineToAffineCompatible.scala`
   - bridges eligible `d_affine.for` and `d_affine.if` forms to stock affine.
-- `passes/src/DependentNatmulLoopFactorization.scala`
+- `passes/src/DependentSizeProductLoopFactorization.scala`
   - adjacent structural factorization pass. It rewrites flat product loops into
     nested loops, but it is not the generic tiling emitter.
 
@@ -73,10 +73,10 @@ points:
 - `dependent-context-band-tile-with-tail:N`
   - guarded dependent output/context-band tiling with a static tile size.
 - `dependent-context-band-factor-tile-with-tail[:policy]`
-  - dependent context-band tiling with a selected nat-product factor and a
+  - dependent context-band tiling with a selected size-product factor and a
     guarded tail.
 - `dependent-context-band-exact-tile[:policy]`
-  - dependent context-band tiling with a selected nat-product factor and no tail
+  - dependent context-band tiling with a selected size-product factor and no tail
     clamp.
 - `dependent-context-band-separable-tile[:policy]`
   - dependent context-band tiling with full/partial separation.
@@ -108,7 +108,7 @@ The current supported domain shape is deliberately conservative:
 - one-region, one-block loop body;
 - exactly one lower-bound operand and one upper-bound operand;
 - identity lower and upper affine maps;
-- lower bound proven exactly `0` by `NatProvenance`;
+- lower bound proven exactly `0` by `SizeWitnessProvenance`;
 - source loop step `1`;
 - `d_affine.for` may use a dynamic step only after tiling has been emitted, not
   as the original source step.
@@ -134,10 +134,10 @@ Tile selection and proof discovery are fact-provider responsibilities.
 
 Current providers:
 
-- `NatMulFactProvider`
-  - consumes `d_tensor.nat.mul` provenance through `NatProductFacts`;
+- `SizeProductFactProvider`
+  - consumes `d_tensor.size.mul` provenance through `SizeProductFacts`;
   - chooses a positive factor according to the pass factor policy;
-  - provides exact-divisibility proof (`ProofSource.NatMul`).
+  - provides exact-divisibility proof (`ProofSource.SizeProduct`).
 - `OrdinaryProductFactProvider`
   - recognizes an ordinary `arith.muli` upper bound;
   - uses a known-positive multiplicand as the tile size;
@@ -150,7 +150,7 @@ Current providers:
   - supplies static tile sizes for static context-band routes.
 - `RefinedAssertFactProvider`
   - exposes positivity learned from `cf.assert`-driven refinement through
-    `NatProvenance.isPositive`.
+    `SizeWitnessProvenance.isPositive`.
 - `AffineSetFactProvider`
   - says whether the v1 1D full-tile condition can be represented as an affine
     set.
@@ -177,7 +177,7 @@ The core questions are:
 - Is the domain extent exactly divisible by the tile size?
 - Can the full-tile condition be represented as an affine guard?
 
-The current exact proof source is nat-product factor containment. Assert-derived
+The current exact proof source is size-product factor containment. Assert-derived
 facts currently contribute primarily through positivity refinement. Direct
 arbitrary inequality scanning from raw `cf.assert` is not implemented yet.
 
@@ -282,17 +282,17 @@ It remaps:
 The original loop is replaced with any required prelude operations plus the new
 outer loop. Original loop results are remapped to the outer loop results.
 
-## Nat Product Facts
+## Size Product Facts
 
-`NatProductFacts.flattenProduct(v)` asks `NatProvenance.resolveNat(v)` for the
-nat witness behind an index value. It then flattens nested `d_tensor.nat.mul`
-operations.
+`SizeProductFacts.flattenProduct(v)` asks `SizeWitnessProvenance` for the
+explicit shape witness behind a value. It then flattens nested
+`d_tensor.size.mul` operations.
 
 For example:
 
 ```mlir
-%ab = "d_tensor.nat.mul"(%a, %b)
-%abc = "d_tensor.nat.mul"(%ab, %c)
+%ab = "d_tensor.size.mul"(%a, %b)
+%abc = "d_tensor.size.mul"(%ab, %c)
 ```
 
 is modeled as:
@@ -312,7 +312,7 @@ known positive. This prevents dynamic zero-step loops.
 
 ## Assert And Refinement Facts
 
-`RefinePositiveNatsFromAsserts` recognizes assertions such as:
+`RefinePositiveSizeWitnessesFromAsserts` recognizes assertions such as:
 
 ```mlir
 %ok = arith.cmpi sgt %k_idx, %c0 : index
@@ -322,11 +322,11 @@ cf.assert %ok
 and inserts:
 
 ```mlir
-%k_pos = "d_tensor.nat.refine_positive"(%k, %ok)
+%k_pos = "d_tensor.size.refine_positive"(%k, %ok)
 ```
 
-Later uses are rewritten to the positive nat where safe. `NatProvenance` then
-sees `!d_tensor.posnat`, and tiling providers can treat the corresponding tile
+Later uses are rewritten to the positive nat where safe. `SizeWitnessProvenance` then
+sees `!d_tensor.pos_size`, and tiling providers can treat the corresponding tile
 size as positive.
 
 This is the current assert-derived path. The tiler does not yet scan arbitrary
@@ -353,7 +353,7 @@ where `tileIv + tileSize` may come from:
 - the loop IV is the same SSA value as `tileIv`;
 - the loop upper bound is the same SSA value as `fullBound`;
 - the loop step is compatible with `tileSize`;
-- `fullBound` contains `tileSize` as an explicit nat-product factor.
+- `fullBound` contains `tileSize` as an explicit size-product factor.
 
 If the proof succeeds, the clamp result is replaced with the unclamped tile end.
 
@@ -362,7 +362,7 @@ If the proof succeeds, the clamp result is replaced with the unclamped tile end.
 Ordinary affine product tiling is the fixed-size baseline for `affine.for`.
 
 It recognizes product bounds produced by ordinary `arith.muli`. Since ordinary
-index arithmetic is not a dependent nat witness, the route does not claim exact
+index arithmetic is not a dependent shape witness, the route does not claim exact
 factor proof. It emits guarded affine tails.
 
 The two product wrappers differ only in target selection:

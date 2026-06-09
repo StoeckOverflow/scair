@@ -12,8 +12,8 @@
 
 // Parse/print + verify with nat.param in type params (tensor + sugar forms).
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "d_tensor.size.param"() : () -> !d_tensor.size
+  %n = "d_tensor.size.param"() : () -> !d_tensor.size
   %v = "test.v"() : () -> !d_tensor.vector<%m, f32>
   %mat = "test.mat"() : () -> !d_tensor.matrix<%m, %n, f32>
   %t = "test.t"() : () -> !d_tensor.tensor<[%m, %n], f32>
@@ -22,8 +22,8 @@ builtin.module {
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// VERIFY:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// VERIFY:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
 // VERIFY:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
 // VERIFY:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
 // VERIFY:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
@@ -31,8 +31,8 @@ builtin.module {
 // VERIFY: }
 
 // CANON: builtin.module {
-// CANON:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
 // CANON:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
 // CANON:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
 // CANON:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
@@ -40,8 +40,8 @@ builtin.module {
 // CANON: }
 
 // CSE: builtin.module {
-// CSE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CSE:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CSE:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
 // CSE:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
 // CSE:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
 // CSE:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
@@ -49,8 +49,8 @@ builtin.module {
 // CSE: }
 
 // DCE: builtin.module {
-// DCE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// DCE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// DCE:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// DCE:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
 // DCE:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
 // DCE:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
 // DCE:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
@@ -58,8 +58,8 @@ builtin.module {
 // DCE: }
 
 // PIPE: builtin.module {
-// PIPE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// PIPE:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
 // PIPE:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
 // PIPE:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
 // PIPE:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
@@ -70,22 +70,22 @@ builtin.module {
 
 // CSE must not merge nat.param producers (fresh identity).
 builtin.module {
-  %p0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %p1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  "test.keep_params"(%p0, %p1) : (!d_tensor.nat, !d_tensor.nat) -> ()
+  %p0 = "d_tensor.size.param"() : () -> !d_tensor.size
+  %p1 = "d_tensor.size.param"() : () -> !d_tensor.size
+  "test.keep_params"(%p0, %p1) : (!d_tensor.size, !d_tensor.size) -> ()
 }
 
 // CSE: builtin.module {
-// CSE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   "test.keep_params"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> ()
+// CSE:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CSE:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CSE:   "test.keep_params"(%0, %1) : (!d_tensor.size, !d_tensor.size) -> ()
 // CSE: }
 
 // -----
 
 // Dead nat.param should be removed by DCE.
 builtin.module {
-  %p = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %p = "d_tensor.size.param"() : () -> !d_tensor.size
 }
 
 // DCE: builtin.module {

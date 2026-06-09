@@ -8,18 +8,18 @@ import scair.utils.OK
 import scair.transformations.{GreedyRewritePatternApplier, PatternRewriteWalker, WalkerPass, PatternAction, pattern}
 
 private def constValue(
-    v: Value[DTensorNatLikeType]
+    v: Value[DTensorSizeWitnessType]
 ): Option[(BigInt, IntegerType | IndexType)] =
   v.owner match
-    case Some(NatConst(IntegerAttr(IntData(k), typ), _)) => Some((k, typ))
+    case Some(SizeConstant(IntegerAttr(IntData(k), typ), _)) => Some((k, typ))
     case _                                               => None
 
-private def mkNatConst(
+private def mkSizeConstant(
     k: BigInt,
     typ: IntegerType | IndexType,
-    resType: DTensorNatLikeType,
-): NatConst =
-  NatConst(IntegerAttr(IntData(k), typ), Result(resType))
+    resType: DTensorSizeWitnessType,
+): SizeConstant =
+  SizeConstant(IntegerAttr(IntData(k), typ), Result(resType))
 
 private def parseReassociationGroups(
     reassociation: ArrayAttribute[Attribute]
@@ -39,10 +39,10 @@ private def parseReassociationGroups(
 private def productType(
     lhs: Value[Attribute],
     rhs: Value[Attribute],
-): DTensorNatLikeType =
+): DTensorSizeWitnessType =
   (lhs.typ, rhs.typ) match
-    case (_: DTensorPosNatType, _: DTensorPosNatType) => DTensorPosNatType()
-    case _                                            => DTensorNatType()
+    case (_: DTensorPosSizeType, _: DTensorPosSizeType) => DTensorPosSizeType()
+    case _                                            => DTensorSizeType()
 
 private def buildOrderedProduct(
     dims: Seq[Value[Attribute]]
@@ -54,9 +54,9 @@ private def buildOrderedProduct(
       Some(
         rest.foldLeft((Seq.empty[Operation], first)) {
           case ((ops, acc), dim) =>
-            val mul = NatMul(
-              acc.asInstanceOf[Operand[DTensorNatLikeType]],
-              dim.asInstanceOf[Operand[DTensorNatLikeType]],
+            val mul = SizeMul(
+              acc.asInstanceOf[Operand[DTensorSizeWitnessType]],
+              dim.asInstanceOf[Operand[DTensorSizeWitnessType]],
               Result(productType(acc, dim)),
             )
             (ops :+ mul, mul.res)
@@ -79,27 +79,27 @@ private def productMatches(
     product: Value[Attribute],
     factors: Seq[Value[Attribute]],
 ): Boolean =
-  DTensorTypeUtil.sameOrderedNatProduct(product, factors) match
+  DTensorTypeUtil.sameOrderedSizeProduct(product, factors) match
     case OK(true) => true
     case _        => false
 
-private val NatAddFold = pattern { case NatAdd(lhs, rhs, res) =>
+private val SizeAddFold = pattern { case SizeAdd(lhs, rhs, res) =>
   (constValue(lhs), constValue(rhs)) match
     case (Some((0, _)), _)              => (Seq(), Seq(rhs))
     case (_, Some((0, _)))              => (Seq(), Seq(lhs))
     case (Some((a, aty)), Some((b, _))) =>
-      mkNatConst(a + b, aty, res.typ)
+      mkSizeConstant(a + b, aty, res.typ)
     case _ => PatternAction.Abort
 }
 
-private val NatMulFold = pattern { case NatMul(lhs, rhs, res) =>
+private val SizeMulFold = pattern { case SizeMul(lhs, rhs, res) =>
   (constValue(lhs), constValue(rhs)) match
     case (Some((0, _)), _)              => (Seq(), Seq(lhs))
     case (_, Some((0, _)))              => (Seq(), Seq(rhs))
     case (Some((1, _)), _)              => (Seq(), Seq(rhs))
     case (_, Some((1, _)))              => (Seq(), Seq(lhs))
     case (Some((a, aty)), Some((b, _))) =>
-      mkNatConst(a * b, aty, res.typ)
+      mkSizeConstant(a * b, aty, res.typ)
     case _ => PatternAction.Abort
 }
 
@@ -174,7 +174,7 @@ final class DTensorShapeCanonicalize(ctx: MLContext) extends WalkerPass(ctx):
 
   override val walker = PatternRewriteWalker(
     GreedyRewritePatternApplier(
-      Seq(NatAddFold, NatMulFold)
+      Seq(SizeAddFold, SizeMulFold)
         ++ Seq(MaterializeCollapseShapeProducts, MaterializeJoinDimProduct)
     )
   )

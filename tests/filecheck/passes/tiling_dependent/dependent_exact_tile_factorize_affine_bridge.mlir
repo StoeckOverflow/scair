@@ -1,17 +1,16 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p dependent-product-loop-exact-tile,dependent-natmul-loop-factorization,d-affine-to-affine-compatible | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect -p dependent-product-loop-exact-tile,dependent-size-product-loop-factorization,d-affine-to-affine-compatible | filecheck %s
 
 builtin.module {
   func.func @dynamic_product_exact_tile_factorize_bridge(
-    %k0_nat: !d_tensor.nat,
-    %k1_nat: !d_tensor.posnat,
+    %k0_size: !d_tensor.size,
+    %k1_size: !d_tensor.pos_size,
     %out: memref<?xf32>
   ) {
-    %k_nat = "d_tensor.nat.mul"(%k0_nat, %k1_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
-    %ub = "d_tensor.shape.to_index"(%k_nat) : (!d_tensor.nat) -> index
+    %k_size = "d_tensor.size.mul"(%k0_size, %k1_size) : (!d_tensor.size, !d_tensor.pos_size) -> !d_tensor.size
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 
-    d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%ub) step 1 : index {
+    d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k_size) step 1 : index {
       "memref.store"(%cst, %out, %p) : (f32, memref<?xf32>, index) -> ()
       d_affine.yield
     }
@@ -21,14 +20,12 @@ builtin.module {
 }
 
 // CHECK-LABEL: func.func @dynamic_product_exact_tile_factorize_bridge
-// CHECK-SAME: %[[K0:[0-9]+]]: !d_tensor.nat
-// CHECK-SAME: %[[K1:[0-9]+]]: !d_tensor.posnat
+// CHECK-SAME: %[[K0:[0-9]+]]: !d_tensor.size
+// CHECK-SAME: %[[K1:[0-9]+]]: !d_tensor.pos_size
 // CHECK-NOT: d_affine.for
-// CHECK: %[[OUTER_UB:[0-9]+]] = "d_tensor.shape.to_index"(%[[K0]]) : (!d_tensor.nat) -> index
-// CHECK: %[[INNER_UB:[0-9]+]] = "d_tensor.shape.to_index"(%[[K1]]) : (!d_tensor.posnat) -> index
-// CHECK: affine.for %[[OI:[0-9]+]] = #map(%{{.*}}) to #map(%[[OUTER_UB]]) step 1
-// CHECK: %[[TILE_START:[0-9]+]] = "arith.muli"(%[[OI]], %[[INNER_UB]])
-// CHECK: %[[TILE_END:[0-9]+]] = "arith.addi"(%[[TILE_START]], %{{[0-9]+}})
+// CHECK: affine.for %[[OI:[0-9]+]] = #map(%{{.*}}) to #map(%[[K0]]) step 1
+// CHECK: %[[TILE_START:[0-9]+]] = "arith.muli"(%[[OI]], %[[K1]])
+// CHECK: %[[TILE_END:[0-9]+]] = "affine.apply"(%[[TILE_START]], %[[K1]])
 // CHECK: affine.for %[[P:[0-9]+]] = #map(%[[TILE_START]]) to #map(%[[TILE_END]]) step 1
 // CHECK: "memref.store"({{.*}}, {{.*}}, %[[P]])
 // CHECK-NOT: d_affine.for

@@ -5,7 +5,7 @@ import scair.dialects.builtin.*
 import scair.dialects.d_tensor.*
 import scair.dialects.d_affine
 import scair.ir.*
-import scair.passes.NatProvenance
+import scair.passes.SizeWitnessProvenance
 
 import scala.collection.mutable
 
@@ -35,7 +35,7 @@ private object DivBound:
         val p = x * y
         if p <= 0 then one else Finite(p)
 
-final class NatDivisibilityFacts private (root: Operation):
+final class SizeDivisibilityFacts private (root: Operation):
   private val memo = mutable.Map.empty[Value[Attribute], DivBound]
   private val inProgress = mutable.Set.empty[Value[Attribute]]
 
@@ -78,8 +78,8 @@ final class NatDivisibilityFacts private (root: Operation):
     if map.affineMap.affineExprs.size != 1 then DivBound.one
     else if args.size != dimCount + symNames.size then DivBound.one
     else
-      val dimBounds = dimNames.zip(args.take(dimCount).map(inferNatProvenance)).toMap
-      val symBounds = symNames.zip(args.drop(dimCount).map(inferNatProvenance)).toMap
+      val dimBounds = dimNames.zip(args.take(dimCount).map(inferSizeWitnessProvenance)).toMap
+      val symBounds = symNames.zip(args.drop(dimCount).map(inferSizeWitnessProvenance)).toMap
       inferAffineExpr(map.affineMap.affineExprs.head, dimBounds, symBounds)
 
   private def infer(v: Value[Attribute]): DivBound =
@@ -90,13 +90,13 @@ final class NatDivisibilityFacts private (root: Operation):
         else
           inProgress += n
           val out = n.owner match
-            case Some(NatConst(IntegerAttr(IntData(c), _), _)) =>
+            case Some(SizeConstant(IntegerAttr(IntData(c), _), _)) =>
               DivBound.fromConst(c)
-            case Some(_: NatParam) =>
+            case Some(_: SizeParam) =>
               DivBound.one
-            case Some(NatAdd(lhs, rhs, _)) =>
+            case Some(SizeAdd(lhs, rhs, _)) =>
               DivBound.gcd(infer(lhs), infer(rhs))
-            case Some(NatMul(lhs, rhs, _)) =>
+            case Some(SizeMul(lhs, rhs, _)) =>
               DivBound.mul(infer(lhs), infer(rhs))
             case Some(d_affine.Min(dimOperands, symbolOperands, map, _)) =>
               inferAffineApply(dimOperands ++ symbolOperands, map)
@@ -111,15 +111,15 @@ final class NatDivisibilityFacts private (root: Operation):
       },
     )
 
-  private def inferNatProvenance(v: Value[Attribute]): DivBound =
-    NatProvenance.resolveNat(v) match
-      case Some(nat) => infer(nat)
+  private def inferSizeWitnessProvenance(v: Value[Attribute]): DivBound =
+    SizeWitnessProvenance.resolveSizeWitness(v) match
+      case Some(size) => infer(size)
       case None      => DivBound.one
 
   def isDivisibleBy(v: Value[Attribute], k: BigInt): Boolean =
     if k <= 0 then false
     else
-      inferNatProvenance(v) match
+      inferSizeWitnessProvenance(v) match
         case DivBound.AnyPositive => true
         case DivBound.Finite(d)   => d % k == 0
 
@@ -131,6 +131,6 @@ final class NatDivisibilityFacts private (root: Operation):
       isDivisibleBy(v, BigInt(k))
     )
 
-object NatDivisibilityFacts:
-  def apply(root: Operation): NatDivisibilityFacts =
-    new NatDivisibilityFacts(root)
+object SizeDivisibilityFacts:
+  def apply(root: Operation): SizeDivisibilityFacts =
+    new SizeDivisibilityFacts(root)

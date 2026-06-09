@@ -38,7 +38,7 @@ private final class Builder(val funcOp: func.Func):
   private def convertCarrierType(attr: Attribute): Attribute =
     attr match
       case _: d_memref.DMemrefMemrefType => llvm.Ptr()
-      case _: DTensor.DTensorNatLikeType => llvmIndexType
+      case _: DTensor.DTensorSizeWitnessType => llvmIndexType
       case _: IndexType                  => llvmIndexType
       case other                         => other
 
@@ -137,7 +137,7 @@ private final class Builder(val funcOp: func.Func):
           )
           emit(entry, alias)
           state.valueMap(oldArg) = alias.res
-        case _: DTensor.DTensorNatLikeType =>
+        case _: DTensor.DTensorSizeWitnessType =>
           state.valueMap(oldArg) = newArg
         case _ => ()
     }
@@ -145,8 +145,8 @@ private final class Builder(val funcOp: func.Func):
   private def constIndex(v: BigInt, block: Block): Value[Attribute] =
     constCache.constIndex(v, block)
 
-  private def materializeNatOrIndex(v: Value[Attribute], block: Block): Value[Attribute] =
-    indexMaterializer.materializeNatOrIndex(v, block)
+  private def materializeSizeOrIndex(v: Value[Attribute], block: Block): Value[Attribute] =
+    indexMaterializer.materializeSizeOrIndex(v, block)
 
   private def materializeLayoutParam(param: d_memref.LayoutParam, block: Block): Value[Attribute] =
     indexMaterializer.materializeLayoutParam(param, block)
@@ -156,7 +156,7 @@ private final class Builder(val funcOp: func.Func):
 
   private def layoutDims(ty: d_memref.DMemrefMemrefType, block: Block): Seq[Value[Attribute]] =
     ty.params.map {
-      case d: ValueAttribute => materializeNatOrIndex(d.getVal(), block)
+      case d: ValueAttribute => materializeSizeOrIndex(d.getVal(), block)
       case IntegerAttr(IntData(v), _: IndexType | _: IntegerType) =>
         constIndex(v, block)
     }
@@ -279,13 +279,13 @@ private final class Builder(val funcOp: func.Func):
     emit(block, llvm.Store(value.asInstanceOf[Operand[Attribute]], asPtr(gep.res)))
 
   private def lowerLoad(op: d_memref.Load, block: Block): Value[Attribute] =
-    val idxs = op.indices.map(materializeNatOrIndex(_, block))
+    val idxs = op.indices.map(materializeSizeOrIndex(_, block))
     val flagged = hasZeroOffset(op.memref.typ) && idxs.size == 2
     val linear = computeLinearIndex(op.memref.typ, idxs, block, flagged)
     lowerLoadFromLinearized(remap(op.memref), op.memref.typ.elem, linear, op.res.typ, block, flagged)
 
   private def lowerStore(op: d_memref.Store, block: Block): Unit =
-    val idxs = op.indices.map(materializeNatOrIndex(_, block))
+    val idxs = op.indices.map(materializeSizeOrIndex(_, block))
     val flagged = hasZeroOffset(op.memref.typ) && idxs.size == 2
     val linear = computeLinearIndex(op.memref.typ, idxs, block, flagged)
     lowerStoreToLinearized(remap(op.value), remap(op.memref), op.memref.typ.elem, linear, block, flagged)
@@ -307,10 +307,10 @@ private final class Builder(val funcOp: func.Func):
   private def lowerCall(call: func.Call, block: Block): func.Call =
     val loweredOperands = call._operands.map { operand =>
       operand.typ match
-        case _: DTensor.DTensorNatLikeType =>
-          materializeNatOrIndex(operand, block).asInstanceOf[Operand[Attribute]]
+        case _: DTensor.DTensorSizeWitnessType =>
+          materializeSizeOrIndex(operand, block).asInstanceOf[Operand[Attribute]]
         case ValueRefType(_) =>
-          materializeNatOrIndex(operand, block).asInstanceOf[Operand[Attribute]]
+          materializeSizeOrIndex(operand, block).asInstanceOf[Operand[Attribute]]
         case _ =>
           remap(operand).asInstanceOf[Operand[Attribute]]
     }
@@ -392,25 +392,27 @@ private final class Builder(val funcOp: func.Func):
           )
           emit(newBlock, lowered)
           state.valueMap(ptrtoint.out) = lowered.out
-        case op: DTensor.NatConst =>
+        case op: DTensor.SizeConstant =>
           val lowered = constIndex(op.value.value.value, newBlock)
           state.valueMap(op.res) = lowered
-        case op: DTensor.IndexToNat =>
-          state.valueMap(op.res) = materializeNatOrIndex(op.index, newBlock)
-        case op: DTensor.ShapeToIndex =>
-          state.valueMap(op.res) = materializeNatOrIndex(op.nat, newBlock)
-        case op: DTensor.NatAdd =>
+        case op: DTensor.SizeImport =>
+          state.valueMap(op.res) = materializeSizeOrIndex(op.index, newBlock)
+        case op: DTensor.SizePositiveProof =>
+          state.valueMap(op.proof) = remap(op.proof)
+        case op: DTensor.SizeRefinePositive =>
+          state.valueMap(op.res) = materializeSizeOrIndex(op.size, newBlock)
+        case op: DTensor.SizeAdd =>
           val lowered = llvm.Add(
-            asLLVMIndex(materializeNatOrIndex(op.lhs, newBlock)),
-            asLLVMIndex(materializeNatOrIndex(op.rhs, newBlock)),
+            asLLVMIndex(materializeSizeOrIndex(op.lhs, newBlock)),
+            asLLVMIndex(materializeSizeOrIndex(op.rhs, newBlock)),
             Result(llvmIndexType),
           )
           emit(newBlock, lowered)
           state.valueMap(op.res) = lowered.res
-        case op: DTensor.NatMul =>
+        case op: DTensor.SizeMul =>
           val lowered = llvm.Mul(
-            asLLVMIndex(materializeNatOrIndex(op.lhs, newBlock)),
-            asLLVMIndex(materializeNatOrIndex(op.rhs, newBlock)),
+            asLLVMIndex(materializeSizeOrIndex(op.lhs, newBlock)),
+            asLLVMIndex(materializeSizeOrIndex(op.rhs, newBlock)),
             Result(llvmIndexType),
           )
           emit(newBlock, lowered)

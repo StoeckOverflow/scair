@@ -14,30 +14,30 @@ builtin.module {
     %A_size = "arith.muli"(%n, %k) : (index, index) -> index
     %B_size = "arith.muli"(%k, %m) : (index, index) -> index
     %C_size = "arith.muli"(%n, %m) : (index, index) -> index
-    %n_nat = "d_tensor.index_to_nat"(%n) : (index) -> !d_tensor.nat
-    %m_nat = "d_tensor.index_to_nat"(%m) : (index) -> !d_tensor.nat
-    %k_nat = "d_tensor.index_to_nat"(%k) : (index) -> !d_tensor.nat
-    %A_size_nat = "d_tensor.index_to_nat"(%A_size) : (index) -> !d_tensor.nat
-    %B_size_nat = "d_tensor.index_to_nat"(%B_size) : (index) -> !d_tensor.nat
-    %C_size_nat = "d_tensor.index_to_nat"(%C_size) : (index) -> !d_tensor.nat
+    %n_size = "d_tensor.size.import"(%n) : (index) -> !d_tensor.size
+    %m_size = "d_tensor.size.import"(%m) : (index) -> !d_tensor.size
+    %k_size = "d_tensor.size.import"(%k) : (index) -> !d_tensor.size
+    %A_size_size = "d_tensor.size.import"(%A_size) : (index) -> !d_tensor.size
+    %B_size_size = "d_tensor.size.import"(%B_size) : (index) -> !d_tensor.size
+    %C_size_size = "d_tensor.size.import"(%C_size) : (index) -> !d_tensor.size
 
-    %Aflat = d_memref.alloc : () -> !d_memref.memref<[%A_size_nat], f32>
-    %Bflat = d_memref.alloc : () -> !d_memref.memref<[%B_size_nat], f32>
-    %Cflat = d_memref.alloc : () -> !d_memref.memref<[%C_size_nat], f32>
+    %Aflat = d_memref.alloc : () -> !d_memref.memref<[%A_size_size], f32>
+    %Bflat = d_memref.alloc : () -> !d_memref.memref<[%B_size_size], f32>
+    %Cflat = d_memref.alloc : () -> !d_memref.memref<[%C_size_size], f32>
 
     %A = d_memref.reinterpret_cast %Aflat
-      : !d_memref.memref<[%A_size_nat], f32>
-        to !d_memref.memref<[%n_nat, %k_nat], f32, offset: %c0, strides: [%k, 1]>
+      : !d_memref.memref<[%A_size_size], f32>
+        to !d_memref.memref<[%n_size, %k_size], f32, offset: %c0, strides: [%k, 1]>
     %B = d_memref.reinterpret_cast %Bflat
-      : !d_memref.memref<[%B_size_nat], f32>
-        to !d_memref.memref<[%k_nat, %m_nat], f32, offset: %c0, strides: [%m, 1]>
+      : !d_memref.memref<[%B_size_size], f32>
+        to !d_memref.memref<[%k_size, %m_size], f32, offset: %c0, strides: [%m, 1]>
     %C = d_memref.reinterpret_cast %Cflat
-      : !d_memref.memref<[%C_size_nat], f32>
-        to !d_memref.memref<[%n_nat, %m_nat], f32, offset: %c0, strides: [%m, 1]>
+      : !d_memref.memref<[%C_size_size], f32>
+        to !d_memref.memref<[%n_size, %m_size], f32, offset: %c0, strides: [%m, 1]>
 
     d_affine.for %i = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%n) step 1 : index {
       d_affine.for %j = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k) step 1 : index {
-        d_memref.store %f1, %A[%i, %j] : f32, !d_memref.memref<[%n_nat, %k_nat], f32, offset: %c0, strides: [%k, 1]>
+        d_memref.store %f1, %A[%i, %j] : f32, !d_memref.memref<[%n_size, %k_size], f32, offset: %c0, strides: [%k, 1]>
         d_affine.yield
       }
       d_affine.yield
@@ -45,7 +45,7 @@ builtin.module {
 
     d_affine.for %i = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k) step 1 : index {
       d_affine.for %j = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%m) step 1 : index {
-        d_memref.store %f1, %B[%i, %j] : f32, !d_memref.memref<[%k_nat, %m_nat], f32, offset: %c0, strides: [%m, 1]>
+        d_memref.store %f1, %B[%i, %j] : f32, !d_memref.memref<[%k_size, %m_size], f32, offset: %c0, strides: [%m, 1]>
         d_affine.yield
       }
       d_affine.yield
@@ -54,13 +54,13 @@ builtin.module {
     d_affine.for %i = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%n) step 1 : index {
       d_affine.for %j = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%m) step 1 : index {
         %sum = d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k) step 1 : index iter_args(%acc = %f0 : f32) {
-          %a = d_memref.load %A[%i, %p] : !d_memref.memref<[%n_nat, %k_nat], f32, offset: %c0, strides: [%k, 1]> -> f32
-          %b = d_memref.load %B[%p, %j] : !d_memref.memref<[%k_nat, %m_nat], f32, offset: %c0, strides: [%m, 1]> -> f32
+          %a = d_memref.load %A[%i, %p] : !d_memref.memref<[%n_size, %k_size], f32, offset: %c0, strides: [%k, 1]> -> f32
+          %b = d_memref.load %B[%p, %j] : !d_memref.memref<[%k_size, %m_size], f32, offset: %c0, strides: [%m, 1]> -> f32
           %mul = "arith.mulf"(%a, %b) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
           %next = "arith.addf"(%acc, %mul) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
           d_affine.yield %next : (f32)
         }
-        d_memref.store %sum, %C[%i, %j] : f32, !d_memref.memref<[%n_nat, %m_nat], f32, offset: %c0, strides: [%m, 1]>
+        d_memref.store %sum, %C[%i, %j] : f32, !d_memref.memref<[%n_size, %m_size], f32, offset: %c0, strides: [%m, 1]>
         d_affine.yield
       }
       d_affine.yield
@@ -68,16 +68,16 @@ builtin.module {
 
     %checksum = d_affine.for %i = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%n) step 1 : index iter_args(%acc = %f0 : f32) {
       %inner = d_affine.for %j = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%m) step 1 : index iter_args(%acc2 = %acc : f32) {
-        %v = d_memref.load %C[%i, %j] : !d_memref.memref<[%n_nat, %m_nat], f32, offset: %c0, strides: [%m, 1]> -> f32
+        %v = d_memref.load %C[%i, %j] : !d_memref.memref<[%n_size, %m_size], f32, offset: %c0, strides: [%m, 1]> -> f32
         %next = "arith.addf"(%acc2, %v) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
         d_affine.yield %next : (f32)
       }
       d_affine.yield %inner : (f32)
     }
 
-    d_memref.dealloc %Aflat : !d_memref.memref<[%A_size_nat], f32>
-    d_memref.dealloc %Bflat : !d_memref.memref<[%B_size_nat], f32>
-    d_memref.dealloc %Cflat : !d_memref.memref<[%C_size_nat], f32>
+    d_memref.dealloc %Aflat : !d_memref.memref<[%A_size_size], f32>
+    d_memref.dealloc %Bflat : !d_memref.memref<[%B_size_size], f32>
+    d_memref.dealloc %Cflat : !d_memref.memref<[%C_size_size], f32>
     func.return %ret : i32
   }
 }

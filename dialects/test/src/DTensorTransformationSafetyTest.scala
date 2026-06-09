@@ -34,15 +34,18 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   private def i32Array(values: Seq[Int]): ArrayAttribute[Attribute] =
     ArrayAttribute(values.map(i32Attr))
 
+  private def unregisteredTensorUser(dim: Value[Attribute]): UnregisteredOperation =
+    UnregisteredOperation("test.tensor")(
+      results = Seq(Result(tensorOf(dim))),
+      regions = Seq.empty,
+    )
+
   "d_tensor type uses" should "track and rewrite embedded dimension references during RAUW" in {
-    val keptDim = Result(DTensorNatType())
-    val replacedDim = Result(DTensorNatType())
-    val kept = NatParam(keptDim)
-    val replaced = NatParam(replacedDim)
-    val user =
-      UnregisteredOperation("test.tensor")(results =
-        Seq(Result(tensorOf(replacedDim)))
-      )
+    val keptDim = Result(DTensorSizeType())
+    val replacedDim = Result(DTensorSizeType())
+    val kept = SizeParam(keptDim)
+    val replaced = SizeParam(replacedDim)
+    val user = unregisteredTensorUser(replacedDim)
     val block = Block(operations = Seq(kept, replaced, user))
 
     replacedDim.typeUses.size shouldBe 1
@@ -58,13 +61,13 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   }
 
   "Block.deepCopy" should "remap embedded d_tensor dimensions to copied SSA values without mutating the original" in {
-    val dim = Result(DTensorNatType())
-    val producer = NatParam(dim)
+    val dim = Result(DTensorSizeType())
+    val producer = SizeParam(dim)
     val tensor = Empty(Result(tensorOf(dim)))
     val original = Block(operations = Seq(producer, tensor))
 
     val copied = original.deepCopy
-    val copiedProducer = copied.operations.head.asInstanceOf[NatParam]
+    val copiedProducer = copied.operations.head.asInstanceOf[SizeParam]
     val copieDTensor = copied.operations.toSeq(1).asInstanceOf[Empty]
 
     copiedProducer.res should not be theSameInstanceAs(dim)
@@ -74,12 +77,12 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   }
 
   it should "remap collapse_shape embedded dimensions without mutating the original" in {
-    val m = Result(DTensorNatType())
-    val n = Result(DTensorNatType())
-    val mn = Result(DTensorNatType())
-    val mProducer = NatParam(m)
-    val nProducer = NatParam(n)
-    val mnProducer = NatMul(m, n, mn)
+    val m = Result(DTensorSizeType())
+    val n = Result(DTensorSizeType())
+    val mn = Result(DTensorSizeType())
+    val mProducer = SizeParam(m)
+    val nProducer = SizeParam(n)
+    val mnProducer = SizeMul(m, n, mn)
     val source = Empty(Result(tensorOf(Seq(m, n))))
     val collapse =
       CollapseShape(source.res, reassociation(Seq(Seq(0, 1))), Result(tensorOf(mn)))
@@ -87,9 +90,9 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
 
     val copied = original.deepCopy
     val copiedOps = copied.operations.toSeq
-    val copiedM = copiedOps(0).asInstanceOf[NatParam].res
-    val copiedN = copiedOps(1).asInstanceOf[NatParam].res
-    val copiedMN = copiedOps(2).asInstanceOf[NatMul].res
+    val copiedM = copiedOps(0).asInstanceOf[SizeParam].res
+    val copiedN = copiedOps(1).asInstanceOf[SizeParam].res
+    val copiedMN = copiedOps(2).asInstanceOf[SizeMul].res
     val copiedSource = copiedOps(3).asInstanceOf[Empty]
     val copiedCollapse = copiedOps(4).asInstanceOf[CollapseShape]
 
@@ -103,21 +106,21 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   }
 
   it should "remap join_dim embedded dimensions without mutating the original" in {
-    val m = Result(DTensorNatType())
-    val n = Result(DTensorNatType())
-    val mn = Result(DTensorNatType())
-    val mProducer = NatParam(m)
-    val nProducer = NatParam(n)
-    val mnProducer = NatMul(m, n, mn)
+    val m = Result(DTensorSizeType())
+    val n = Result(DTensorSizeType())
+    val mn = Result(DTensorSizeType())
+    val mProducer = SizeParam(m)
+    val nProducer = SizeParam(n)
+    val mnProducer = SizeMul(m, n, mn)
     val joinSource = Empty(Result(tensorOf(Seq(m, n))))
     val join = JoinDim(joinSource.res, i32Attr(0), Result(tensorOf(mn)))
     val original = Block(operations = Seq(mProducer, nProducer, mnProducer, joinSource, join))
 
     val copied = original.deepCopy
     val copiedOps = copied.operations.toSeq
-    val copiedM = copiedOps(0).asInstanceOf[NatParam].res
-    val copiedN = copiedOps(1).asInstanceOf[NatParam].res
-    val copiedMN = copiedOps(2).asInstanceOf[NatMul].res
+    val copiedM = copiedOps(0).asInstanceOf[SizeParam].res
+    val copiedN = copiedOps(1).asInstanceOf[SizeParam].res
+    val copiedMN = copiedOps(2).asInstanceOf[SizeMul].res
     val copiedJoinSource = copiedOps(3).asInstanceOf[Empty]
     val copiedJoin = copiedOps(4).asInstanceOf[JoinDim]
 
@@ -131,14 +134,14 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   }
 
   it should "remap split_dim embedded dimensions without mutating the original" in {
-    val m = Result(DTensorNatType())
-    val mt = Result(DTensorNatType())
-    val tm = Result(DTensorNatType())
-    val n = Result(DTensorNatType())
-    val mProducer = NatParam(m)
-    val mtProducer = NatParam(mt)
-    val tmProducer = NatParam(tm)
-    val nProducer = NatParam(n)
+    val m = Result(DTensorSizeType())
+    val mt = Result(DTensorSizeType())
+    val tm = Result(DTensorSizeType())
+    val n = Result(DTensorSizeType())
+    val mProducer = SizeParam(m)
+    val mtProducer = SizeParam(mt)
+    val tmProducer = SizeParam(tm)
+    val nProducer = SizeParam(n)
     val splitSource = Empty(Result(tensorOf(Seq(m, n))))
     val split = SplitDim(splitSource.res, mt, tm, i32Attr(0), Result(tensorOf(Seq(mt, tm, n))))
     val original =
@@ -146,10 +149,10 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
 
     val copied = original.deepCopy
     val copiedOps = copied.operations.toSeq
-    val copiedM = copiedOps(0).asInstanceOf[NatParam].res
-    val copiedMT = copiedOps(1).asInstanceOf[NatParam].res
-    val copiedTM = copiedOps(2).asInstanceOf[NatParam].res
-    val copiedN = copiedOps(3).asInstanceOf[NatParam].res
+    val copiedM = copiedOps(0).asInstanceOf[SizeParam].res
+    val copiedMT = copiedOps(1).asInstanceOf[SizeParam].res
+    val copiedTM = copiedOps(2).asInstanceOf[SizeParam].res
+    val copiedN = copiedOps(3).asInstanceOf[SizeParam].res
     val copiedSplitSource = copiedOps(4).asInstanceOf[Empty]
     val copiedSplit = copiedOps(5).asInstanceOf[SplitDim]
 
@@ -168,18 +171,18 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   }
 
   it should "remap permute_dims embedded dimensions without mutating the original" in {
-    val m = Result(DTensorNatType())
-    val n = Result(DTensorNatType())
-    val mProducer = NatParam(m)
-    val nProducer = NatParam(n)
+    val m = Result(DTensorSizeType())
+    val n = Result(DTensorSizeType())
+    val mProducer = SizeParam(m)
+    val nProducer = SizeParam(n)
     val source = Empty(Result(tensorOf(Seq(m, n))))
     val permute = PermuteDims(source.res, i32Array(Seq(1, 0)), Result(tensorOf(Seq(n, m))))
     val original = Block(operations = Seq(mProducer, nProducer, source, permute))
 
     val copied = original.deepCopy
     val copiedOps = copied.operations.toSeq
-    val copiedM = copiedOps(0).asInstanceOf[NatParam].res
-    val copiedN = copiedOps(1).asInstanceOf[NatParam].res
+    val copiedM = copiedOps(0).asInstanceOf[SizeParam].res
+    val copiedN = copiedOps(1).asInstanceOf[SizeParam].res
     val copiedSource = copiedOps(2).asInstanceOf[Empty]
     val copiedPermute = copiedOps(3).asInstanceOf[PermuteDims]
 
@@ -192,12 +195,9 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   }
 
   "Verifier" should "reject out-of-scope d_tensor dimensions embedded in result types" in {
-    val laterDim = Result(DTensorNatType())
-    val use =
-      UnregisteredOperation("test.tensor")(results =
-        Seq(Result(tensorOf(laterDim)))
-      )
-    val defn = NatParam(laterDim)
+    val laterDim = Result(DTensorSizeType())
+    val use = unregisteredTensorUser(laterDim)
+    val defn = SizeParam(laterDim)
     val module = ModuleOp(Region(Seq(Block(operations = Seq(use, defn)))))
 
     Verifier.verify(module) match

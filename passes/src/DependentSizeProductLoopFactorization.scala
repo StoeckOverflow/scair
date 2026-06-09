@@ -1,4 +1,4 @@
-package scair.passes.dependent_natmul_loop_factorization
+package scair.passes.dependent_size_product_loop_factorization
 
 import scair.MLContext
 import scair.dialects.arith
@@ -6,9 +6,9 @@ import scair.dialects.builtin.*
 import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_affine
 import scair.ir.*
-import scair.passes.NatProvenance
-import scair.passes.analysis.NatProductFacts
-import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
+import scair.passes.SizeWitnessProvenance
+import scair.passes.analysis.SizeProductFacts
+import scair.passes.analysis.SizeProductFacts.FactorSelectionPolicy
 import scair.transformations.ModulePass
 import scair.transformations.RewriteMethods
 
@@ -19,12 +19,6 @@ private def asIndex(v: Value[Attribute]): Operand[IndexType] =
 
 private def idxConst(v: BigInt): arith.Constant =
   arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
-
-private def toIndex(nat: Value[Attribute]): DTensor.ShapeToIndex =
-  DTensor.ShapeToIndex(
-    nat.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
-    Result(IndexType()),
-  )
 
 private def identityMap: AffineMapAttr =
   AffineMapAttr(
@@ -78,22 +72,20 @@ private def choosePlan(
   if loop.upperBoundOperands.size != 1 then None
   else
     for
-      product <- NatProductFacts.flattenProduct(loop.upperBoundOperands.head)
+      product <- SizeProductFacts.flattenProduct(loop.upperBoundOperands.head)
       innerFactor <- product.selectFactor(factorPolicy)
-      residualFactors <- NatProductFacts.residualAfterRemovingFactorProduct(
+      residualFactors <- SizeProductFacts.residualAfterRemovingFactorProduct(
         loop.upperBoundOperands.head,
         innerFactor.value,
       )
       if residualFactors.nonEmpty
-      residual <- NatProductFacts.buildExplicitProduct(residualFactors)
+      residual <- SizeProductFacts.buildExplicitProduct(residualFactors)
     yield
-      val (residualPrelude, residualNat) = residual
-      val outerIdx = toIndex(residualNat)
-      val innerIdx = toIndex(innerFactor.value)
+      val (residualPrelude, residualWitness) = residual
       FactorizationPlan(
-        prelude = residualPrelude ++ Seq(outerIdx, innerIdx),
-        outerUpperBound = outerIdx.res,
-        innerUpperBound = innerIdx.res,
+        prelude = residualPrelude,
+        outerUpperBound = residualWitness,
+        innerUpperBound = innerFactor.value,
       )
 
 private def buildLoop(
@@ -112,8 +104,8 @@ private def buildLoop(
     )
   )
   d_affine.For(
-    lowerBoundOperands = Seq(asIndex(lowerBound)),
-    upperBoundOperands = Seq(asIndex(upperBound)),
+    lowerBoundOperands = Seq(lowerBound.asInstanceOf[Operand[Attribute]]),
+    upperBoundOperands = Seq(upperBound.asInstanceOf[Operand[Attribute]]),
     stepOperands = Seq.empty,
     inits = inits,
     res = resultTypes.map(ty => Result(ty)),
@@ -130,7 +122,7 @@ private def tryFactorize(
   if loop.body.blocks.size != 1 then false
   else if loop.lowerBoundOperands.size != 1 || loop.upperBoundOperands.size != 1 then false
   else if !isIdentityProjection(loop.lowerBoundMap) || !isIdentityProjection(loop.upperBoundMap) then false
-  else if NatProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then false
+  else if SizeWitnessProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then false
   else
     choosePlan(loop, factorPolicy) match
       case None => false
@@ -144,9 +136,9 @@ private def tryFactorize(
 private def stepMatchesInnerFactor(loop: d_affine.For, plan: FactorizationPlan): Boolean =
   loop.stepOperands match
     case Seq(dynamicStep) =>
-      NatProvenance.equivalentNatOrConst(dynamicStep, plan.innerUpperBound)
+      SizeWitnessProvenance.equivalentSizeWitnessOrConst(dynamicStep, plan.innerUpperBound)
     case Seq() =>
-      NatProvenance.exactConst(plan.innerUpperBound).contains(loop.step.value.value)
+      SizeWitnessProvenance.exactConst(plan.innerUpperBound).contains(loop.step.value.value)
     case _ => false
 
 private def tryFactorizeUnitProductLoop(loop: d_affine.For, plan: FactorizationPlan): Boolean =
@@ -248,11 +240,11 @@ private def tryFactorizeTiledProductLoop(loop: d_affine.For, plan: Factorization
   )
   true
 
-final class DependentNatmulLoopFactorization(
+final class DependentSizeProductLoopFactorization(
     ctx: MLContext,
     factorPolicy: FactorSelectionPolicy = FactorSelectionPolicy.RightmostPositive,
 ) extends ModulePass(ctx):
-  override val name: String = "dependent-natmul-loop-factorization"
+  override val name: String = "dependent-size-product-loop-factorization"
 
   override def transform(op: Operation): Operation =
     var changed = true

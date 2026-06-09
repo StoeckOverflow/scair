@@ -2,7 +2,7 @@ package scair.passes.context_band_tiling
 
 import scair.MLContext
 import scair.ir.Operation
-import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
+import scair.passes.analysis.SizeProductFacts.FactorSelectionPolicy
 import scair.passes.tiling.ValueDependentTiling
 import scair.transformations.ModulePass
 
@@ -27,7 +27,7 @@ final class DependentContextBandExactTile(
   override val name: String = "dependent-context-band-exact-tile"
 
   override def transform(op: Operation): Operation =
-    ValueDependentTiling.transformDAffineContextNatmul(
+    ValueDependentTiling.transformDAffineContextSizeProduct(
       op,
       factorPolicy,
       ValueDependentTiling.TailMode.Exact,
@@ -40,7 +40,7 @@ final class DependentContextBandFactorTileWithTail(
   override val name: String = "dependent-context-band-factor-tile-with-tail"
 
   override def transform(op: Operation): Operation =
-    ValueDependentTiling.transformDAffineContextNatmul(
+    ValueDependentTiling.transformDAffineContextSizeProduct(
       op,
       factorPolicy,
       ValueDependentTiling.TailMode.Guarded,
@@ -53,7 +53,7 @@ final class DependentContextBandSeparableTile(
   override val name: String = "dependent-context-band-separable-tile"
 
   override def transform(op: Operation): Operation =
-    ValueDependentTiling.transformDAffineContextNatmul(
+    ValueDependentTiling.transformDAffineContextSizeProduct(
       op,
       factorPolicy,
       ValueDependentTiling.TailMode.Separable,

@@ -41,9 +41,9 @@ builtin.module {
 
 // Valid: unrelated non-DBI metadata is ignored by the DBI verifier.
 builtin.module {
-  "test.use"() <{prop = !d_tensor.tensor<[], i32>}> {attr = !d_tensor.nat} : () -> ()
+  "test.use"() <{prop = !d_tensor.tensor<[], i32>}> {attr = !d_tensor.size} : () -> ()
 }
 
 // CHECK: builtin.module {
-// CHECK:   "test.use"() <{prop = !d_tensor.tensor<[], i32>}> {attr = !d_tensor.nat} : () -> ()
+// CHECK:   "test.use"() <{prop = !d_tensor.tensor<[], i32>}> {attr = !d_tensor.size} : () -> ()
 // CHECK: }

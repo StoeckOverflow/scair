@@ -15,9 +15,9 @@ builtin.module {
 }
 
 // CHECK: d_affine.for %[[I_TILE:[0-9]+]] = #map(%{{.*}}) to #map(%{{.*}}) step 4 : index
-// CHECK: arith.minsi
-// CHECK: d_affine.for %[[I:[0-9]+]] = #map(%[[I_TILE]]) to #map(%{{.*}}) step 1 : index
+// CHECK: %[[I_CLAMP:[0-9]+]] = d_affine.min
+// CHECK: d_affine.for %[[I:[0-9]+]] = #map(%[[I_TILE]]) to #map(%[[I_CLAMP]]) step 1 : index
 // CHECK: d_affine.for %[[J_TILE:[0-9]+]] = #map(%{{.*}}) to #map(%{{.*}}) step 4 : index
-// CHECK: arith.minsi
-// CHECK: d_affine.for %[[J:[0-9]+]] = #map(%[[J_TILE]]) to #map(%{{.*}}) step 1 : index
+// CHECK: %[[J_CLAMP:[0-9]+]] = d_affine.min
+// CHECK: d_affine.for %[[J:[0-9]+]] = #map(%[[J_TILE]]) to #map(%[[J_CLAMP]]) step 1 : index
 // CHECK: "test.touch"(%[[I]], %[[J]])

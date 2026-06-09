@@ -2,22 +2,20 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics | scair-opt --allow-unregistered-dialect --verify-diagnostics
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %m = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+  %n = "d_tensor.size.constant"() <{value = 8 : i32}> : () -> !d_tensor.size
   %lb = "arith.constant"() <{value = 0 : index}> : () -> index
-  %ub = "d_tensor.shape.to_index"(%m) : (!d_tensor.nat) -> index
-  %sym = "d_tensor.shape.to_index"(%n) : (!d_tensor.nat) -> index
   %step = "arith.constant"() <{value = 2 : index}> : () -> index
   %init = "arith.constant"() <{value = 0 : index}> : () -> index
   %value = "arith.constant"() <{value = 7 : i32}> : () -> i32
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], i32>
-  %applied = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%lb)[%sym] : (index)[index] -> index
-  %minimum = d_affine.min affine_map<(d0)[s0] -> (d0, s0, d0 + s0)>(%applied)[%sym] : (index)[index] -> index
-  %sum = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 iter_args(%acc = %init : index) {
+  %applied = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%lb)[%n] : (index)[!d_tensor.size] -> index
+  %minimum = d_affine.min affine_map<(d0)[s0] -> (d0, s0, d0 + s0)>(%applied)[%n] : (index)[!d_tensor.size] -> index
+  %sum = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%m) step 1 : i32 iter_args(%acc = %init : index) {
     %inner = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%iv)[%acc] : (index)[index] -> index
     d_affine.yield %inner : (index)
   }
-  d_affine.for %dyn = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step %step : index {
+  d_affine.for %dyn = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%m) step %step : index {
     d_affine.yield
   }
   "d_affine.store"(%value, %buf, %lb, %applied) <{map = affine_map<(d0, d1) -> (d0, d1)>}>
@@ -40,7 +38,7 @@ builtin.module {
   }) : (index) -> index
   // d_affine.parallel currently has no custom verifier; this pins the
   // supported parse/print contract without claiming deeper bound semantics.
-  "d_affine.parallel"(%lb, %ub) <{
+  "d_affine.parallel"(%lb, %m) <{
     lowerBoundsMap = affine_map<(d0) -> (0)>,
     lowerBoundsGroups = dense<1> : vector<1xi32>,
     upperBoundsMap = affine_map<(d0) -> (d0)>,
@@ -49,14 +47,14 @@ builtin.module {
     reductions = []
   }> ({
   ^par:
-  }) : (index, index) -> ()
+  }) : (index, !d_tensor.size) -> ()
   "test.keep"(%applied, %minimum, %sum, %loaded, %if_result) : (index, index, index, i32, index) -> ()
 }
 
 // CHECK: builtin.module {
 // CHECK:        %[[BUF:[0-9]+]] = d_memref.alloc : () -> !d_memref.memref<[%{{[0-9]+}}, %{{[0-9]+}}], i32>
-// CHECK:        %[[APPLIED:[0-9]+]] = d_affine.apply #[[MAP0:map[0-9]*]] (%{{[0-9]+}})[%{{[0-9]+}}] : (index)[index] -> index
-// CHECK:        %[[MIN:[0-9]+]] = d_affine.min #[[MAP1:map[0-9]*]] (%[[APPLIED]])[%{{[0-9]+}}] : (index)[index] -> index
+// CHECK:        %[[APPLIED:[0-9]+]] = d_affine.apply #[[MAP0:map[0-9]*]] (%{{[0-9]+}})[%{{[0-9]+}}] : (index)[!d_tensor.size] -> index
+// CHECK:        %[[MIN:[0-9]+]] = d_affine.min #[[MAP1:map[0-9]*]] (%[[APPLIED]])[%{{[0-9]+}}] : (index)[!d_tensor.size] -> index
 // CHECK:        %[[SUM:[0-9]+]] = d_affine.for %{{[0-9]+}} = #[[MAP2:map[0-9]*]](%{{[0-9]+}}) to #[[MAP2]](%{{[0-9]+}}) step 1 : i32 iter_args(%{{[0-9]+}} = %{{[0-9]+}} : index) {
 // CHECK:          %{{[0-9]+}} = d_affine.apply #[[MAP0]] (%{{[0-9]+}})[%{{[0-9]+}}] : (index)[index] -> index
 // CHECK:          d_affine.yield %{{[0-9]+}} : (index)

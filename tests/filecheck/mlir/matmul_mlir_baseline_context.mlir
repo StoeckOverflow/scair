@@ -5,5 +5,5 @@
 // CHECK: affine.for %{{.*}} = 0 to %{{.*}} step 3
 // CHECK-NOT: affine.for %{{.*}} = 0 to %[[K]] step 3
 // CHECK: affine.for %{{.*}} = 0 to %[[K]] iter_args
-// CHECK-NOT: d_tensor.nat.mul
+// CHECK-NOT: d_tensor.size.mul
 // CHECK-NOT: d_affine.for

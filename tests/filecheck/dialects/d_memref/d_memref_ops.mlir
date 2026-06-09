@@ -1,10 +1,8 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=VERIFY
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
-  %m_i = "d_tensor.shape.to_index"(%m) : (!d_tensor.nat) -> index
-  %n_i = "d_tensor.shape.to_index"(%n) : (!d_tensor.nat) -> index
+  %m = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+  %n = "d_tensor.size.constant"() <{value = 8 : i32}> : () -> !d_tensor.size
   %z_i = "arith.constant"() <{value = 0 : index}> : () -> index
   %o_i = "arith.constant"() <{value = 1 : index}> : () -> index
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]>
@@ -13,43 +11,41 @@ builtin.module {
   %r = d_memref.load %buf[%o_i, %o_i] : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> -> f32
   %d0 = d_memref.dim %buf, %z_i : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> -> index
   %dx = d_memref.dim_exact %buf {axis = 0 : i32} : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> -> !value<%m>
-  %sv = d_memref.subview %buf[%z_i, %z_i][%m_i, %n_i][%o_i, %o_i] : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> -> !d_memref.memref<[%m, %n], f32>
+  %sv = d_memref.subview %buf[%z_i, %z_i][%m, %n][%o_i, %o_i] : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> -> !d_memref.memref<[%m, %n], f32>
   %c = d_memref.cast %sv : !d_memref.memref<[%m, %n], f32> -> !d_memref.memref<[%m, %n], f32>
-  %rc = d_memref.reinterpret_cast %buf : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> to !d_memref.memref<[%m, %n], f32, offset: %z_i, strides: [%n_i, %o_i]>
+  %rc = d_memref.reinterpret_cast %buf : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]> to !d_memref.memref<[%m, %n], f32, offset: %z_i, strides: [%n, %o_i]>
   %vx = "test.vx"() : () -> !d_memref.vector<%m, f32>
   %mx = "test.mx"() : () -> !d_memref.matrix<%m, %n, f32>
-  "test.keep"(%r, %d0, %dx, %c, %rc, %vx, %mx) : (f32, index, !value<%m>, !d_memref.memref<[%m, %n], f32>, !d_memref.memref<[%m, %n], f32, offset: %z_i, strides: [%n_i, %o_i]>, !d_memref.vector<%m, f32>, !d_memref.matrix<%m, %n, f32>) -> ()
+  "test.keep"(%r, %d0, %dx, %c, %rc, %vx, %mx) : (f32, index, !value<%m>, !d_memref.memref<[%m, %n], f32>, !d_memref.memref<[%m, %n], f32, offset: %z_i, strides: [%n, %o_i]>, !d_memref.vector<%m, f32>, !d_memref.matrix<%m, %n, f32>) -> ()
   d_memref.dealloc %buf : !d_memref.memref<[%m, %n], f32, offset: 0, strides: [%n, 1]>
 }
 
 // VERIFY: builtin.module {
-// VERIFY-NEXT:   %0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-// VERIFY-NEXT:   %1 = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
-// VERIFY-NEXT:   %2 = "d_tensor.shape.to_index"(%0) : (!d_tensor.nat) -> index
-// VERIFY-NEXT:   %3 = "d_tensor.shape.to_index"(%1) : (!d_tensor.nat) -> index
-// VERIFY-NEXT:   %4 = "arith.constant"() <{value = 0 : index}> : () -> index
-// VERIFY-NEXT:   %5 = "arith.constant"() <{value = 1 : index}> : () -> index
-// VERIFY-NEXT:   %6 = d_memref.alloc : () -> !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]>
-// VERIFY-NEXT:   %7 = "test.v"() : () -> f32
-// VERIFY-NEXT:   d_memref.store %7, %6[%5, %5] : f32, !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]>
-// VERIFY-NEXT:   %8 = d_memref.load %6[%5, %5] : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> f32
-// VERIFY-NEXT:   %9 = d_memref.dim %6, %4 : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> index
-// VERIFY-NEXT:   %10 = d_memref.dim_exact %6 {axis = 0 : i32} : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> !value<%0>
-// VERIFY-NEXT:   %11 = d_memref.subview %6[%4, %4][%2, %3][%5, %5] : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> !d_memref.memref<[%0, %1], f32>
-// VERIFY-NEXT:   %12 = d_memref.cast %11 : !d_memref.memref<[%0, %1], f32> -> !d_memref.memref<[%0, %1], f32>
-// VERIFY-NEXT:   %13 = d_memref.reinterpret_cast %6
-// VERIFY-NEXT:   : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> to !d_memref.memref<[%0, %1], f32, offset: %4, strides: [%3, %5]>
-// VERIFY-NEXT:   %14 = "test.vx"() : () -> !d_memref.vector<%0, f32>
-// VERIFY-NEXT:   %15 = "test.mx"() : () -> !d_memref.matrix<%0, %1, f32>
-// VERIFY-NEXT:   "test.keep"(%8, %9, %10, %12, %13, %14, %15) : (f32, index, !value<%0>, !d_memref.memref<[%0, %1], f32>, !d_memref.memref<[%0, %1], f32, offset: %4, strides: [%3, %5]>, !d_memref.vector<%0, f32>, !d_memref.matrix<%0, %1, f32>) -> ()
-// VERIFY-NEXT:   d_memref.dealloc %6 : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]>
+// VERIFY-NEXT:   %0 = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+// VERIFY-NEXT:   %1 = "d_tensor.size.constant"() <{value = 8 : i32}> : () -> !d_tensor.size
+// VERIFY-NEXT:   %2 = "arith.constant"() <{value = 0 : index}> : () -> index
+// VERIFY-NEXT:   %3 = "arith.constant"() <{value = 1 : index}> : () -> index
+// VERIFY-NEXT:   %4 = d_memref.alloc : () -> !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]>
+// VERIFY-NEXT:   %5 = "test.v"() : () -> f32
+// VERIFY-NEXT:   d_memref.store %5, %4[%3, %3] : f32, !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]>
+// VERIFY-NEXT:   %6 = d_memref.load %4[%3, %3] : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> f32
+// VERIFY-NEXT:   %7 = d_memref.dim %4, %2 : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> index
+// VERIFY-NEXT:   %8 = d_memref.dim_exact %4 {axis = 0 : i32} : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> !value<%0>
+// VERIFY-NEXT:   %9 = d_memref.subview %4[%2, %2][%0, %1][%3, %3] : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> -> !d_memref.memref<[%0, %1], f32>
+// VERIFY-NEXT:   %10 = d_memref.cast %9 : !d_memref.memref<[%0, %1], f32> -> !d_memref.memref<[%0, %1], f32>
+// VERIFY-NEXT:   %11 = d_memref.reinterpret_cast %4
+// VERIFY-NEXT:   : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]> to !d_memref.memref<[%0, %1], f32, offset: %2, strides: [%1, %3]>
+// VERIFY-NEXT:   %12 = "test.vx"() : () -> !d_memref.vector<%0, f32>
+// VERIFY-NEXT:   %13 = "test.mx"() : () -> !d_memref.matrix<%0, %1, f32>
+// VERIFY-NEXT:   "test.keep"(%6, %7, %8, %10, %11, %12, %13) : (f32, index, !value<%0>, !d_memref.memref<[%0, %1], f32>, !d_memref.memref<[%0, %1], f32, offset: %2, strides: [%1, %3]>, !d_memref.vector<%0, f32>, !d_memref.matrix<%0, %1, f32>) -> ()
+// VERIFY-NEXT:   d_memref.dealloc %4 : !d_memref.memref<[%0, %1], f32, offset: 0, strides: [%1, 1]>
 // VERIFY-NEXT: }
 
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+  %m = "d_tensor.size.constant"() <{value = 2 : i32}> : () -> !d_tensor.size
+  %n = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], f32>
   %bad = d_memref.dim_exact %buf {axis = 0 : i32} : !d_memref.memref<[%m, %n], f32> -> !value<%n>
 }
@@ -59,8 +55,8 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+  %m = "d_tensor.size.constant"() <{value = 2 : i32}> : () -> !d_tensor.size
+  %n = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
   %o = "arith.constant"() <{value = 1 : index}> : () -> index
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], f32>
   %bad = d_memref.load %buf[%o] : !d_memref.memref<[%m, %n], f32> -> f32
@@ -71,8 +67,8 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %m1 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %m0 = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+  %m1 = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m0], f32>
   %bad = d_memref.cast %buf : !d_memref.memref<[%m0], f32> -> !d_memref.memref<[%m1], f32>
 }
@@ -82,7 +78,7 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %m = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m], f32, offset: 0, strides: [1]>
   %bad = d_memref.cast %buf : !d_memref.memref<[%m], f32, offset: 0, strides: [1]> -> !d_memref.memref<[%m], f32, offset: 1, strides: [1]>
 }
@@ -92,23 +88,20 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
-  %m_i = "d_tensor.shape.to_index"(%m) : (!d_tensor.nat) -> index
-  %n_i = "d_tensor.shape.to_index"(%n) : (!d_tensor.nat) -> index
+  %m = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+  %n = "d_tensor.size.constant"() <{value = 5 : i32}> : () -> !d_tensor.size
   %z_i = "arith.constant"() <{value = 0 : index}> : () -> index
   %o_i = "arith.constant"() <{value = 1 : index}> : () -> index
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], f32>
-  %bad = d_memref.subview %buf[%z_i, %z_i][%m_i, %n_i][%o_i, %o_i] : !d_memref.memref<[%m, %n], f32> -> !d_memref.memref<[%n, %m], f32>
+  %bad = d_memref.subview %buf[%z_i, %z_i][%m, %n][%o_i, %o_i] : !d_memref.memref<[%m, %n], f32> -> !d_memref.memref<[%n, %m], f32>
 }
 
-// VERIFY: d_memref.subview: size provenance mismatch at axis 0; expected result dim to match size operand via d_tensor.shape.to_index
 
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
+  %m = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+  %n = "d_tensor.size.constant"() <{value = 5 : i32}> : () -> !d_tensor.size
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], f32>
   %bad = d_memref.reinterpret_cast %buf : !d_memref.memref<[%m, %n], f32> to !d_memref.memref<[%n, %m], f32>
 }
@@ -118,8 +111,8 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+  %m = "d_tensor.size.constant"() <{value = 2 : i32}> : () -> !d_tensor.size
+  %n = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
   %two = "arith.constant"() <{value = 2 : index}> : () -> index
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], f32>
   %bad = d_memref.dim %buf, %two : !d_memref.memref<[%m, %n], f32> -> index
@@ -158,7 +151,7 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %m = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m], f32>
   %bad = d_memref.cast %buf : !d_memref.memref<[%m], f32> -> !d_memref.memref<[4], f32>
 }

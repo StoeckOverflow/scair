@@ -4,15 +4,15 @@ import scair.clair.*
 import scair.ir.*
 
 val DTensorDialect = summonDialect[
-  (DTensorNatType, DTensorPosNatType, DTensorVectorType, DTensorMatrixType, DTensorTensorType),
+  (DTensorSizeType, DTensorPosSizeType, DTensorPositiveSizeProofType, DTensorVectorType, DTensorMatrixType, DTensorTensorType),
   (
-    NatConst,
-    NatParam,
-    NatAdd,
-    NatMul,
-    ShapeToIndex,
-    IndexToNat,
-    NatRefinePositive,
+    SizeConstant,
+    SizeParam,
+    SizeAdd,
+    SizeMul,
+    SizeImport,
+    SizePositiveProof,
+    SizeRefinePositive,
     Empty,
     Fill,
     Dim,

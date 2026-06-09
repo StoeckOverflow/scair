@@ -15,8 +15,7 @@ private def asIndex(v: Value[Attribute]): Operand[IndexType] =
   v.asInstanceOf[Operand[IndexType]]
 
 // Layout parameters may be stored either as index-like integers or as d_tensor
-// nat values. This helper normalizes both cases to index SSA values so the
-// subsequent address arithmetic is purely arithmetic IR.
+// size witnesses. The latter stay explicit until final witness erasure.
 private def materializeLayoutParam(param: d_memref.LayoutParam): (Vector[Operation], Value[Attribute]) =
   param match
     case i: IntegerAttr =>
@@ -25,9 +24,8 @@ private def materializeLayoutParam(param: d_memref.LayoutParam): (Vector[Operati
     case v: ValueAttribute =>
       v.getVal().typ match
         case _: IndexType => (Vector.empty, v.getVal())
-        case _: DTensor.DTensorNatLikeType =>
-          val cast = DTensor.ShapeToIndex(v.getVal().asInstanceOf[Operand[DTensor.DTensorNatLikeType]], Result(IndexType()))
-          (Vector(cast), cast.res)
+        case _: DTensor.DTensorSizeWitnessType =>
+          (Vector.empty, v.getVal())
         case ValueRefType(ref) =>
           materializeLayoutParam(ValueAttribute(ref.getVal()))
 

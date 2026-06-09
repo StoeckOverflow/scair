@@ -4,15 +4,36 @@ import fastparse.*
 import scair.print.Printer
 import scair.clair.*
 import scair.dialects.builtin.*
+import scair.dialects.d_tensor
 import scair.dialects.d_memref
 import scair.ir.*
 import scair.parse.*
 import scair.parse.given
 import scair.utils.*
 
+private def isAffineIndexLikeType(a: Attribute): Boolean =
+  a match
+    case _: IndexType => true
+    case _: d_tensor.DTensorSizeWitnessType => true
+    case _ => false
+
+private def parseAffineIndexLikeOperand[$: P](
+    name: String,
+    annotatedType: Attribute,
+    owner: String,
+)(using Parser): P[Operand[Attribute]] =
+  if !isAffineIndexLikeType(annotatedType) then
+    Fail(s"$owner: expected operand type index or d_tensor size witness, got $annotatedType")
+  else
+    existingOrForwardValueRefOperandP(name).flatMap { valueAttr =>
+      val v = valueAttr.getVal()
+      if isAffineIndexLikeType(v.typ) then Pass(v.asInstanceOf[Operand[Attribute]])
+      else Fail(s"$owner: expected operand %$name to have type index or d_tensor size witness, got ${v.typ}")
+    }
+
 final case class Apply(
-    dimOperands: Seq[Operand[IndexType]],
-    symbolOperands: Seq[Operand[IndexType]],
+    dimOperands: Seq[Operand[Attribute]],
+    symbolOperands: Seq[Operand[Attribute]],
     map: AffineMapAttr,
     res: Result[IndexType],
 ) extends DerivedOperation["d_affine.apply"]
@@ -21,6 +42,8 @@ final case class Apply(
   override def customVerify(): OK[Operation] =
     if res.typ != IndexType() then
       Err(s"d_affine.apply: expected result type index, got ${res.typ}")
+    else if (dimOperands ++ symbolOperands).exists(op => !isAffineIndexLikeType(op.typ)) then
+      Err("d_affine.apply: expected all dim/symbol operands to be index or d_tensor size witnesses")
     else if dimOperands.size != map.affineMap.dimensions.size then
       Err(
         s"d_affine.apply: expected ${map.affineMap.dimensions.size} dim operands for map ${map.affineMap}, got ${dimOperands.size}"
@@ -62,24 +85,25 @@ given OperationCustomParser[Apply]:
         Fail(
           s"d_affine.apply: expected equal symbol operand name/type arity, got ${symNames.size} names and ${symTypes.size} types"
         )
-      else if dimTypes.exists(_ != IndexType()) || symTypes.exists(_ != IndexType())
-      then Fail("d_affine.apply: expected all dim/symbol operand types to be index")
+      else if dimTypes.exists(t => t != IndexType() && !t.isInstanceOf[d_tensor.DTensorSizeWitnessType]) ||
+        symTypes.exists(t => t != IndexType() && !t.isInstanceOf[d_tensor.DTensorSizeWitnessType])
+      then Fail("d_affine.apply: expected all dim/symbol operand types to be index or d_tensor size witnesses")
       else
         dimNames
           .zip(dimTypes)
-          .foldLeft(Pass(Seq.empty[Operand[IndexType]])) {
+          .foldLeft(Pass(Seq.empty[Operand[Attribute]])) {
             case (acc, (name, typ)) =>
               acc.flatMap(seq =>
-                operandP(name, typ.asInstanceOf[IndexType]).map(seq :+ _)
+                parseAffineIndexLikeOperand(name, typ, "d_affine.apply").map(seq :+ _)
               )
           }
           .flatMap(dimOps =>
             symNames
               .zip(symTypes)
-              .foldLeft(Pass(Seq.empty[Operand[IndexType]])) {
+              .foldLeft(Pass(Seq.empty[Operand[Attribute]])) {
                 case (acc, (name, typ)) =>
                   acc.flatMap(seq =>
-                    operandP(name, typ.asInstanceOf[IndexType]).map(seq :+ _)
+                    parseAffineIndexLikeOperand(name, typ, "d_affine.apply").map(seq :+ _)
                   )
               }
               .flatMap(symOps =>
@@ -91,9 +115,9 @@ given OperationCustomParser[Apply]:
     )
 
 final case class For(
-    lowerBoundOperands: Seq[Operand[IndexType]],
-    upperBoundOperands: Seq[Operand[IndexType]],
-    stepOperands: Seq[Operand[IndexType]],
+    lowerBoundOperands: Seq[Operand[Attribute]],
+    upperBoundOperands: Seq[Operand[Attribute]],
+    stepOperands: Seq[Operand[Attribute]],
     inits: Seq[Operand[Attribute]],
     res: Seq[Result[Attribute]],
     lowerBoundMap: AffineMapAttr,
@@ -102,6 +126,12 @@ final case class For(
     body: Region,
 ) extends DerivedOperation["d_affine.for"]
     with NoTerminator derives OpDefs:
+
+  private def isAffineIndexLike(a: Attribute): Boolean =
+    a match
+      case _: IndexType => true
+      case _: d_tensor.DTensorSizeWitnessType => true
+      case _ => false
 
   private def expectedArity(map: AffineMapAttr): Int =
     map.affineMap.dimensions.size + map.affineMap.symbols.size
@@ -123,6 +153,8 @@ final case class For(
       Err(
         s"d_affine.for: expected ${expectedArity(upperBoundMap)} upper bound operands for map ${upperBoundMap.affineMap}, got ${upperBoundOperands.size}"
       )
+    else if (lowerBoundOperands ++ upperBoundOperands ++ stepOperands).exists(op => !isAffineIndexLike(op.typ)) then
+      Err("d_affine.for: expected lower/upper/step operands to be index or d_tensor size witnesses")
     else OK(())
 
   private def verifyInitResultContract(): OK[Unit] =
@@ -233,12 +265,17 @@ final case class For(
 
 private enum ForStepSpec:
   case Static(step: IntegerAttr)
-  case Dynamic(name: String, typ: IndexType)
+  case Dynamic(name: String, typ: TypeAttribute)
 
 private def forStepSpecP[$: P](using Parser): P[ForStepSpec] =
   P(
     operandNameP.flatMap(name =>
-      P(":" ~ typeOfP[IndexType]).map(typ => ForStepSpec.Dynamic(name, typ))
+      P(":" ~ typeP).flatMap {
+        case typ: TypeAttribute if isAffineIndexLikeType(typ) =>
+          Pass(ForStepSpec.Dynamic(name, typ))
+        case other =>
+          Fail(s"d_affine.for: expected dynamic step type index or d_tensor size witness, got $other")
+      }
     ) | attrOfP[IntegerAttr].map(ForStepSpec.Static(_))
   )
 
@@ -255,13 +292,25 @@ given OperationCustomParser[For]:
         ) ~ ")").?
     ).flatMap((ivName, lbMap, lbNames, ubMap, ubNames, stepSpec, iterArgsOpt) =>
       lbNames
-        .foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
-          acc.flatMap(seq => operandP(n, IndexType()).map(seq :+ _))
+        .foldLeft(Pass(Seq.empty[Operand[Attribute]]))((acc, n) =>
+          acc.flatMap(seq =>
+            existingOrForwardValueRefOperandP(n).flatMap { valueAttr =>
+              val v = valueAttr.getVal()
+              if isAffineIndexLikeType(v.typ) then Pass(seq :+ v.asInstanceOf[Operand[Attribute]])
+              else Fail(s"d_affine.for: expected lower bound operand %$n to have type index or d_tensor size witness, got ${v.typ}")
+            }
+          )
         )
         .flatMap(lbOps =>
           ubNames
-            .foldLeft(Pass(Seq.empty[Operand[IndexType]]))((acc, n) =>
-              acc.flatMap(seq => operandP(n, IndexType()).map(seq :+ _))
+            .foldLeft(Pass(Seq.empty[Operand[Attribute]]))((acc, n) =>
+              acc.flatMap(seq =>
+                existingOrForwardValueRefOperandP(n).flatMap { valueAttr =>
+                  val v = valueAttr.getVal()
+                  if isAffineIndexLikeType(v.typ) then Pass(seq :+ v.asInstanceOf[Operand[Attribute]])
+                  else Fail(s"d_affine.for: expected upper bound operand %$n to have type index or d_tensor size witness, got ${v.typ}")
+                }
+              )
             )
             .flatMap(ubOps =>
               val iterArgs = iterArgsOpt.getOrElse(Seq.empty)
@@ -275,9 +324,9 @@ given OperationCustomParser[For]:
                 val parsedStep =
                   stepSpec match
                     case ForStepSpec.Static(step) =>
-                      Pass((Seq.empty[Operand[IndexType]], step))
+                      Pass((Seq.empty[Operand[Attribute]], step))
                     case ForStepSpec.Dynamic(name, typ) =>
-                      operandP(name, typ).map(stepOperand =>
+                      parseAffineIndexLikeOperand(name, typ, "d_affine.for").map(stepOperand =>
                         (Seq(stepOperand), IntegerAttr(IntData(1), I32))
                       )
                 parsedStep.flatMap { case (stepOperands, step) =>
@@ -393,8 +442,8 @@ given OperationCustomParser[Yield]:
     }
 
 final case class Min(
-    dimOperands: Seq[Operand[IndexType]],
-    symbolOperands: Seq[Operand[IndexType]],
+    dimOperands: Seq[Operand[Attribute]],
+    symbolOperands: Seq[Operand[Attribute]],
     map: AffineMapAttr,
     res: Result[IndexType],
 ) extends DerivedOperation["d_affine.min"]
@@ -403,6 +452,8 @@ final case class Min(
   override def customVerify(): OK[Operation] =
     if res.typ != IndexType() then
       Err(s"d_affine.min: expected result type index, got ${res.typ}")
+    else if (dimOperands ++ symbolOperands).exists(op => !isAffineIndexLikeType(op.typ)) then
+      Err("d_affine.min: expected all dim/symbol operands to be index or d_tensor size witnesses")
     else if dimOperands.size != map.affineMap.dimensions.size then
       Err(
         s"d_affine.min: expected ${map.affineMap.dimensions.size} dim operands for map ${map.affineMap}, got ${dimOperands.size}"
@@ -443,24 +494,25 @@ given OperationCustomParser[Min]:
         Fail(
           s"d_affine.min: expected equal symbol operand name/type arity, got ${symNames.size} names and ${symTypes.size} types"
         )
-      else if dimTypes.exists(_ != IndexType()) || symTypes.exists(_ != IndexType())
-      then Fail("d_affine.min: expected all dim/symbol operand types to be index")
+      else if dimTypes.exists(t => t != IndexType() && !t.isInstanceOf[d_tensor.DTensorSizeWitnessType]) ||
+        symTypes.exists(t => t != IndexType() && !t.isInstanceOf[d_tensor.DTensorSizeWitnessType])
+      then Fail("d_affine.min: expected all dim/symbol operand types to be index or d_tensor size witnesses")
       else
         dimNames
           .zip(dimTypes)
-          .foldLeft(Pass(Seq.empty[Operand[IndexType]])) {
+          .foldLeft(Pass(Seq.empty[Operand[Attribute]])) {
             case (acc, (name, typ)) =>
               acc.flatMap(seq =>
-                operandP(name, typ.asInstanceOf[IndexType]).map(seq :+ _)
+                parseAffineIndexLikeOperand(name, typ, "d_affine.min").map(seq :+ _)
               )
           }
           .flatMap(dimOps =>
             symNames
               .zip(symTypes)
-              .foldLeft(Pass(Seq.empty[Operand[IndexType]])) {
+              .foldLeft(Pass(Seq.empty[Operand[Attribute]])) {
                 case (acc, (name, typ)) =>
                   acc.flatMap(seq =>
-                    operandP(name, typ.asInstanceOf[IndexType]).map(seq :+ _)
+                    parseAffineIndexLikeOperand(name, typ, "d_affine.min").map(seq :+ _)
                   )
               }
               .flatMap(symOps =>

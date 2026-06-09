@@ -10,7 +10,7 @@ tail/min simplifier:        min(tile + T, N) => tile + T
 
 The benchmark is deliberately small. It does not claim runtime speedup. Its purpose is to show that
 a conservative guarded tiler can emit tail code first, and a later ScaIR pass can remove that code
-only when `d_tensor.nat.mul` provenance proves exact divisibility.
+only when `d_tensor.size.mul` provenance proves exact divisibility.
 
 ## Variants
 
@@ -20,7 +20,7 @@ only when `d_tensor.nat.mul` provenance proves exact divisibility.
 - `ordinary_d_affine_guarded_tile`: uses an ordinary `arith.muli` product with the same
   known-positive dynamic RHS used as the tile step. Cleanup runs, but `dependent-tail-min-simplify`
   does not; the generated `arith.minsi` tail guard remains.
-- `dependent_guarded_tile_simplified`: uses the congruent dependent `d_tensor.nat.mul` product and
+- `dependent_guarded_tile_simplified`: uses the congruent dependent `d_tensor.size.mul` product and
   runs `dependent-tile-with-tail-control,dependent-tail-min-simplify,canonicalize,cse,dce`. The
   `arith.minsi` guard is removed.
 
@@ -32,7 +32,7 @@ The script records:
 - `arith_minsi_count`
 - `tail_guard_count`
 - dynamic/static loop step counts
-- `d_tensor.nat.mul` and `d_tensor.shape.to_index` counts
+- `d_tensor.size.mul` and `d_tensor.size witness erasure` counts
 - total operation count and MLIR LOC
 - removed-op delta from the guarded form where applicable
 

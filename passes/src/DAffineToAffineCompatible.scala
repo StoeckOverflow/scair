@@ -83,8 +83,8 @@ private final class DAffineToAffineConverter:
       .getOrElse(value.asInstanceOf[Value[Attribute]], value.asInstanceOf[Value[Attribute]])
       .asInstanceOf[Value[T]]
 
-  private def index(value: Value[IndexType]): Operand[IndexType] =
-    mapped(value)
+  private def index(value: Value[Attribute]): Operand[IndexType] =
+    mapped(value).asInstanceOf[Operand[IndexType]]
 
   private def operand(value: Value[Attribute]): Operand[Attribute] =
     mapped(value)

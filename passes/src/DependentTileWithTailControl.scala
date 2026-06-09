@@ -1,8 +1,8 @@
-package scair.passes.dependent_natmul_tiling
+package scair.passes.dependent_size_product_tiling
 
 import scair.MLContext
 import scair.ir.Operation
-import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
+import scair.passes.analysis.SizeProductFacts.FactorSelectionPolicy
 import scair.transformations.ModulePass
 
 final class DependentTileWithTailControl(
@@ -12,4 +12,4 @@ final class DependentTileWithTailControl(
   override val name: String = "dependent-tile-with-tail-control"
 
   override def transform(op: Operation): Operation =
-    DependentNatmulTilingTransform.transform(op, TailPolicy.Guarded, factorPolicy)
+    DependentSizeProductTilingTransform.transform(op, TailPolicy.Guarded, factorPolicy)

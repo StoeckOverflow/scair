@@ -39,7 +39,7 @@ enum {
 };
 
 extern void matmul_reduction_dim_tiling(
-    int64_t m_nat, int64_t n_nat, int64_t k0_nat, int64_t k1_nat,
+    int64_t m_size, int64_t n_size, int64_t k0_size, int64_t k1_size,
     float *A, float *B, float *C);
 
 static double elapsed_ns(struct timespec start, struct timespec end) {

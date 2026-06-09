@@ -9,7 +9,7 @@ import scair.utils.OK
 
 import scala.collection.mutable
 
-object NatProvenance:
+object SizeWitnessProvenance:
   /** Conservative provenance/constant reasoning for the currently supported affine subset;
     * does not attempt general semi-affine symbolic solving.
     */
@@ -74,7 +74,7 @@ object NatProvenance:
         )
       yield out
 
-  private def recoverProjectedNatFromApply(
+  private def recoverProjectedSizeWitnessFromApply(
       dimOperands: Seq[Value[Attribute]],
       symbolOperands: Seq[Value[Attribute]],
       map: AffineMapAttr,
@@ -92,34 +92,34 @@ object NatProvenance:
             val idx = dimNames.indexOf(position)
             if idx < 0 then None
             else
-              DTensorTypeUtil.resolveNatFromIndexValue(dimOperands(idx)) match
-                case OK(nat) => Some(nat)
+              DTensorTypeUtil.resolveSizeWitnessFromIndexValue(dimOperands(idx)) match
+                case OK(size) => Some(size)
                 case _       => None
           case AffineSymExpr(position) =>
             val idx = symNames.indexOf(position)
             if idx < 0 then None
             else
-              DTensorTypeUtil.resolveNatFromIndexValue(symbolOperands(idx)) match
-                case OK(nat) => Some(nat)
+              DTensorTypeUtil.resolveSizeWitnessFromIndexValue(symbolOperands(idx)) match
+                case OK(size) => Some(size)
                 case _       => None
           case _ => None
 
-  def resolveNat(v: Value[Attribute]): Option[Value[Attribute]] =
-    DTensorTypeUtil.resolveNatProvenance(v) match
-      case OK(nat) => Some(nat)
+  def resolveSizeWitness(v: Value[Attribute]): Option[Value[Attribute]] =
+    DTensorTypeUtil.resolveSizeWitnessProvenance(v) match
+      case OK(size) => Some(size)
       case _       =>
         v.owner match
           case Some(d_affine.Apply(dimOperands, symbolOperands, map, _)) =>
-            recoverProjectedNatFromApply(dimOperands, symbolOperands, map)
+            recoverProjectedSizeWitnessFromApply(dimOperands, symbolOperands, map)
           case _ => None
 
-  def sameNat(lhs: Value[Attribute], rhs: Value[Attribute]): Boolean =
-    (resolveNat(lhs), resolveNat(rhs)) match
+  def sameSizeWitness(lhs: Value[Attribute], rhs: Value[Attribute]): Boolean =
+    (resolveSizeWitness(lhs), resolveSizeWitness(rhs)) match
       case (Some(l), Some(r)) => l eq r
       case _                  => false
 
-  def equivalentNatOrConst(lhs: Value[Attribute], rhs: Value[Attribute]): Boolean =
-    (resolveNat(lhs), resolveNat(rhs)) match
+  def equivalentSizeWitnessOrConst(lhs: Value[Attribute], rhs: Value[Attribute]): Boolean =
+    (resolveSizeWitness(lhs), resolveSizeWitness(rhs)) match
       case (Some(l), Some(r)) if l eq r => true
       case _ =>
         (exactConst(lhs), exactConst(rhs)) match
@@ -131,21 +131,20 @@ object NatProvenance:
     val inProgress = mutable.Set.empty[Value[Attribute]]
 
     def eval(x: Value[Attribute]): Option[BigInt] =
-      val base = resolveNat(x).getOrElse(x)
+      val base = resolveSizeWitness(x).getOrElse(x)
       memo.getOrElseUpdate(
         base, {
           if inProgress.contains(base) then None
           else
             inProgress += base
             val out = base.owner match
-              case Some(NatConst(IntegerAttr(IntData(c), _), _)) => Some(c)
-              case Some(ShapeToIndex(nat, _))                    => eval(nat)
-              case Some(NatAdd(lhs, rhs, _)) =>
+              case Some(SizeConstant(IntegerAttr(IntData(c), _), _)) => Some(c)
+              case Some(SizeAdd(lhs, rhs, _)) =>
                 for
                   l <- eval(lhs)
                   r <- eval(rhs)
                 yield l + r
-              case Some(NatMul(lhs, rhs, _)) =>
+              case Some(SizeMul(lhs, rhs, _)) =>
                 for
                   l <- eval(lhs)
                   r <- eval(rhs)
@@ -170,21 +169,20 @@ object NatProvenance:
     val inProgress = mutable.Set.empty[Value[Attribute]]
 
     def eval(x: Value[Attribute]): Boolean =
-      val base = resolveNat(x).getOrElse(x)
+      val base = resolveSizeWitness(x).getOrElse(x)
       memo.getOrElseUpdate(
         base, {
           if inProgress.contains(base) then false
           else
             inProgress += base
             val out =
-              base.typ.isInstanceOf[DTensorPosNatType] ||
+              base.typ.isInstanceOf[DTensorPosSizeType] ||
                 exactConst(base).exists(_ > 0) ||
                 (base.owner match
-                  case Some(ShapeToIndex(nat, _))    => eval(nat)
-                  case Some(NatAdd(lhs, rhs, _))     => eval(lhs) || eval(rhs)
-                  case Some(NatMul(lhs, rhs, _))     => eval(lhs) && eval(rhs)
+                  case Some(SizeAdd(lhs, rhs, _))     => eval(lhs) || eval(rhs)
+                  case Some(SizeMul(lhs, rhs, _))     => eval(lhs) && eval(rhs)
                   case Some(d_affine.Apply(dimOperands, symbolOperands, map, _)) =>
-                    recoverProjectedNatFromApply(dimOperands, symbolOperands, map).exists(eval)
+                    recoverProjectedSizeWitnessFromApply(dimOperands, symbolOperands, map).exists(eval)
                   case Some(arith.Constant(IntegerAttr(IntData(c), _), _)) => c > 0
                   case _                                                    => false
                 )

@@ -10,15 +10,15 @@ import scair.utils.OK
 final class TensorTypesSpec extends AnyFlatSpec:
 
   "TensorTypeUtil.asTensor" should "convert vector to rank-1 tensor" in {
-    val d0 = Value[Attribute](DTensorNatType())
+    val d0 = Value[Attribute](DTensorSizeType())
     val v = DTensorVectorType(ValueAttribute(d0), Float32Type())
     val t = DTensorTypeUtil.asDTensor(v)
     t shouldBe DTensorTensorType(Seq(ValueAttribute(d0)), Float32Type())
   }
 
   it should "convert matrix to rank-2 tensor" in {
-    val d0 = Value[Attribute](DTensorNatType())
-    val d1 = Value[Attribute](DTensorNatType())
+    val d0 = Value[Attribute](DTensorSizeType())
+    val d1 = Value[Attribute](DTensorSizeType())
     val m = DTensorMatrixType(
       ValueAttribute(d0),
       ValueAttribute(d1),
@@ -32,15 +32,15 @@ final class TensorTypesSpec extends AnyFlatSpec:
   }
 
   it should "return tensor unchanged" in {
-    val n = Value[Attribute](DTensorNatType())
+    val n = Value[Attribute](DTensorSizeType())
     val tt = DTensorTensorType(Seq(ValueAttribute(n)), Float32Type())
     DTensorTypeUtil.asDTensor(tt) shouldBe tt
   }
 
   "tensor.dim" should
     "return the embedded dim SSA value for the selected axis" in {
-      val d0 = Value[Attribute](DTensorNatType())
-      val d1 = Value[Attribute](DTensorNatType())
+      val d0 = Value[Attribute](DTensorSizeType())
+      val d1 = Value[Attribute](DTensorSizeType())
       val tensor = Value[DTensorTensorType](
         DTensorTensorType(
           Seq(ValueAttribute(d0), ValueAttribute(d1)),

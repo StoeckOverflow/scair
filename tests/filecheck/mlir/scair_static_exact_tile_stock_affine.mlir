@@ -4,14 +4,13 @@
 // RUN: scair-opt %s --allow-unregistered-dialect -p dependent-product-loop-exact-tile,d-affine-to-affine-compatible | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' | mlir-opt --allow-unregistered-dialect --pass-pipeline='builtin.module(func.func(affine-loop-unroll{unroll-factor=8}))' | filecheck %s --check-prefix=UNROLL
 
 builtin.module {
-  func.func @static_exact_tile_stock_affine(%k0_nat: !d_tensor.nat, %out: memref<?xf32>) {
-    %k1_nat = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
-    %k_nat = "d_tensor.nat.mul"(%k0_nat, %k1_nat) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-    %ub = "d_tensor.shape.to_index"(%k_nat) : (!d_tensor.nat) -> index
+  func.func @static_exact_tile_stock_affine(%k0_size: !d_tensor.size, %out: memref<?xf32>) {
+    %k1_size = "d_tensor.size.constant"() <{value = 8 : i32}> : () -> !d_tensor.size
+    %k_size = "d_tensor.size.mul"(%k0_size, %k1_size) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 
-    d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%ub) step 1 : index {
+    d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k_size) step 1 : index {
       "memref.store"(%cst, %out, %p) : (f32, memref<?xf32>, index) -> ()
       d_affine.yield
     }

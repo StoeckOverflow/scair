@@ -252,12 +252,12 @@ final class RefinedIndexMaterializer(
     remap: Value[Attribute] => Value[Attribute],
     cache: CachedIndexConstants,
 ):
-  private def constNat(v: Value[Attribute]): Option[BigInt] =
+  private def constSize(v: Value[Attribute]): Option[BigInt] =
     v.owner match
-      case Some(DTensor.NatConst(IntegerAttr(IntData(k), _), _)) => Some(k)
+      case Some(DTensor.SizeConstant(IntegerAttr(IntData(k), _), _)) => Some(k)
       case _                                                     => None
 
-  def materializeNatOrIndex(v: Value[Attribute], block: Block): Value[Attribute] =
+  def materializeSizeOrIndex(v: Value[Attribute], block: Block): Value[Attribute] =
     remap(v) match
       case existing if existing.owner.exists {
             case op: Operation => op.name.startsWith("llvm.")
@@ -265,12 +265,10 @@ final class RefinedIndexMaterializer(
           } =>
         existing
       case other =>
-        constNat(other).map(k => cache.constIndex(k, block)).orElse {
+        constSize(other).map(k => cache.constIndex(k, block)).orElse {
           other.owner.collect {
-            case DTensor.IndexToNat(idx, _) =>
-              materializeNatOrIndex(idx, block)
-            case DTensor.ShapeToIndex(nat, _) =>
-              constNat(nat).map(k => cache.constIndex(k, block)).getOrElse(other)
+            case DTensor.SizeImport(idx, _) =>
+              materializeSizeOrIndex(idx, block)
           }
         }.getOrElse(other)
 
@@ -282,4 +280,4 @@ final class RefinedIndexMaterializer(
       case i: IntegerAttr =>
         cache.constIndex(i.value.value, block)
       case v: ValueAttribute =>
-        materializeNatOrIndex(v.getVal(), block)
+        materializeSizeOrIndex(v.getVal(), block)

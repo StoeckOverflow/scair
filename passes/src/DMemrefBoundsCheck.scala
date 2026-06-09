@@ -7,7 +7,7 @@ import scair.dialects.d_memref
 import scair.dialects.arith
 import scair.exceptions.VerifyException
 import scair.ir.*
-import scair.passes.NatProvenance
+import scair.passes.SizeWitnessProvenance
 import scair.transformations.ModulePass
 
 /**
@@ -59,11 +59,11 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
       axis: Int,
   ): Unit =
     val safeByLoop =
-      loopIvUpperBound(idx).exists(ub => NatProvenance.sameNat(ub, dim))
+      loopIvUpperBound(idx).exists(ub => SizeWitnessProvenance.sameSizeWitness(ub, dim))
     if safeByLoop then return
 
-    val idxConst = NatProvenance.exactConst(idx)
-    val dimConst = NatProvenance.exactConst(dim)
+    val idxConst = SizeWitnessProvenance.exactConst(idx)
+    val dimConst = SizeWitnessProvenance.exactConst(dim)
     (idxConst, dimConst) match
       case (Some(i), _) if i < 0 =>
         throw VerifyException(
@@ -81,9 +81,9 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
       dim: Value[Attribute],
       axis: Int,
   ): Unit =
-    val offConst = NatProvenance.exactConst(off)
-    val sizeConst = NatProvenance.exactConst(size)
-    val dimConst = NatProvenance.exactConst(dim)
+    val offConst = SizeWitnessProvenance.exactConst(off)
+    val sizeConst = SizeWitnessProvenance.exactConst(size)
+    val dimConst = SizeWitnessProvenance.exactConst(dim)
 
     (offConst, sizeConst, dimConst) match
       case (Some(o), _, _) if o < 0 =>
@@ -100,7 +100,7 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
         )
       case _ =>
         val isZeroOffset = offConst.contains(0)
-        if isZeroOffset && NatProvenance.sameNat(size, dim) then ()
+        if isZeroOffset && SizeWitnessProvenance.sameSizeWitness(size, dim) then ()
         else ()
 
   private def dimValue(dim: d_memref.DimParam): Value[Attribute] =

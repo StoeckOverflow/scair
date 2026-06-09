@@ -2,20 +2,20 @@
 
 // Earlier same-signature arguments may be used as value parameters in later
 // block argument types.
-func.func @ok(%n : !d_tensor.nat,
+func.func @ok(%n : !d_tensor.size,
               %buf : !d_memref.memref<[%n], f32>) {
   func.return
 }
 
 // CHECK-LABEL: func.func @ok(
-// CHECK-SAME: %0: !d_tensor.nat
+// CHECK-SAME: %0: !d_tensor.size
 // CHECK-SAME: %1: !d_memref.memref<[%0], f32>
 
 // -----
 
 // Later same-signature arguments do not dominate earlier argument types.
 func.func @bad_later(%buf : !d_memref.memref<[%n], f32>,
-                     %n : !d_tensor.nat) {
+                     %n : !d_tensor.size) {
   func.return
 }
 
@@ -25,7 +25,7 @@ func.func @bad_later(%buf : !d_memref.memref<[%n], f32>,
 
 // Body-local operation results do not dominate function-entry argument types.
 func.func @bad_body(%buf : !d_memref.memref<[%n], f32>) {
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %n = "d_tensor.size.param"() : () -> !d_tensor.size
   func.return
 }
 
@@ -45,17 +45,17 @@ func.func @bad_self(%n : !value<%n>) {
 // The same ordered telescope rule applies to ordinary block labels, not just
 // function entry signatures.
 "test.region"() ({
-^bb0(%n : !d_tensor.nat, %buf : !d_memref.memref<[%n], f32>):
+^bb0(%n : !d_tensor.size, %buf : !d_memref.memref<[%n], f32>):
   "test.ret"() : () -> ()
 }) : () -> ()
 
 // CHECK: "test.region"() ({
-// CHECK-NEXT: ^bb{{[0-9]+}}(%{{[0-9]+}}: !d_tensor.nat, %{{[0-9]+}}: !d_memref.memref<[%{{[0-9]+}}], f32>):
+// CHECK-NEXT: ^bb{{[0-9]+}}(%{{[0-9]+}}: !d_tensor.size, %{{[0-9]+}}: !d_memref.memref<[%{{[0-9]+}}], f32>):
 
 // -----
 
 "test.region"() ({
-^bb0(%buf : !d_memref.memref<[%n], f32>, %n : !d_tensor.nat):
+^bb0(%buf : !d_memref.memref<[%n], f32>, %n : !d_tensor.size):
   "test.ret"() : () -> ()
 }) : () -> ()
 
@@ -74,7 +74,7 @@ func.func @bad_self(%n : !value<%n>) {
 
 "test.region"() ({
 ^bb0(%buf : !d_memref.memref<[%n], f32>):
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %n = "d_tensor.size.param"() : () -> !d_tensor.size
   "test.ret"() : () -> ()
 }) : () -> ()
 

@@ -64,11 +64,11 @@ object DMemrefTypeUtil:
         v.getVal().typ match
           case _: IndexType      => OK(())
           case _: IntegerType    => OK(())
-          case _: DTensorNatLikeType => DTensorTypeUtil.resolveNatValue(v.getVal()).map(_ => ())
+          case _: DTensorSizeWitnessType => DTensorTypeUtil.resolveSizeWitnessValue(v.getVal()).map(_ => ())
           case ValueRefType(ref) => checkLayoutParam(ValueAttribute(ref.getVal()))
           case other =>
             Err(
-              s"layout SSA parameter must have type index, integer, !d_tensor.nat, !d_tensor.posnat, or !value<...>, got ${renderAttr(other)}"
+              s"layout SSA parameter must have type index, integer, !d_tensor.size, !d_tensor.pos_size, or !value<...>, got ${renderAttr(other)}"
             )
       case IntegerAttr(_, _: IndexType)   => OK(())
       case IntegerAttr(_, _: IntegerType) => OK(())
@@ -287,6 +287,24 @@ private def parseIndexOperands[$: P](names: Seq[String])(using
     (acc ~ operandP(n, IndexType())).map(_ :+ _)
   )
 
+private def parseSizeOperands[$: P](names: Seq[String])(using
+    p: Parser
+): P[Seq[Operand[Attribute]]] =
+  names.foldLeft(Pass(Seq.empty[Operand[Attribute]]))((acc, n) =>
+    acc.flatMap(seq =>
+      existingOrForwardValueRefOperandP(n).flatMap(valueAttr =>
+        val v = valueAttr.getVal()
+        v.typ match
+          case _: DTensorSizeWitnessType =>
+            Pass(seq :+ v.asInstanceOf[Operand[Attribute]])
+          case _: IndexType =>
+            Pass(seq :+ v.asInstanceOf[Operand[Attribute]])
+          case other =>
+            Fail(s"d_memref.subview: expected size operand %$n to be index or d_tensor size witness, got $other")
+      )
+    )
+  )
+
 final case class Alloc(
     res: Result[DMemrefMemrefType]
 ) extends DerivedOperation["d_memref.alloc"]
@@ -392,7 +410,7 @@ final case class DimExact(
     else
       selectedDimValue.flatMap(sel =>
         if res.typ.ref.getVal() eq sel then
-          DTensorTypeUtil.resolveNatValue(res.typ.ref.getVal()).map(_ => this)
+          DTensorTypeUtil.resolveSizeWitnessValue(res.typ.ref.getVal()).map(_ => this)
         else
           Err(
             "d_memref.dim_exact: expected result !value<...> to reference the selected embedded dim"
@@ -555,7 +573,7 @@ given OperationCustomParser[Cast]:
 final case class Subview(
     src: Operand[DMemrefMemrefType],
     offsets: Seq[Operand[IndexType]],
-    sizes: Seq[Operand[IndexType]],
+    sizes: Seq[Operand[Attribute]],
     strides: Seq[Operand[IndexType]],
     res: Result[DMemrefMemrefType],
 ) extends DerivedOperation["d_memref.subview"]
@@ -563,18 +581,18 @@ final case class Subview(
 
   private def sameDimAsSizeOperand(
       dim: DimParam,
-      size: Operand[IndexType],
+      size: Operand[Attribute],
   ): Boolean =
     dim match
       case d: ValueAttribute =>
-        val dimNat = DTensorTypeUtil.resolveNatValue(d.getVal())
-        val sizeNat = DTensorTypeUtil.resolveNatFromIndexValue(size)
+        val dimNat = DTensorTypeUtil.resolveSizeWitnessValue(d.getVal())
+        val sizeNat = DTensorTypeUtil.resolveSizeWitnessFromIndexValue(size)
         (dimNat, sizeNat) match
           case (OK(lhs), OK(rhs)) => lhs eq rhs
           case _                  =>
             (d.getVal().owner, size.owner) match
               case (
-                    Some(NatConst(IntegerAttr(IntData(lhs), _), _)),
+                    Some(SizeConstant(IntegerAttr(IntData(lhs), _), _)),
                     Some(arith.Constant(IntegerAttr(IntData(rhs), _: IndexType), _)),
                   ) => lhs == rhs
               case _ => false
@@ -608,7 +626,7 @@ final case class Subview(
       firstSizeProvenanceMismatch match
         case Some(axis) =>
           Err(
-            s"d_memref.subview: size provenance mismatch at axis $axis; expected result dim to match size operand via d_tensor.shape.to_index"
+            s"d_memref.subview: size provenance mismatch at axis $axis; expected result dim to match size witness operand"
           )
         case None =>
           OK(this)
@@ -631,7 +649,7 @@ given OperationCustomParser[Subview]:
     ).flatMap((srcName, offNames, sizeNames, strideNames, srcTyp, resTyp) =>
       operandP(srcName, srcTyp).flatMap(src =>
         parseIndexOperands(offNames).flatMap(offsets =>
-          parseIndexOperands(sizeNames).flatMap(sizes =>
+          parseSizeOperands(sizeNames).flatMap(sizes =>
             parseIndexOperands(strideNames).flatMap(strides =>
               resultP(resNames.head, resTyp).map(res =>
                 Subview(src, offsets, sizes, strides, res)

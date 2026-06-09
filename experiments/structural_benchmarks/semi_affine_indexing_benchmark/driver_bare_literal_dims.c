@@ -16,7 +16,7 @@
 #endif
 
 extern void semi_affine_fill_and_sum(
-    int64_t rows_nat, int64_t cols_nat, int64_t stride0, int64_t stride1,
+    int64_t rows_size, int64_t cols_size, int64_t stride0, int64_t stride1,
     float *flat, float *out);
 
 int main(int argc, char **argv) {

@@ -53,30 +53,30 @@ Use in thesis:
 - exact-tiling claim: ScaIR derives a dynamic step from `hidden = heads * head_dim` provenance for
   the flattened hidden loop and avoids the cleanup structure that an affine tiled loop would need
   without that proof
-- positivity claim: the value-dependent route treats `heads` and `head_dim` as `!d_tensor.posnat`, so
+- positivity claim: the value-dependent route treats `heads` and `head_dim` as `!d_tensor.pos_size`, so
   the dynamic exact-tile step is checked by the same positivity discipline used by the matmul and
   affine tiling benchmarks
 
 Metric interpretation / limitations:
 
 - `scair_baseline` is the ScaIR dynamic memref baseline and intentionally does not carry dependent
-  `d_tensor.nat.mul` provenance.
+  `d_tensor.size.mul` provenance.
 - In the current MLIR source, upstream `affine-loop-tile` tiles outer affine bands; it does not
   isolate the same flattened hidden loop that the ScaIR exact-tile pass rewrites. Use `tile_loop`
   before making same-loop comparisons.
 - The value-dependent route demonstrates preserved head/head-dimension provenance and exact tiling
   for the flattened hidden loop; it should not be framed as a broad attention-performance result.
 - The value-dependent route runs `validate-d-affine-dynamic-steps` before lowering;
-  `canonicalize-d-tensor-nat-products` is used as IR cleanup, while legality comes from explicit
-  `d_tensor.nat.mul` provenance plus `!d_tensor.posnat`.
-- The separate `dependent-natmul-loop-factorization` pass rewrites a flat nat-mul loop into two
+  `canonicalize-d-tensor-size-products` is used as IR cleanup, while legality comes from explicit
+  `d_tensor.size.mul` provenance plus `!d_tensor.pos_size`.
+- The separate `dependent-size-product-loop-factorization` pass rewrites a flat nat-mul loop into two
   unit-step factor loops and should not be used as same-step tiling evidence.
 - `loop_transform`, `tile_loop`, `shared_tile_size`, `tile_size_source`, `dynamic_step_present`,
   `tail_cleanup_present`, and `exact_divisibility_proof` are route notes derived from build-script
   arguments and generated IR artifact checks.
 - `affine_cleanup_present`, `factorized_tile_count`, and `tail_free_factorized` are legacy artifact
   checks over generated `.tiled.mlir`; the semantic exact-divisibility argument comes from
-  `d_tensor.nat.mul`, not from these regex notes alone.
+  `d_tensor.size.mul`, not from these regex notes alone.
 
 Run:
 

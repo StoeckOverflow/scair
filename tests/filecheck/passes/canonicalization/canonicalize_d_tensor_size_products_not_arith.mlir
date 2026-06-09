@@ -1,4 +1,4 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-d-tensor-nat-products | filecheck %s --implicit-check-not=d_tensor.nat.mul
+// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-d-tensor-size-products | filecheck %s --implicit-check-not=d_tensor.size.mul
 
 builtin.module {
   func.func @ordinary_arith_is_not_product_proof(%lhs: index, %rhs: index) -> index {

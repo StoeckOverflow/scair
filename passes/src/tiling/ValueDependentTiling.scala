@@ -6,9 +6,9 @@ import scair.dialects.builtin.*
 import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_affine
 import scair.ir.*
-import scair.passes.NatProvenance
-import scair.passes.analysis.NatProductFacts
-import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
+import scair.passes.SizeWitnessProvenance
+import scair.passes.analysis.SizeProductFacts
+import scair.passes.analysis.SizeProductFacts.FactorSelectionPolicy
 import scair.transformations.RewriteMethods
 
 import scala.collection.mutable
@@ -30,7 +30,7 @@ object ValueDependentTiling:
     case SeparableWhenNotExact
 
   enum ProofSource:
-    case NatMul
+    case SizeProduct
     case OrdinaryProduct
     case AffineSet
     case RefinedAssert
@@ -89,27 +89,25 @@ object ValueDependentTiling:
         case source                                        => Some(source)
     def canEmitFullTileFitsGuard(domain: LoopDomain, spec: TileSpec): Option[ProofSource] = None
 
-  private final case class NatMulFactProvider(
+  private final case class SizeProductFactProvider(
       factorPolicy: FactorSelectionPolicy
   ) extends TilingFactProvider:
     override def tileSpec(domain: LoopDomain): Option[TileSpec] =
       if domain.dialect != LoopDialect.DAffine then None
       else
-        NatProductFacts.selectFactor(domain.upperBound, factorPolicy).map { factor =>
-          val tileSize = toIndex(factor.value)
+        SizeProductFacts.selectFactor(domain.upperBound, factorPolicy).map { factor =>
           TileSpec(
             fullUpperBound = domain.upperBound,
-            tileSize = tileSize.res,
-            prelude = Seq(tileSize),
-            proofSource = ProofSource.NatMul,
+            tileSize = factor.value,
+            proofSource = ProofSource.SizeProduct,
           )
         }
 
     override def provePositive(domain: LoopDomain, value: Value[Attribute]): Option[ProofSource] =
-      if positive(value) then Some(ProofSource.NatMul) else None
+      if positive(value) then Some(ProofSource.SizeProduct) else None
 
     override def proveExactDivisibility(domain: LoopDomain, spec: TileSpec): Option[ProofSource] =
-      if spec.proofSource == ProofSource.NatMul then Some(ProofSource.NatMul) else None
+      if spec.proofSource == ProofSource.SizeProduct then Some(ProofSource.SizeProduct) else None
 
   private object OrdinaryProductFactProvider extends TilingFactProvider:
     override def tileSpec(domain: LoopDomain): Option[TileSpec] =
@@ -145,7 +143,7 @@ object ValueDependentTiling:
     override def tileSpec(domain: LoopDomain): Option[TileSpec] = None
 
     override def provePositive(domain: LoopDomain, value: Value[Attribute]): Option[ProofSource] =
-      if NatProvenance.isPositive(value) then Some(ProofSource.RefinedAssert) else None
+      if SizeWitnessProvenance.isPositive(value) then Some(ProofSource.RefinedAssert) else None
 
   private object AffineSetFactProvider extends TilingFactProvider:
     override def tileSpec(domain: LoopDomain): Option[TileSpec] = None
@@ -209,7 +207,7 @@ object ValueDependentTiling:
         case TilingPolicy.GuardedOnly =>
           TilingDecision.Guarded
         case TilingPolicy.SeparableWhenNotExact =>
-          if proofSource == ProofSource.NatMul || proofSource == ProofSource.AffineSet || proofSource == ProofSource.RefinedAssert
+          if proofSource == ProofSource.SizeProduct || proofSource == ProofSource.AffineSet || proofSource == ProofSource.RefinedAssert
           then TilingDecision.Exact
           else TilingDecision.Separable
     TilingPlan(decision, target, proofSource)
@@ -219,12 +217,6 @@ object ValueDependentTiling:
 
   private def idxConst(v: BigInt): arith.Constant =
     arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
-
-  private def toIndex(nat: Value[Attribute]): DTensor.ShapeToIndex =
-    DTensor.ShapeToIndex(
-      nat.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
-      Result(IndexType()),
-    )
 
   private def identityMap: AffineMapAttr =
     AffineMapAttr(
@@ -256,6 +248,30 @@ object ValueDependentTiling:
             AffineConstantExpr(offset),
           )
         ),
+      )
+    )
+
+  private def tileEndMap: AffineMapAttr =
+    AffineMapAttr(
+      AffineMap(
+        dimensions = Seq("d0"),
+        symbols = Seq("s0"),
+        affineExprs = Seq(
+          AffineBinaryOpExpr(
+            AffineBinaryOp.Add,
+            AffineDimExpr("d0"),
+            AffineSymExpr("s0"),
+          )
+        ),
+      )
+    )
+
+  private def tailMinMap: AffineMapAttr =
+    AffineMapAttr(
+      AffineMap(
+        dimensions = Seq("d0"),
+        symbols = Seq("s0"),
+        affineExprs = Seq(AffineDimExpr("d0"), AffineSymExpr("s0")),
       )
     )
 
@@ -300,7 +316,7 @@ object ValueDependentTiling:
       map.affineMap.affineExprs == Seq(AffineDimExpr(map.affineMap.dimensions.head))
 
   private def positive(value: Value[Attribute]): Boolean =
-    NatProvenance.exactConst(value).exists(_ > 0) || NatProvenance.isPositive(value)
+    SizeWitnessProvenance.exactConst(value).exists(_ > 0) || SizeWitnessProvenance.isPositive(value)
 
   private def collectDAffineLoops(op: Operation, innermostFirst: Boolean): Seq[d_affine.For] =
     val loops = mutable.ArrayBuffer.empty[d_affine.For]
@@ -449,7 +465,7 @@ object ValueDependentTiling:
       loop.upperBoundOperands.size == 1 &&
       isIdentityProjection(loop.lowerBoundMap) &&
       isIdentityProjection(loop.upperBoundMap) &&
-      NatProvenance.exactConst(loop.lowerBoundOperands.head) == Some(0)
+      SizeWitnessProvenance.exactConst(loop.lowerBoundOperands.head) == Some(0)
 
   private def eligibleAffineLoop(loop: affine.For, requireReductionLoop: Boolean): Boolean =
     loop.body.blocks.size == 1 &&
@@ -459,7 +475,7 @@ object ValueDependentTiling:
       loop.upperBoundOperands.size == 1 &&
       isIdentityProjection(loop.lowerBoundMap) &&
       isIdentityProjection(loop.upperBoundMap) &&
-      NatProvenance.exactConst(loop.lowerBoundOperands.head) == Some(0)
+      SizeWitnessProvenance.exactConst(loop.lowerBoundOperands.head) == Some(0)
 
   private def targetMatches(loop: d_affine.For, target: TilingTarget): Boolean =
     target match
@@ -492,7 +508,7 @@ object ValueDependentTiling:
     else if !staticUnitDAffineLoop(loop) then None
     else if loop.lowerBoundOperands.size != 1 || loop.upperBoundOperands.size != 1 then None
     else if !isIdentityProjection(loop.lowerBoundMap) || !isIdentityProjection(loop.upperBoundMap) then None
-    else if NatProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then None
+    else if SizeWitnessProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then None
     else
       Some(
         LoopDomain(
@@ -516,7 +532,7 @@ object ValueDependentTiling:
     else if loop.step.value.value != 1 then None
     else if loop.lowerBoundOperands.size != 1 || loop.upperBoundOperands.size != 1 then None
     else if !isIdentityProjection(loop.lowerBoundMap) || !isIdentityProjection(loop.upperBoundMap) then None
-    else if NatProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then None
+    else if SizeWitnessProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then None
     else
       Some(
         LoopDomain(
@@ -535,7 +551,7 @@ object ValueDependentTiling:
       lowerBound: Value[Attribute],
       upperBound: Value[Attribute],
       step: IntegerAttr,
-      stepOperands: Seq[Operand[IndexType]],
+      stepOperands: Seq[Operand[Attribute]],
       inits: Seq[Operand[Attribute]],
       resultTypes: Seq[Attribute],
       lowerBoundMap: AffineMapAttr = identityMap,
@@ -550,8 +566,8 @@ object ValueDependentTiling:
       )
     )
     d_affine.For(
-      lowerBoundOperands = Seq(asIndex(lowerBound)),
-      upperBoundOperands = Seq(asIndex(upperBound)),
+      lowerBoundOperands = Seq(lowerBound.asInstanceOf[Operand[Attribute]]),
+      upperBoundOperands = Seq(upperBound.asInstanceOf[Operand[Attribute]]),
       stepOperands = stepOperands,
       inits = inits,
       res = resultTypes.map(Result(_)),
@@ -636,13 +652,13 @@ object ValueDependentTiling:
       val staticOne = IntegerAttr(IntData(1), stepAttrType)
       val outerStepConst =
         if useStaticStepForConst then
-          NatProvenance.exactConst(spec.tileSize)
+          SizeWitnessProvenance.exactConst(spec.tileSize)
             .filter(_ > 0)
             .map(v => IntegerAttr(IntData(v), stepAttrType))
         else None
       val outerStepOperands =
         if outerStepConst.isDefined then Seq.empty
-        else Seq(asIndex(spec.tileSize))
+        else Seq(spec.tileSize.asInstanceOf[Operand[Attribute]])
 
       val outerLoop = buildDAffineLoop(
         zero.result,
@@ -663,12 +679,13 @@ object ValueDependentTiling:
             case Some(tileSize) =>
               (Seq.empty[Operation], tileIv, shiftedMap(tileSize))
             case None =>
-              val tileEnd = arith.AddI(
-                tileIv.asInstanceOf[Operand[arith.AnyIntegerType]],
-                spec.tileSize.asInstanceOf[Operand[arith.AnyIntegerType]],
+              val tileEnd = d_affine.Apply(
+                Seq(tileIv.asInstanceOf[Operand[Attribute]]),
+                Seq(spec.tileSize.asInstanceOf[Operand[Attribute]]),
+                tileEndMap,
                 Result(IndexType()),
               )
-              (Seq(tileEnd), tileEnd.result, identityMap)
+              (Seq(tileEnd), tileEnd.res, identityMap)
 
         def exactInner(): d_affine.For =
           emitDAffineInnerLoop(
@@ -684,9 +701,10 @@ object ValueDependentTiling:
           )
 
         def guardedInner(): (Seq[Operation], d_affine.For) =
-          val clampedTileEnd = arith.MinSI(
-            tileEndValue.asInstanceOf[Operand[arith.AnyIntegerType]],
-            spec.fullUpperBound.asInstanceOf[Operand[arith.AnyIntegerType]],
+          val clampedTileEnd = d_affine.Min(
+            Seq(tileEndValue.asInstanceOf[Operand[Attribute]]),
+            Seq(spec.fullUpperBound.asInstanceOf[Operand[Attribute]]),
+            tailMinMap,
             Result(IndexType()),
           )
           val inner = emitDAffineInnerLoop(
@@ -694,7 +712,7 @@ object ValueDependentTiling:
             oldIv,
             oldIterArgs,
             tileIv,
-            clampedTileEnd.result,
+            clampedTileEnd.res,
             outerIterArgs.map(_.asInstanceOf[Operand[Attribute]]),
             loop.res.map(_.typ),
             stepAttrType,
@@ -859,7 +877,7 @@ object ValueDependentTiling:
         stepAttrType = stepAttrType,
       )
 
-  def transformDAffineNatmulProduct(
+  def transformDAffineSizeProductProduct(
       op: Operation,
       mode: TailMode,
       factorPolicy: FactorSelectionPolicy,
@@ -873,7 +891,7 @@ object ValueDependentTiling:
           val target = loopKindToTarget(loopKind)
           val specOpt =
             normalizeDAffineLoop(loop, target).flatMap(domain =>
-              firstTileSpec(domain, Seq(NatMulFactProvider(factorPolicy)))
+              firstTileSpec(domain, Seq(SizeProductFactProvider(factorPolicy)))
             )
           specOpt.foreach { spec =>
             val decision =
@@ -925,7 +943,7 @@ object ValueDependentTiling:
         if loop.containerBlock.nonEmpty then
           val target = loopKindToTarget(loopKind)
           val providers = Seq(
-            NatMulFactProvider(factorPolicy),
+            SizeProductFactProvider(factorPolicy),
             OrdinaryProductFactProvider,
             RefinedAssertFactProvider,
             AffineSetFactProvider,
@@ -990,7 +1008,7 @@ object ValueDependentTiling:
       }
     op
 
-  def transformDAffineContextNatmul(
+  def transformDAffineContextSizeProduct(
       op: Operation,
       factorPolicy: FactorSelectionPolicy,
       mode: TailMode,
@@ -1002,7 +1020,7 @@ object ValueDependentTiling:
         if loop.containerBlock.nonEmpty then
           val specOpt =
             normalizeDAffineLoop(loop, TilingTarget.ContextBand).flatMap(domain =>
-              firstTileSpec(domain, Seq(NatMulFactProvider(factorPolicy)))
+              firstTileSpec(domain, Seq(SizeProductFactProvider(factorPolicy)))
             )
           specOpt.foreach { spec =>
             val decision =

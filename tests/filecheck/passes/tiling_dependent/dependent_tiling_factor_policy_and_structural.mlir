@@ -6,13 +6,12 @@
 
 builtin.module {
   func.func @policy_product(%out: memref<?xf32>) {
-    %k0 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-    %k1 = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
-    %k = "d_tensor.nat.mul"(%k0, %k1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-    %ub = "d_tensor.shape.to_index"(%k) : (!d_tensor.nat) -> index
+    %k0 = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
+    %k1 = "d_tensor.size.constant"() <{value = 5 : i32}> : () -> !d_tensor.size
+    %k = "d_tensor.size.mul"(%k0, %k1) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-    d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%ub) step 1 : index {
+    d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k) step 1 : index {
       "memref.store"(%cst, %out, %p) : (f32, memref<?xf32>, index) -> ()
       d_affine.yield
     }
@@ -20,15 +19,14 @@ builtin.module {
   }
 
   func.func @triple_index_product(%out: memref<?xf32>) {
-    %a = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-    %b = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
-    %c = "d_tensor.nat.const"() <{value = 11 : i32}> : () -> !d_tensor.nat
-    %ab = "d_tensor.nat.mul"(%a, %b) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-    %abc = "d_tensor.nat.mul"(%ab, %c) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-    %ub = "d_tensor.shape.to_index"(%abc) : (!d_tensor.nat) -> index
+    %a = "d_tensor.size.constant"() <{value = 2 : i32}> : () -> !d_tensor.size
+    %b = "d_tensor.size.constant"() <{value = 7 : i32}> : () -> !d_tensor.size
+    %c = "d_tensor.size.constant"() <{value = 11 : i32}> : () -> !d_tensor.size
+    %ab = "d_tensor.size.mul"(%a, %b) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+    %abc = "d_tensor.size.mul"(%ab, %c) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-    d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%ub) step 1 : index {
+    d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%abc) step 1 : index {
       "memref.store"(%cst, %out, %p) : (f32, memref<?xf32>, index) -> ()
       d_affine.yield
     }
@@ -36,13 +34,12 @@ builtin.module {
   }
 
   func.func @non_zero_lower_product_is_unchanged(%out: memref<?xf32>) {
-    %k0 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-    %k1 = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
-    %k = "d_tensor.nat.mul"(%k0, %k1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-    %ub = "d_tensor.shape.to_index"(%k) : (!d_tensor.nat) -> index
+    %k0 = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
+    %k1 = "d_tensor.size.constant"() <{value = 5 : i32}> : () -> !d_tensor.size
+    %abc = "d_tensor.size.mul"(%k0, %k1) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
     %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-    d_affine.for %p = affine_map<(d0) -> (d0)>(%c1) to affine_map<(d0) -> (d0)>(%ub) step 1 : index {
+    d_affine.for %p = affine_map<(d0) -> (d0)>(%c1) to affine_map<(d0) -> (d0)>(%abc) step 1 : index {
       "memref.store"(%cst, %out, %p) : (f32, memref<?xf32>, index) -> ()
       d_affine.yield
     }
@@ -50,16 +47,14 @@ builtin.module {
   }
 
   func.func @wrong_factor_tail_guard_is_preserved(%out: memref<?xf32>) {
-    %k0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-    %k1 = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
-    %k = "d_tensor.nat.mul"(%k0, %k1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-    %ub = "d_tensor.shape.to_index"(%k) : (!d_tensor.nat) -> index
-    %k0_idx = "d_tensor.shape.to_index"(%k0) : (!d_tensor.nat) -> index
+    %k0 = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+    %k1 = "d_tensor.size.constant"() <{value = 8 : i32}> : () -> !d_tensor.size
+    %abc = "d_tensor.size.mul"(%k0, %k1) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-    d_affine.for %tile = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%ub) step 8 : index {
-      %end = "arith.addi"(%tile, %k0_idx) : (index, index) -> index
-      %clamped = "arith.minsi"(%end, %ub) : (index, index) -> index
+    d_affine.for %tile = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%abc) step 8 : index {
+      %end = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%tile)[%k0] : (index)[!d_tensor.size] -> index
+      %clamped = d_affine.min affine_map<(d0)[s0] -> (d0, s0)>(%end)[%abc] : (index)[!d_tensor.size] -> index
       d_affine.for %p = affine_map<(d0) -> (d0)>(%tile) to affine_map<(d0) -> (d0)>(%clamped) step 1 : index {
         "memref.store"(%cst, %out, %p) : (f32, memref<?xf32>, index) -> ()
         d_affine.yield
@@ -71,18 +66,15 @@ builtin.module {
 }
 
 // RIGHT-LABEL: func.func @policy_product
-// RIGHT: %[[K1:[0-9]+]] = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
-// RIGHT: %[[TILE:[0-9]+]] = "d_tensor.shape.to_index"(%[[K1]]) : (!d_tensor.nat) -> index
+// RIGHT: %[[K1:[0-9]+]] = "d_tensor.size.constant"() <{value = 5 : i32}> : () -> !d_tensor.size
 // RIGHT: d_affine.for %{{[0-9]+}} = #map{{[0-9]*}}(%{{[0-9]+}}) to #map{{[0-9]*}}(%{{[0-9]+}}) step 5
 
 // LEFT-LABEL: func.func @policy_product
-// LEFT: %[[K0:[0-9]+]] = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-// LEFT: %[[TILE:[0-9]+]] = "d_tensor.shape.to_index"(%[[K0]]) : (!d_tensor.nat) -> index
+// LEFT: %[[K0:[0-9]+]] = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
 // LEFT: d_affine.for %{{[0-9]+}} = #map{{[0-9]*}}(%{{[0-9]+}}) to #map{{[0-9]*}}(%{{[0-9]+}}) step 3
 
 // INDEX1-LABEL: func.func @triple_index_product
-// INDEX1: %[[B:[0-9]+]] = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
-// INDEX1: %[[TILE:[0-9]+]] = "d_tensor.shape.to_index"(%[[B]]) : (!d_tensor.nat) -> index
+// INDEX1: %[[B:[0-9]+]] = "d_tensor.size.constant"() <{value = 7 : i32}> : () -> !d_tensor.size
 // INDEX1: d_affine.for %{{[0-9]+}} = #map{{[0-9]*}}(%{{[0-9]+}}) to #map{{[0-9]*}}(%{{[0-9]+}}) step 7
 
 // TWICE-LABEL: func.func @policy_product
@@ -94,4 +86,4 @@ builtin.module {
 // TWICE: "memref.store"(%{{[0-9]+}}, %{{[0-9]+}}, %[[P]])
 
 // WRONG-TAIL-LABEL: func.func @wrong_factor_tail_guard_is_preserved
-// WRONG-TAIL: "arith.minsi"
+// WRONG-TAIL: d_affine.min

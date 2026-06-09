@@ -4,14 +4,14 @@ builtin.module {
   func.func @address_formula(%stride0 : index, %stride1 : index, %i : index, %j : index) -> f32 {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %c7 = "arith.constant"() <{value = 7 : index}> : () -> index
-    %d0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-    %d1 = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
-    %flat_nat = "d_tensor.nat.const"() <{value = 32 : i32}> : () -> !d_tensor.nat
-    %flat = d_memref.alloc : () -> !d_memref.memref<[%flat_nat], f32>
+    %d0 = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+    %d1 = "d_tensor.size.constant"() <{value = 8 : i32}> : () -> !d_tensor.size
+    %flat_size = "d_tensor.size.constant"() <{value = 32 : i32}> : () -> !d_tensor.size
+    %flat = d_memref.alloc : () -> !d_memref.memref<[%flat_size], f32>
     %view = d_memref.reinterpret_cast %flat
-    : !d_memref.memref<[%flat_nat], f32> to !d_memref.memref<[%d0, %d1], f32, offset: %c7, strides: [%stride0, %stride1]>
+    : !d_memref.memref<[%flat_size], f32> to !d_memref.memref<[%d0, %d1], f32, offset: %c7, strides: [%stride0, %stride1]>
     %v = d_memref.load %view[%i, %j] : !d_memref.memref<[%d0, %d1], f32, offset: %c7, strides: [%stride0, %stride1]> -> f32
-    d_memref.dealloc %flat : !d_memref.memref<[%flat_nat], f32>
+    d_memref.dealloc %flat : !d_memref.memref<[%flat_size], f32>
     func.return %v : f32
   }
 }

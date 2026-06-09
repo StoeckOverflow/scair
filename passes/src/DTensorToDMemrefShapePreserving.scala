@@ -41,9 +41,6 @@ private def asMemref(
 private def idxConst(v: Int): arith.Constant =
   arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
 
-private def toIndex(nat: Value[Attribute]): ShapeToIndex =
-  ShapeToIndex(nat.asInstanceOf[Operand[DTensorNatLikeType]], Result(IndexType()))
-
 private def identityMap: AffineMapAttr =
   AffineMapAttr(
     AffineMap(
@@ -63,8 +60,8 @@ private def mkFor(
     Block(IndexType(), iv => bodyBuilder(iv) :+ d_affine.Yield(Seq.empty))
   )
   d_affine.For(
-    lowerBoundOperands = Seq(asIndex(lb)),
-    upperBoundOperands = Seq(asIndex(ub)),
+    lowerBoundOperands = Seq(lb.asInstanceOf[Operand[Attribute]]),
+    upperBoundOperands = Seq(ub.asInstanceOf[Operand[Attribute]]),
     stepOperands = Seq.empty,
     inits = Seq.empty,
     res = Seq.empty,
@@ -102,17 +99,17 @@ private def productMatches(
     product: Value[Attribute],
     factors: Seq[Value[Attribute]],
 ): Boolean =
-  DTensorTypeUtil.sameOrderedNatProduct(product, factors) match
+  DTensorTypeUtil.sameOrderedSizeProduct(product, factors) match
     case OK(true) => true
     case _        => false
 
 private def productType(
     lhs: Value[Attribute],
     rhs: Value[Attribute],
-): DTensorNatLikeType =
+): DTensorSizeWitnessType =
   (lhs.typ, rhs.typ) match
-    case (_: DTensorPosNatType, _: DTensorPosNatType) => DTensorPosNatType()
-    case _                                            => DTensorNatType()
+    case (_: DTensorPosSizeType, _: DTensorPosSizeType) => DTensorPosSizeType()
+    case _                                            => DTensorSizeType()
 
 private def buildOrderedProduct(
     dims: Seq[Value[Attribute]]
@@ -125,9 +122,9 @@ private def buildOrderedProduct(
     case first +: rest =>
       val (ops, product) = rest.foldLeft((Seq.empty[Operation], first)) {
         case ((ops, acc), dim) =>
-          val mul = NatMul(
-            acc.asInstanceOf[Operand[DTensorNatLikeType]],
-            dim.asInstanceOf[Operand[DTensorNatLikeType]],
+          val mul = SizeMul(
+            acc.asInstanceOf[Operand[DTensorSizeWitnessType]],
+            dim.asInstanceOf[Operand[DTensorSizeWitnessType]],
             Result(productType(acc, dim)),
           )
           (ops :+ mul, mul.res)
@@ -200,12 +197,12 @@ private val LowerEmpty = pattern {
 private val LowerFill = pattern {
   case Fill(v, res) =>
     val memTy = DTensorDMemrefConversion.tensorToMemrefType(res.typ)
-    val idxDims = res.typ.params.map(_.getVal()).map(toIndex)
+    val dims = res.typ.params.map(_.getVal())
     val zero = idxConst(0)
     val alloc = d_memref.Alloc(Result(memTy))
-    val fillOps = buildFillNest(alloc.res, v, idxDims.map(_.res), zero.result)
+    val fillOps = buildFillNest(alloc.res, v, dims, zero.result)
     val castBack = castBackToTensor(alloc.res, res.typ)
-    (Seq(zero) ++ idxDims ++ Seq(alloc) ++ fillOps ++ Seq(castBack), Seq(castBack.outputs.head))
+    (Seq(zero, alloc) ++ fillOps ++ Seq(castBack), Seq(castBack.outputs.head))
 }
 
 private val LowerDim = pattern {

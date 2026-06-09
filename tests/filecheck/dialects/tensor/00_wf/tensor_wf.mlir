@@ -2,11 +2,11 @@
 
 // Valid: core tensor SSA-shape ops.
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
-  %k = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-  %s = "d_tensor.nat.add"(%m, %k) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %p = "d_tensor.nat.mul"(%s, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+  %n = "d_tensor.size.constant"() <{value = 8 : i32}> : () -> !d_tensor.size
+  %k = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
+  %s = "d_tensor.size.add"(%m, %k) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+  %p = "d_tensor.size.mul"(%s, %n) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
   %z = "test.zero"() : () -> f32
   %a = "d_tensor.fill"(%z) : (f32) -> !d_tensor.tensor<[%m, %k], f32>
   %b = "d_tensor.empty"() : () -> !d_tensor.tensor<[%k, %n], f32>
@@ -21,11 +21,11 @@ builtin.module {
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-// VERIFY:   %1 = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
-// VERIFY:   %2 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-// VERIFY:   %3 = "d_tensor.nat.add"(%0, %2) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// VERIFY:   %4 = "d_tensor.nat.mul"(%3, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   %0 = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+// VERIFY:   %1 = "d_tensor.size.constant"() <{value = 8 : i32}> : () -> !d_tensor.size
+// VERIFY:   %2 = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
+// VERIFY:   %3 = "d_tensor.size.add"(%0, %2) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+// VERIFY:   %4 = "d_tensor.size.mul"(%3, %1) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // VERIFY:   %5 = "test.zero"() : () -> f32
 // VERIFY:   %6 = "d_tensor.fill"(%5) : (f32) -> !d_tensor.tensor<[%0, %2], f32>
 // VERIFY:   %7 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%2, %1], f32>
@@ -45,7 +45,7 @@ builtin.module {
     %c = "arith.constant"() <{value = true}> : () -> i1
     "test.cond_br"(%c) [^bb1, ^bb2] : (i1) -> ()
   ^bb1:
-    %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+    %m = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
     "test.br"() [^bb2] : () -> ()
   ^bb2:
     %u = "test.use"() : () -> !d_tensor.tensor<[%m], f32>
@@ -54,4 +54,4 @@ builtin.module {
 }
 
 // VERIFY: // -----
-// VERIFY: ssa-dominance: value Value(!d_tensor.nat) does not dominate its use in op `test.use`
+// VERIFY: ssa-dominance: value Value(!d_tensor.size) does not dominate its use in op `test.use`

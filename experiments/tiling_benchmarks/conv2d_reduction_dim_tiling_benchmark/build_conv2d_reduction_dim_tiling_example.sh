@@ -104,21 +104,21 @@ for dims in "${sizes[@]}"; do
     guarded="$OUT_DIR/${tag}_dependent_reduction_guarded_tail_simplified.guarded.mlir"
     out="$OUT_DIR/${tag}_dependent_reduction_guarded_tail_simplified.tiled.mlir"
     cp "$DEPENDENT_SRC" "$OUT_DIR/${tag}_dependent_reduction_guarded_tail_simplified.input.mlir"
-    guarded_pipeline="canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
-    pipeline="canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
+    guarded_pipeline="canonicalize,cse,dce,canonicalize-d-tensor-size-products,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
+    pipeline="canonicalize,cse,dce,canonicalize-d-tensor-size-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
     run_scair "$DEPENDENT_SRC" "$guarded_pipeline" "$guarded"
     require_pat "$guarded" 'arith\.minsi' "guarded reduction route should emit min before simplification"
     run_scair "$DEPENDENT_SRC" "$pipeline" "$out"
     reject_tail "$out"
-    append_row "dependent_reduction_guarded_tail_simplified" "$dims" "dynamic_Cin1KhKw" "$DEPENDENT_SRC" "$out" "$pipeline" "d_tensor.nat.mul" "tiling_decision=guarded_then_exact_after_simplify;proof_source=natmul;guarded_artifact=$(basename "$guarded");proof_removes_reduction_tail"
+    append_row "dependent_reduction_guarded_tail_simplified" "$dims" "dynamic_Cin1KhKw" "$DEPENDENT_SRC" "$out" "$pipeline" "d_tensor.size.mul" "tiling_decision=guarded_then_exact_after_simplify;proof_source=size_product;guarded_artifact=$(basename "$guarded");proof_removes_reduction_tail"
   fi
   if route_enabled "dependent_reduction_exact_tile"; then
     out="$OUT_DIR/${tag}_dependent_reduction_exact_tile.tiled.mlir"
     cp "$DEPENDENT_SRC" "$OUT_DIR/${tag}_dependent_reduction_exact_tile.input.mlir"
-    pipeline="canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
+    pipeline="canonicalize,cse,dce,canonicalize-d-tensor-size-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
     run_scair "$DEPENDENT_SRC" "$pipeline" "$out"
     reject_tail "$out"
-    append_row "dependent_reduction_exact_tile" "$dims" "dynamic_Cin1KhKw" "$DEPENDENT_SRC" "$out" "$pipeline" "d_tensor.nat.mul" "tiling_decision=exact;proof_source=natmul;diagnostic_direct_exact_reduction_tiling"
+    append_row "dependent_reduction_exact_tile" "$dims" "dynamic_Cin1KhKw" "$DEPENDENT_SRC" "$out" "$pipeline" "d_tensor.size.mul" "tiling_decision=exact;proof_source=size_product;diagnostic_direct_exact_reduction_tiling"
   fi
 done
 

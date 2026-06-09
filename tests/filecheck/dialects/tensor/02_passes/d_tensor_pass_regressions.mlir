@@ -9,18 +9,18 @@
 
 // Shape canonicalization on symbolic dims; deep RAUW into type dims.
 builtin.module {
-  %p = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %o = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
-  %s = "d_tensor.nat.add"(%p, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %m = "d_tensor.nat.mul"(%s, %o) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %p = "d_tensor.size.param"() : () -> !d_tensor.size
+  %z = "d_tensor.size.constant"() <{value = 0 : i32}> : () -> !d_tensor.size
+  %o = "d_tensor.size.constant"() <{value = 1 : i32}> : () -> !d_tensor.size
+  %s = "d_tensor.size.add"(%p, %z) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+  %m = "d_tensor.size.mul"(%s, %o) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
   %u = "test.use"() : () -> !d_tensor.tensor<[%m], f32>
 }
 
 // CANON: builtin.module {
-// CANON-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %1 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-// CANON-NEXT:   %2 = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
+// CANON-NEXT:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON-NEXT:   %1 = "d_tensor.size.constant"() <{value = 0 : i32}> : () -> !d_tensor.size
+// CANON-NEXT:   %2 = "d_tensor.size.constant"() <{value = 1 : i32}> : () -> !d_tensor.size
 // CANON-NEXT:   %3 = "test.use"() : () -> !d_tensor.tensor<[%0], f32>
 // CANON-NEXT: }
 
@@ -28,16 +28,16 @@ builtin.module {
 
 // Must-not-fold case.
 builtin.module {
-  %p = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %q = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %s = "d_tensor.nat.add"(%p, %q) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %p = "d_tensor.size.param"() : () -> !d_tensor.size
+  %q = "d_tensor.size.param"() : () -> !d_tensor.size
+  %s = "d_tensor.size.add"(%p, %q) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
   %u = "test.use"() : () -> !d_tensor.tensor<[%s], f32>
 }
 
 // CANON: builtin.module {
-// CANON:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON:   %2 = "d_tensor.nat.add"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CANON:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CANON:   %2 = "d_tensor.size.add"(%0, %1) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // CANON:   %3 = "test.use"() : () -> !d_tensor.tensor<[%2], f32>
 // CANON: }
 
@@ -45,8 +45,8 @@ builtin.module {
 
 // CSE regression: result types with different dim SSA identity must not merge.
 builtin.module {
-  %x0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %x1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %x0 = "d_tensor.size.param"() : () -> !d_tensor.size
+  %x1 = "d_tensor.size.param"() : () -> !d_tensor.size
   %e0 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%x0], f32>
   %e1 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%x1], f32>
   %v = "test.scalar"() : () -> f32
@@ -55,8 +55,8 @@ builtin.module {
 }
 
 // CSE: builtin.module {
-// CSE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CSE:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
+// CSE:   %1 = "d_tensor.size.param"() : () -> !d_tensor.size
 // CSE:   %2 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0], f32>
 // CSE:   %3 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%1], f32>
 // CSE:   %4 = "test.scalar"() : () -> f32
@@ -70,31 +70,31 @@ builtin.module {
 builtin.module {
   "test.island_a"() ({
   ^bb0:
-    %c1 = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-    %c2 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-    %s = "d_tensor.nat.add"(%c1, %c2) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+    %c1 = "d_tensor.size.constant"() <{value = 2 : i32}> : () -> !d_tensor.size
+    %c2 = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
+    %s = "d_tensor.size.add"(%c1, %c2) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
     "test.yield"() : () -> ()
   }) : () -> ()
   "test.island_b"() ({
   ^bb0:
-    %c1 = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-    %c2 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-    %s = "d_tensor.nat.add"(%c1, %c2) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+    %c1 = "d_tensor.size.constant"() <{value = 2 : i32}> : () -> !d_tensor.size
+    %c2 = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
+    %s = "d_tensor.size.add"(%c1, %c2) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
     "test.yield"() : () -> ()
   }) : () -> ()
 }
 
 // CSE: builtin.module {
 // CSE:   "test.island_a"() ({
-// CSE:     %0 = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-// CSE:     %1 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-// CSE:     %2 = "d_tensor.nat.add"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CSE:     %0 = "d_tensor.size.constant"() <{value = 2 : i32}> : () -> !d_tensor.size
+// CSE:     %1 = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
+// CSE:     %2 = "d_tensor.size.add"(%0, %1) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // CSE:     "test.yield"() : () -> ()
 // CSE:   }) : () -> ()
 // CSE:   "test.island_b"() ({
-// CSE:     %0 = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-// CSE:     %1 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-// CSE:     %2 = "d_tensor.nat.add"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CSE:     %0 = "d_tensor.size.constant"() <{value = 2 : i32}> : () -> !d_tensor.size
+// CSE:     %1 = "d_tensor.size.constant"() <{value = 3 : i32}> : () -> !d_tensor.size
+// CSE:     %2 = "d_tensor.size.add"(%0, %1) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
 // CSE:     "test.yield"() : () -> ()
 // CSE:   }) : () -> ()
 // CSE: }
@@ -103,14 +103,14 @@ builtin.module {
 
 // DCE regression: keep type-only dim uses across user chain.
 builtin.module {
-  %p = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %p = "d_tensor.size.param"() : () -> !d_tensor.size
   %t = "d_tensor.empty"() : () -> !d_tensor.tensor<[%p], f32>
   %u = "test.id"(%t) : (!d_tensor.tensor<[%p], f32>) -> !d_tensor.tensor<[%p], f32>
   "test.keep"(%u) : (!d_tensor.tensor<[%p], f32>) -> ()
 }
 
 // DCE: builtin.module {
-// DCE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// DCE:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
 // DCE:   %1 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0], f32>
 // DCE:   %2 = "test.id"(%1) : (!d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
 // DCE:   "test.keep"(%2) : (!d_tensor.tensor<[%0], f32>) -> ()
@@ -120,16 +120,16 @@ builtin.module {
 
 // DCE regression: remove dead nat algebra.
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %a = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %b = "d_tensor.nat.mul"(%a, %m) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
+  %z = "d_tensor.size.constant"() <{value = 0 : i32}> : () -> !d_tensor.size
+  %a = "d_tensor.size.add"(%m, %z) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+  %b = "d_tensor.size.mul"(%a, %m) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
   %t = "test.use"() : () -> !d_tensor.tensor<[%m], f32>
   "test.keep_dead"(%t) : (!d_tensor.tensor<[%m], f32>) -> ()
 }
 
 // DCE: builtin.module {
-// DCE:   %0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+// DCE:   %0 = "d_tensor.size.constant"() <{value = 4 : i32}> : () -> !d_tensor.size
 // DCE:   %1 = "test.use"() : () -> !d_tensor.tensor<[%0], f32>
 // DCE:   "test.keep_dead"(%1) : (!d_tensor.tensor<[%0], f32>) -> ()
 // DCE: }
@@ -138,16 +138,16 @@ builtin.module {
 
 // Full pipeline: fold and propagate symbolic dims.
 builtin.module {
-  %p = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %s0 = "d_tensor.nat.add"(%p, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %s1 = "d_tensor.nat.add"(%p, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %p = "d_tensor.size.param"() : () -> !d_tensor.size
+  %z = "d_tensor.size.constant"() <{value = 0 : i32}> : () -> !d_tensor.size
+  %s0 = "d_tensor.size.add"(%p, %z) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
+  %s1 = "d_tensor.size.add"(%p, %z) : (!d_tensor.size, !d_tensor.size) -> !d_tensor.size
   %k0 = "test.keep"() : () -> !d_tensor.tensor<[%s0], f32>
   %k1 = "test.keep"() : () -> !d_tensor.tensor<[%s1], f32>
 }
 
 // PIPE: builtin.module {
-// PIPE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE:   %0 = "d_tensor.size.param"() : () -> !d_tensor.size
 // PIPE:   %1 = "test.keep"() : () -> !d_tensor.tensor<[%0], f32>
 // PIPE:   %2 = "test.keep"() : () -> !d_tensor.tensor<[%0], f32>
 // PIPE: }

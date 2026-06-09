@@ -1,7 +1,6 @@
 package scair.passes.dependent_dim_query_elim
 
 import scair.MLContext
-import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.{d_tensor as DTensor}
 import scair.ir.*
@@ -17,22 +16,9 @@ import scair.utils.*
 private val EliminateDTensorDim = pattern { case op: DTensor.Dim =>
   op.selectedDimValue match
     case OK(selected) =>
-      DTensor.DTensorTypeUtil.resolveNatValue(selected) match
-        case OK(baseNat) => (Seq.empty[Operation], baseNat)
+      DTensor.DTensorTypeUtil.resolveSizeWitnessValue(selected) match
+        case OK(baseWitness) => (Seq.empty[Operation], baseWitness)
         case _           => PatternAction.Abort
-    case _ => PatternAction.Abort
-}
-
-private val ShapeToIndexNatConst = pattern { case op: DTensor.ShapeToIndex =>
-  DTensor.DTensorTypeUtil.resolveNatValue(op.nat) match
-    case OK(nat) =>
-      nat.owner match
-        case Some(DTensor.NatConst(value, _)) =>
-          arith.Constant(
-            IntegerAttr(IntData(value.value.value), IndexType()),
-            Result(IndexType()),
-          )
-        case _ => PatternAction.Abort
     case _ => PatternAction.Abort
 }
 
@@ -44,7 +30,6 @@ final class DependentDimQueryElim(ctx: MLContext) extends WalkerPass(ctx):
       GreedyRewritePatternApplier(
         Seq(
           EliminateDTensorDim,
-          ShapeToIndexNatConst,
         )
       )
     )

@@ -27,7 +27,7 @@ enum {
 };
 
 extern void attention_mha(
-    int64_t batch_nat, int64_t seq_nat, int64_t heads_nat, int64_t head_dim_nat,
+    int64_t batch_size, int64_t seq_size, int64_t heads_size, int64_t head_dim_size,
     float *Q, float *K, float *V, float *score, float *prob, float *tmp_out, float *out);
 
 extern float bench_expf(float x);

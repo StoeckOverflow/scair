@@ -6,72 +6,83 @@ import scair.dialects.builtin.*
 import scair.ir.*
 import scair.utils.*
 
-final case class NatParam(
-    res: Result[DTensorNatLikeType]
-) extends DerivedOperation["d_tensor.nat.param"] derives OpDefs
+final case class SizeParam(
+    res: Result[DTensorSizeWitnessType]
+) extends DerivedOperation["d_tensor.size.param"] derives OpDefs
 
-final case class NatConst(
+final case class SizeConstant(
     value: IntegerAttr,
-    res: Result[DTensorNatLikeType],
-) extends DerivedOperation["d_tensor.nat.const"]
+    res: Result[DTensorSizeWitnessType],
+) extends DerivedOperation["d_tensor.size.constant"]
     with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if value.value.value < 0 then
-      Err(s"d_tensor.nat.const: expected non-negative literal, got $value")
-    else if res.typ.isInstanceOf[DTensorPosNatType] && value.value.value <= 0 then
-      Err(s"d_tensor.nat.const: expected positive literal for !d_tensor.posnat, got $value")
+      Err(s"d_tensor.size.constant: expected non-negative literal, got $value")
+    else if res.typ.isInstanceOf[DTensorPosSizeType] && value.value.value <= 0 then
+      Err(s"d_tensor.size.constant: expected positive literal for !d_tensor.pos_size, got $value")
     else OK(this)
 
-final case class NatAdd(
-    lhs: Operand[DTensorNatLikeType],
-    rhs: Operand[DTensorNatLikeType],
-    res: Result[DTensorNatLikeType],
-) extends DerivedOperation["d_tensor.nat.add"]
+final case class SizeAdd(
+    lhs: Operand[DTensorSizeWitnessType],
+    rhs: Operand[DTensorSizeWitnessType],
+    res: Result[DTensorSizeWitnessType],
+) extends DerivedOperation["d_tensor.size.add"]
     with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
-    if res.typ.isInstanceOf[DTensorPosNatType] &&
-      !lhs.typ.isInstanceOf[DTensorPosNatType] &&
-      !rhs.typ.isInstanceOf[DTensorPosNatType]
-    then Err("d_tensor.nat.add: !d_tensor.posnat result requires at least one !d_tensor.posnat operand")
+    if res.typ.isInstanceOf[DTensorPosSizeType] &&
+      !lhs.typ.isInstanceOf[DTensorPosSizeType] &&
+      !rhs.typ.isInstanceOf[DTensorPosSizeType]
+    then Err("d_tensor.size.add: !d_tensor.pos_size result requires at least one !d_tensor.pos_size operand")
     else OK(this)
 
-final case class NatMul(
-    lhs: Operand[DTensorNatLikeType],
-    rhs: Operand[DTensorNatLikeType],
-    res: Result[DTensorNatLikeType],
-) extends DerivedOperation["d_tensor.nat.mul"]
+final case class SizeMul(
+    lhs: Operand[DTensorSizeWitnessType],
+    rhs: Operand[DTensorSizeWitnessType],
+    res: Result[DTensorSizeWitnessType],
+) extends DerivedOperation["d_tensor.size.mul"]
     with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
-    if res.typ.isInstanceOf[DTensorPosNatType] &&
-      (!lhs.typ.isInstanceOf[DTensorPosNatType] || !rhs.typ.isInstanceOf[DTensorPosNatType])
-    then Err("d_tensor.nat.mul: !d_tensor.posnat result requires two !d_tensor.posnat operands")
+    if res.typ.isInstanceOf[DTensorPosSizeType] &&
+      (!lhs.typ.isInstanceOf[DTensorPosSizeType] || !rhs.typ.isInstanceOf[DTensorPosSizeType])
+    then Err("d_tensor.size.mul: !d_tensor.pos_size result requires two !d_tensor.pos_size operands")
     else OK(this)
 
-final case class ShapeToIndex(
-    nat: Operand[DTensorNatLikeType],
-    res: Result[IndexType],
-) extends DerivedOperation["d_tensor.shape.to_index"]
-    with NoMemoryEffect derives OpDefs
-
-final case class IndexToNat(
+final case class SizeImport(
     index: Operand[IndexType],
-    res: Result[DTensorNatType],
-) extends DerivedOperation["d_tensor.index_to_nat"]
+    res: Result[DTensorSizeType],
+) extends DerivedOperation["d_tensor.size.import"]
     with NoMemoryEffect derives OpDefs
 
-final case class NatRefinePositive(
-    nat: Operand[DTensorNatLikeType],
+final case class SizePositiveProof(
+    size: Operand[DTensorSizeWitnessType],
     proof: Operand[IntegerType],
-    res: Result[DTensorPosNatType],
-) extends DerivedOperation["d_tensor.nat.refine_positive"]
+    res: Result[DTensorPositiveSizeProofType],
+) extends DerivedOperation["d_tensor.size.positive_proof"]
     with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
     if proof.typ == I1 then OK(this)
-    else Err(s"d_tensor.nat.refine_positive: expected i1 proof, got ${proof.typ}")
+    else Err(s"d_tensor.size.positive_proof: expected i1 proof, got ${proof.typ}")
+
+final case class SizeRefinePositive(
+    size: Operand[DTensorSizeWitnessType],
+    proof: Operand[DTensorPositiveSizeProofType],
+    res: Result[DTensorPosSizeType],
+) extends DerivedOperation["d_tensor.size.refine_positive"]
+    with NoMemoryEffect derives OpDefs:
+
+  override def customVerify(): OK[Operation] =
+    proof.owner match
+      case Some(SizePositiveProof(provenSize, _, _)) =>
+        (DTensorTypeUtil.resolveSizeWitnessValue(size), DTensorTypeUtil.resolveSizeWitnessValue(provenSize)) match
+          case (OK(lhs), OK(rhs)) if lhs eq rhs => OK(this)
+          case _ =>
+            Err("d_tensor.size.refine_positive: proof must be for the same size witness")
+      case _ =>
+        Err("d_tensor.size.refine_positive: expected proof from d_tensor.size.positive_proof")
 
 final case class Empty(
     res: Result[DTensorTensorType]
@@ -112,7 +123,7 @@ final case class Dim(
     else
       selectedDimValue.flatMap(sel =>
         if res.typ.ref.getVal() eq sel then
-          DTensorTypeUtil.resolveNatValue(res.typ.ref.getVal()).map(_ => this)
+          DTensorTypeUtil.resolveSizeWitnessValue(res.typ.ref.getVal()).map(_ => this)
         else
           Err(
             "d_tensor.dim: expected result !value<...> to reference the selected embedded dim"
@@ -176,7 +187,7 @@ final case class Cast(
 
 final case class ExpandShape(
     src: Operand[DTensorTensorType],
-    outputShape: Seq[Operand[DTensorNatLikeType]],
+    outputShape: Seq[Operand[DTensorSizeWitnessType]],
     reassociation: ArrayAttribute[Attribute],
     res: Result[DTensorTensorType],
 ) extends DerivedOperation["d_tensor.expand_shape"]
@@ -241,7 +252,7 @@ final case class ExpandShape(
       outputShape.zip(res.typ.params).zipWithIndex
         .foldLeft[OK[Unit]](OK(())) { case (acc, ((operand, dim), idx)) =>
           acc.flatMap(_ =>
-            (DTensorTypeUtil.resolveNatValue(operand), DTensorTypeUtil.resolveNatValue(dim.getVal())) match
+            (DTensorTypeUtil.resolveSizeWitnessValue(operand), DTensorTypeUtil.resolveSizeWitnessValue(dim.getVal())) match
               case (OK(lhs), OK(rhs)) if lhs eq rhs => OK(())
               case _ =>
                 Err(
@@ -351,8 +362,8 @@ final case class CollapseShape(
 
 final case class SplitDim(
     src: Operand[DTensorTensorType],
-    outer: Operand[DTensorNatLikeType],
-    inner: Operand[DTensorNatLikeType],
+    outer: Operand[DTensorSizeWitnessType],
+    inner: Operand[DTensorSizeWitnessType],
     dim: IntegerAttr,
     res: Result[DTensorTensorType],
 ) extends DerivedOperation["d_tensor.split_dim"]
@@ -361,8 +372,8 @@ final case class SplitDim(
   private def sameDim(lhs: ValueAttribute, rhs: ValueAttribute): Boolean =
     DTensorTypeUtil.sameDims(Seq(lhs), Seq(rhs))
 
-  private def sameNatValue(lhs: Value[Attribute], rhs: Value[Attribute]): Boolean =
-    (DTensorTypeUtil.resolveNatValue(lhs), DTensorTypeUtil.resolveNatValue(rhs)) match
+  private def sameSizeWitnessValue(lhs: Value[Attribute], rhs: Value[Attribute]): Boolean =
+    (DTensorTypeUtil.resolveSizeWitnessValue(lhs), DTensorTypeUtil.resolveSizeWitnessValue(rhs)) match
       case (OK(lv), OK(rv)) => lv eq rv
       case _                => false
 
@@ -393,9 +404,9 @@ final case class SplitDim(
           Err("d_tensor.split_dim: expected dimensions before split dim to be SSA-identical")
         else if !suffixOk then
           Err("d_tensor.split_dim: expected dimensions after split dim to be shifted and SSA-identical")
-        else if !sameNatValue(outer, res.typ.params(idx).getVal()) then
+        else if !sameSizeWitnessValue(outer, res.typ.params(idx).getVal()) then
           Err(s"d_tensor.split_dim: outer operand must be SSA-identical to result dimension $idx")
-        else if !sameNatValue(inner, res.typ.params(idx + 1).getVal()) then
+        else if !sameSizeWitnessValue(inner, res.typ.params(idx + 1).getVal()) then
           Err(s"d_tensor.split_dim: inner operand must be SSA-identical to result dimension ${idx + 1}")
         else OK(this)
 

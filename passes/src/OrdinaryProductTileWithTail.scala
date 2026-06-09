@@ -1,4 +1,4 @@
-package scair.passes.dependent_natmul_tiling
+package scair.passes.dependent_size_product_tiling
 
 import scair.MLContext
 import scair.ir.Operation
@@ -8,4 +8,4 @@ final class OrdinaryProductTileWithTail(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "ordinary-product-tile-with-tail"
 
   override def transform(op: Operation): Operation =
-    DependentNatmulTilingTransform.transformOrdinaryIndexProduct(op)
+    DependentSizeProductTilingTransform.transformOrdinaryIndexProduct(op)
