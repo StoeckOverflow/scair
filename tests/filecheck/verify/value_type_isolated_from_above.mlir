@@ -80,3 +80,27 @@ builtin.module {
 }
 
 // CHECK: ssa-dominance: value Value{{.*}} crosses IsolatedFromAbove boundary in value-dependent type reference
+
+// -----
+
+// Bodyless isolated declarations may not capture enclosing values through their
+// function type.
+builtin.module {
+  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  func.func private @bad_isolated_decl(!d_memref.memref<[%n], f32>)
+}
+
+// CHECK: ssa-dominance: value Value{{.*}} crosses IsolatedFromAbove boundary in value-dependent type reference
+
+// -----
+
+// Attributes attached directly to an isolated operation are also part of the
+// isolation boundary.
+builtin.module {
+  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  func.func @bad_isolated_op_attr() attributes {dep = !value<%n>} {
+    func.return
+  }
+}
+
+// CHECK: ssa-dominance: value Value{{.*}} crosses IsolatedFromAbove boundary in value-dependent type reference

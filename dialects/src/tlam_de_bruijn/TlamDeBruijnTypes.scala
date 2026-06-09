@@ -22,8 +22,9 @@ final case class tlamBVarType(k: IntegerAttr)
     derives AttrDefs:
 
   override def customVerify(): OK[Unit] =
-    if k.value < 0 then Err(s"tlam.bvar index must be >= 0, got ${k.value}")
-    else OK(())
+    // Bounds, including negative indices, are checked with binder depth by
+    // TlamDeBruijnIndicesCheck.
+    OK(())
 
 final case class tlamFunType(in: TypeAttribute, out: TypeAttribute)
     extends ParametrizedAttribute(),

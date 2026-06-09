@@ -11,7 +11,7 @@ final case class VLambda(
 ) extends DerivedOperation["tlam_dbi.vlambda"]
     derives OpDefs:
 
-  override def verify(): OK[Operation] =
+  override def customVerify(): OK[Operation] =
     val funTy = res.typ
     body.blocks match
       case Block(args, ops) :: Nil
@@ -33,7 +33,30 @@ final case class VReturn(
     value: Value[TypeAttribute]
 ) extends DerivedOperation["tlam_dbi.vreturn"]
     with NoMemoryEffect
-    with IsTerminator derives OpDefs
+    with IsTerminator derives OpDefs:
+
+  override def customVerify(): OK[Operation] =
+    def enclosingVLambda(op: Operation): Option[VLambda] =
+      var curRegion = op.containerBlock.flatMap(_.containerRegion)
+      var curParent = curRegion.flatMap(_.containerOperation)
+      while curParent.isDefined do
+        curParent.get match
+          case vl: VLambda => return Some(vl)
+          case parent      =>
+            curRegion = parent.containerBlock.flatMap(_.containerRegion)
+            curParent = curRegion.flatMap(_.containerOperation)
+      None
+
+    enclosingVLambda(this) match
+      case Some(vl) =>
+        val expected = vl.res.typ.out
+        if value.typ == expected then OK(this)
+        else
+          Err(
+            s"vreturn: expected value type $expected from enclosing tlam_dbi.vlambda, got ${value.typ}"
+          )
+      case None =>
+        Err("vreturn: must appear inside a tlam_dbi.vlambda body")
 
 /** tlam.tlambda — type-level lambda abstraction (forall introduction). */
 final case class TLambda(
@@ -42,7 +65,7 @@ final case class TLambda(
 ) extends DerivedOperation["tlam_dbi.tlambda"]
     derives OpDefs:
 
-  override def verify(): OK[Operation] =
+  override def customVerify(): OK[Operation] =
     body.blocks match
       case Block(args, ops) :: Nil if args.isEmpty =>
         ops.lastOption match
@@ -65,7 +88,23 @@ final case class TReturn(
     value: Value[TypeAttribute]
 ) extends DerivedOperation["tlam_dbi.treturn"]
     with NoMemoryEffect
-    with IsTerminator derives OpDefs
+    with IsTerminator derives OpDefs:
+
+  override def customVerify(): OK[Operation] =
+    def enclosingTLambda(op: Operation): Option[TLambda] =
+      var curRegion = op.containerBlock.flatMap(_.containerRegion)
+      var curParent = curRegion.flatMap(_.containerOperation)
+      while curParent.isDefined do
+        curParent.get match
+          case tl: TLambda => return Some(tl)
+          case parent      =>
+            curRegion = parent.containerBlock.flatMap(_.containerRegion)
+            curParent = curRegion.flatMap(_.containerOperation)
+      None
+
+    enclosingTLambda(this) match
+      case Some(_) => OK(this)
+      case None    => Err("treturn: must appear inside a tlam_dbi.tlambda body")
 
 /** tlam.tapply — type application (forall elimination). */
 final case class TApply(
@@ -76,7 +115,7 @@ final case class TApply(
     with NoMemoryEffect
     derives OpDefs:
 
-  override def verify(): OK[Operation] =
+  override def customVerify(): OK[Operation] =
     (fun.typ, tyArg) match
       case (fa: tlamForAllType, argTy: TypeAttribute) =>
         val inst = DBI.instantiate(fa, argTy)
@@ -95,7 +134,7 @@ final case class VApply(
 ) extends DerivedOperation["tlam_dbi.vapply"]
     derives OpDefs:
 
-  override def verify(): OK[Operation] =
+  override def customVerify(): OK[Operation] =
     fun.typ match
       case tlamFunType(in, out) =>
         if arg.typ == in && res.typ == out then OK(this)

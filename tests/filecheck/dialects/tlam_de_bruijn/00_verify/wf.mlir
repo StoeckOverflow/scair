@@ -291,7 +291,7 @@ builtin.module {
     "test.op"() : () -> ()
   }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<i32, i32>>)
 }
-// CHECK: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
+// CHECK: Operation 'tlam_dbi.treturn' marked as a terminator, but is not the last operation within its container block
 
 // -----
 
@@ -342,3 +342,49 @@ builtin.module {
   %bad = "tlam_dbi.tapply"(%poly) <{tyArg = "oops"}> : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>>) -> (!tlam_dbi.fun<i32, i32>)
 }
 // CHECK: tapply: expected type argument, got "oops"
+
+// -----
+
+// INVALID: nested vapply must be verified recursively inside vlambda bodies.
+builtin.module {
+  %f = "test.fun"() : () -> (!tlam_dbi.fun<i32, i32>)
+  %lam = "tlam_dbi.vlambda"() ({
+  ^bb0(%x: i32):
+    %bad = "tlam_dbi.vapply"(%f, %x) : (!tlam_dbi.fun<i32, i32>, i32) -> (i64)
+    "test.keep"(%bad) : (i64) -> ()
+    "tlam_dbi.vreturn"(%x) : (i32) -> ()
+  }) : () -> (!tlam_dbi.fun<i32, i32>)
+}
+// CHECK: vapply: expected arg i32 and result i32, got i32 and i64
+
+// -----
+
+// INVALID: nested tapply must reject non-type type arguments.
+builtin.module {
+  %poly = "test.poly"() : () -> (!tlam_dbi.forall<i32>)
+  %lam = "tlam_dbi.vlambda"() ({
+  ^bb0(%x: i32):
+    %bad = "tlam_dbi.tapply"(%poly) <{tyArg = "oops"}> : (!tlam_dbi.forall<i32>) -> (i32)
+    "test.keep"(%bad) : (i32) -> ()
+    "tlam_dbi.vreturn"(%x) : (i32) -> ()
+  }) : () -> (!tlam_dbi.fun<i32, i32>)
+}
+// CHECK: tapply: expected type argument, got "oops"
+
+// -----
+
+// INVALID: vreturn outside a vlambda body.
+builtin.module {
+  %x = "test.op"() : () -> (i32)
+  "tlam_dbi.vreturn"(%x) : (i32) -> ()
+}
+// CHECK: vreturn: must appear inside a tlam_dbi.vlambda body
+
+// -----
+
+// INVALID: treturn outside a tlambda body.
+builtin.module {
+  %x = "test.op"() : () -> (i32)
+  "tlam_dbi.treturn"(%x) : (i32) -> ()
+}
+// CHECK: treturn: must appear inside a tlam_dbi.tlambda body

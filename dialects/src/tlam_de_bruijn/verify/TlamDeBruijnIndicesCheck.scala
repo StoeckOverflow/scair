@@ -77,7 +77,10 @@ object TlamDeBruijnIndicesCheck extends VerifierCheck:
                   checkType(t, depth) match
                     case e: Err => break(e)
                     case _      => ()
-                case _ => ()
+                case other =>
+                  break(
+                    Err(s"tapply: expected type argument, got $other"): OK[Unit]
+                  )
 
             case vl: VLambda =>
               checkVLambda(vl) match
