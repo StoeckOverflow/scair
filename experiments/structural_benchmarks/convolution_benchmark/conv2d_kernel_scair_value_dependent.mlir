@@ -1,14 +1,14 @@
 builtin.module {
   func.func @conv2d_dynamic(
-    %n_nat : !dtensor.nat,
-    %cin_nat : !dtensor.nat,
-    %h_nat : !dtensor.nat,
-    %w_nat : !dtensor.nat,
-    %cout_nat : !dtensor.nat,
-    %kh_nat : !dtensor.nat,
-    %kw_nat : !dtensor.nat,
-    %oh_nat : !dtensor.nat,
-    %ow_nat : !dtensor.nat,
+    %n_nat : !d_tensor.nat,
+    %cin_nat : !d_tensor.nat,
+    %h_nat : !d_tensor.nat,
+    %w_nat : !d_tensor.nat,
+    %cout_nat : !d_tensor.nat,
+    %kh_nat : !d_tensor.nat,
+    %kw_nat : !d_tensor.nat,
+    %oh_nat : !d_tensor.nat,
+    %ow_nat : !d_tensor.nat,
     %Xflat : !d_memref.memref<[], f32>,
     %Kflat : !d_memref.memref<[], f32>,
     %Yflat : !d_memref.memref<[], f32>
@@ -17,15 +17,15 @@ builtin.module {
     %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 
-    %n = "dtensor.shape.to_index"(%n_nat) : (!dtensor.nat) -> index
-    %cin = "dtensor.shape.to_index"(%cin_nat) : (!dtensor.nat) -> index
-    %h = "dtensor.shape.to_index"(%h_nat) : (!dtensor.nat) -> index
-    %w = "dtensor.shape.to_index"(%w_nat) : (!dtensor.nat) -> index
-    %cout = "dtensor.shape.to_index"(%cout_nat) : (!dtensor.nat) -> index
-    %kh = "dtensor.shape.to_index"(%kh_nat) : (!dtensor.nat) -> index
-    %kw = "dtensor.shape.to_index"(%kw_nat) : (!dtensor.nat) -> index
-    %oh = "dtensor.shape.to_index"(%oh_nat) : (!dtensor.nat) -> index
-    %ow = "dtensor.shape.to_index"(%ow_nat) : (!dtensor.nat) -> index
+    %n = "d_tensor.shape.to_index"(%n_nat) : (!d_tensor.nat) -> index
+    %cin = "d_tensor.shape.to_index"(%cin_nat) : (!d_tensor.nat) -> index
+    %h = "d_tensor.shape.to_index"(%h_nat) : (!d_tensor.nat) -> index
+    %w = "d_tensor.shape.to_index"(%w_nat) : (!d_tensor.nat) -> index
+    %cout = "d_tensor.shape.to_index"(%cout_nat) : (!d_tensor.nat) -> index
+    %kh = "d_tensor.shape.to_index"(%kh_nat) : (!d_tensor.nat) -> index
+    %kw = "d_tensor.shape.to_index"(%kw_nat) : (!d_tensor.nat) -> index
+    %oh = "d_tensor.shape.to_index"(%oh_nat) : (!d_tensor.nat) -> index
+    %ow = "d_tensor.shape.to_index"(%ow_nat) : (!d_tensor.nat) -> index
     %hw = "arith.muli"(%h, %w) : (index, index) -> index
     %chw = "arith.muli"(%cin, %hw) : (index, index) -> index
     %khkw = "arith.muli"(%kh, %kw) : (index, index) -> index

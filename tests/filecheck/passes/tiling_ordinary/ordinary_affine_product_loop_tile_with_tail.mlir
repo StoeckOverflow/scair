@@ -14,7 +14,7 @@ builtin.module {
 }
 
 // CHECK: %[[K:[0-9]+]] = "arith.muli"
-// CHECK-NOT: dtensor
+// CHECK-NOT: d_tensor
 // CHECK-NOT: d_affine
 // CHECK: affine.for %[[TILE:[0-9]+]] = #map(%{{.*}}) to #map{{[0-9]*}}()[%[[K]]] step 3
 // CHECK: affine.for %[[P:[0-9]+]] = #map(%[[TILE]]) to min #map{{[0-9]*}}(%[[TILE]])[%[[K]]] step 1

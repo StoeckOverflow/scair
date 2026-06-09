@@ -11,7 +11,7 @@ matmul affine bridge, not a separate runtime benchmark.
   dialects.
 - `ordinary_scair_product_with_tail`: ScaIR ordinary index-product route that keeps conservative
   tail cleanup.
-- `value_dependent_exact_product`: dependent dynamic route using `dtensor.nat.mul`, expected to
+- `value_dependent_exact_product`: dependent dynamic route using `d_tensor.nat.mul`, expected to
   avoid tail/min cleanup in `d_affine`.
 - `value_dependent_static_affine_compatible`: static `nat.const` route expected to bridge to stock
   `affine.for` and pass upstream parse/verify/canonicalize, affine loop normalize, and affine loop

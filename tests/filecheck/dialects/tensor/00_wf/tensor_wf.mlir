@@ -2,38 +2,38 @@
 
 // Valid: core tensor SSA-shape ops.
 builtin.module {
-  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %n = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %k = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-  %s = "dtensor.nat.add"(%m, %k) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %p = "dtensor.nat.mul"(%s, %n) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %n = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %k = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+  %s = "d_tensor.nat.add"(%m, %k) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %p = "d_tensor.nat.mul"(%s, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
   %z = "test.zero"() : () -> f32
-  %a = "dtensor.fill"(%z) : (f32) -> !dtensor.tensor<[%m, %k], f32>
-  %b = "dtensor.empty"() : () -> !dtensor.tensor<[%k, %n], f32>
-  %x = "dtensor.matmul"(%a, %b)
-    : (!dtensor.tensor<[%m, %k], f32>, !dtensor.tensor<[%k, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
-  %d0 = "dtensor.dim"(%x) <{axis = 0 : i32}>
-    : (!dtensor.tensor<[%m, %n], f32>) -> !value<%m>
-  %v0 = "test.v0"() : () -> !dtensor.vector<%m, f32>
-  %m0 = "test.m0"() : () -> !dtensor.matrix<%m, %n, f32>
-  %c = "dtensor.cast"(%x)
-    : (!dtensor.tensor<[%m, %n], f32>) -> !dtensor.tensor<[%m, %n], f32>
+  %a = "d_tensor.fill"(%z) : (f32) -> !d_tensor.tensor<[%m, %k], f32>
+  %b = "d_tensor.empty"() : () -> !d_tensor.tensor<[%k, %n], f32>
+  %x = "d_tensor.matmul"(%a, %b)
+    : (!d_tensor.tensor<[%m, %k], f32>, !d_tensor.tensor<[%k, %n], f32>) -> !d_tensor.tensor<[%m, %n], f32>
+  %d0 = "d_tensor.dim"(%x) <{axis = 0 : i32}>
+    : (!d_tensor.tensor<[%m, %n], f32>) -> !value<%m>
+  %v0 = "test.v0"() : () -> !d_tensor.vector<%m, f32>
+  %m0 = "test.m0"() : () -> !d_tensor.matrix<%m, %n, f32>
+  %c = "d_tensor.cast"(%x)
+    : (!d_tensor.tensor<[%m, %n], f32>) -> !d_tensor.tensor<[%m, %n], f32>
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-// VERIFY:   %1 = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-// VERIFY:   %2 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-// VERIFY:   %3 = "dtensor.nat.add"(%0, %2) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// VERIFY:   %4 = "dtensor.nat.mul"(%3, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// VERIFY:   %0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+// VERIFY:   %1 = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+// VERIFY:   %2 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+// VERIFY:   %3 = "d_tensor.nat.add"(%0, %2) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   %4 = "d_tensor.nat.mul"(%3, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
 // VERIFY:   %5 = "test.zero"() : () -> f32
-// VERIFY:   %6 = "dtensor.fill"(%5) : (f32) -> !dtensor.tensor<[%0, %2], f32>
-// VERIFY:   %7 = "dtensor.empty"() : () -> !dtensor.tensor<[%2, %1], f32>
-// VERIFY:   %8 = "dtensor.matmul"(%6, %7) : (!dtensor.tensor<[%0, %2], f32>, !dtensor.tensor<[%2, %1], f32>) -> !dtensor.tensor<[%0, %1], f32>
-// VERIFY:   %9 = "dtensor.dim"(%8) <{axis = 0 : i32}> : (!dtensor.tensor<[%0, %1], f32>) -> !value<%0>
-// VERIFY:   %10 = "test.v0"() : () -> !dtensor.vector<%0, f32>
-// VERIFY:   %11 = "test.m0"() : () -> !dtensor.matrix<%0, %1, f32>
-// VERIFY:   %12 = "dtensor.cast"(%8) : (!dtensor.tensor<[%0, %1], f32>) -> !dtensor.tensor<[%0, %1], f32>
+// VERIFY:   %6 = "d_tensor.fill"(%5) : (f32) -> !d_tensor.tensor<[%0, %2], f32>
+// VERIFY:   %7 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%2, %1], f32>
+// VERIFY:   %8 = "d_tensor.matmul"(%6, %7) : (!d_tensor.tensor<[%0, %2], f32>, !d_tensor.tensor<[%2, %1], f32>) -> !d_tensor.tensor<[%0, %1], f32>
+// VERIFY:   %9 = "d_tensor.dim"(%8) <{axis = 0 : i32}> : (!d_tensor.tensor<[%0, %1], f32>) -> !value<%0>
+// VERIFY:   %10 = "test.v0"() : () -> !d_tensor.vector<%0, f32>
+// VERIFY:   %11 = "test.m0"() : () -> !d_tensor.matrix<%0, %1, f32>
+// VERIFY:   %12 = "d_tensor.cast"(%8) : (!d_tensor.tensor<[%0, %1], f32>) -> !d_tensor.tensor<[%0, %1], f32>
 // VERIFY: }
 
 // -----
@@ -45,13 +45,13 @@ builtin.module {
     %c = "arith.constant"() <{value = true}> : () -> i1
     "test.cond_br"(%c) [^bb1, ^bb2] : (i1) -> ()
   ^bb1:
-    %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
+    %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
     "test.br"() [^bb2] : () -> ()
   ^bb2:
-    %u = "test.use"() : () -> !dtensor.tensor<[%m], f32>
+    %u = "test.use"() : () -> !d_tensor.tensor<[%m], f32>
     "test.ret"() : () -> ()
   }) : () -> ()
 }
 
 // VERIFY: // -----
-// VERIFY: ssa-dominance: value Value(!dtensor.nat) does not dominate its use in op `test.use`
+// VERIFY: ssa-dominance: value Value(!d_tensor.nat) does not dominate its use in op `test.use`

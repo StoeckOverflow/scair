@@ -1,7 +1,7 @@
 package scair.passes.llvm_helpers
 
 import scair.dialects.builtin.*
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_memref
 import scair.dialects.llvm
 import scair.ir.*
@@ -254,7 +254,7 @@ final class RefinedIndexMaterializer(
 ):
   private def constNat(v: Value[Attribute]): Option[BigInt] =
     v.owner match
-      case Some(dTensor.NatConst(IntegerAttr(IntData(k), _), _)) => Some(k)
+      case Some(DTensor.NatConst(IntegerAttr(IntData(k), _), _)) => Some(k)
       case _                                                     => None
 
   def materializeNatOrIndex(v: Value[Attribute], block: Block): Value[Attribute] =
@@ -267,9 +267,9 @@ final class RefinedIndexMaterializer(
       case other =>
         constNat(other).map(k => cache.constIndex(k, block)).orElse {
           other.owner.collect {
-            case dTensor.IndexToNat(idx, _) =>
+            case DTensor.IndexToNat(idx, _) =>
               materializeNatOrIndex(idx, block)
-            case dTensor.ShapeToIndex(nat, _) =>
+            case DTensor.ShapeToIndex(nat, _) =>
               constNat(nat).map(k => cache.constIndex(k, block)).getOrElse(other)
           }
         }.getOrElse(other)

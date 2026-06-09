@@ -1,11 +1,11 @@
 builtin.module {
   func.func @nested_commuted_explicit_product_lazy(%out: memref<?xf32>) {
-    %k0 = "dtensor.nat.const"() <{value = 5 : i32}> : () -> !dtensor.nat
-    %k1 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-    %k2 = "dtensor.nat.const"() <{value = 7 : i32}> : () -> !dtensor.nat
-    %k10 = "dtensor.nat.mul"(%k1, %k0) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-    %k = "dtensor.nat.mul"(%k10, %k2) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-    %ub = "dtensor.shape.to_index"(%k) : (!dtensor.nat) -> index
+    %k0 = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
+    %k1 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+    %k2 = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
+    %k10 = "d_tensor.nat.mul"(%k1, %k0) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+    %k = "d_tensor.nat.mul"(%k10, %k2) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+    %ub = "d_tensor.shape.to_index"(%k) : (!d_tensor.nat) -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 

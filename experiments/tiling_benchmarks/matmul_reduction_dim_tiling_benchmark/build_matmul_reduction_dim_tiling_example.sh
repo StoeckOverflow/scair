@@ -413,8 +413,8 @@ append_row() {
     "$(count_source_extract_strided_metadata_ops "$src")" \
     "$(count_source_memref_load_ops "$src")" \
     "$(count_source_memref_store_ops "$src")" \
-    "$(count_source_dmemref_load_ops "$src")" \
-    "$(count_source_dmemref_store_ops "$src")" \
+    "$(count_source_d_memref_load_ops "$src")" \
+    "$(count_source_d_memref_store_ops "$src")" \
     "$(count_func_defs "$lowered_mlir")" \
     "$(count_ops "$lowered_mlir")" \
     "$(count_ops_structural "$lowered_mlir")" \
@@ -571,8 +571,8 @@ for dims in "${MATMUL_REDUCTION_DIM_TILING_SIZES[@]}"; do
     build_scair_variant \
       "value_dependent" \
       "$VALUE_DEP_SRC" \
-      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,dependent-natmul-loop-factorization,validate-d-affine-dynamic-steps,lower-dmemref-to-llvm" \
-      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,dependent-natmul-loop-factorization,validate-d-affine-dynamic-steps" \
+      "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,dependent-natmul-loop-factorization,validate-d-affine-dynamic-steps,lower-d-memref-to-llvm" \
+      "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,dependent-natmul-loop-factorization,validate-d-affine-dynamic-steps" \
       "$VALUE_DEP_DRIVER_SRC" \
       "$artifact_tag" \
       "$m" \
@@ -595,7 +595,7 @@ for dims in "${MATMUL_REDUCTION_DIM_TILING_SIZES[@]}"; do
   if route_enabled "value_dependent_guarded_tile_tail_simplified"; then
     echo "==> Building value-dependent guarded-tail-simplified matmul kernel for $row_size_descriptor"
     guarded_ir="$OUT_DIR/${artifact_tag}_value_dependent_guarded_tile_tail_simplified.guarded.mlir"
-    run_scair_opt -s "$VALUE_DEP_SRC" --passes "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps,canonicalize,cse,dce" > "$guarded_ir"
+    run_scair_opt -s "$VALUE_DEP_SRC" --passes "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps,canonicalize,cse,dce" > "$guarded_ir"
     if [[ "$(tail_handling_present "$guarded_ir")" != "yes" ]]; then
       echo "error: guarded-tail-simplified matmul route did not emit a tail guard before simplification: $guarded_ir" >&2
       exit 1
@@ -604,8 +604,8 @@ for dims in "${MATMUL_REDUCTION_DIM_TILING_SIZES[@]}"; do
     build_scair_variant \
       "value_dependent_guarded_tile_tail_simplified" \
       "$VALUE_DEP_SRC" \
-      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,lower-dmemref-to-llvm" \
-      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
+      "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,lower-d-memref-to-llvm" \
+      "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
       "$VALUE_DEP_DRIVER_SRC" \
       "$artifact_tag" \
       "$m" \

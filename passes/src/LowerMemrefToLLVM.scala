@@ -4,11 +4,11 @@ import scair.MLContext
 import scair.exceptions.VerifyException
 import scair.passes.convert_arith_to_llvm.ConvertArithToLLVM
 import scair.passes.finalize_dynamic_memref_to_llvm.FinalizeDynamicMemrefToLLVM
-import scair.passes.finalize_refined_dmemref_to_llvm.FinalizeRefinedDMemrefToLLVM
+import scair.passes.finalize_refined_d_memref_to_llvm.FinalizeRefinedDMemrefToLLVM
 import scair.passes.lower_baseline_control_flow_to_llvm.LowerBaselineControlFlowToLLVM
 import scair.passes.lower_refined_control_flow_to_llvm.LowerRefinedControlFlowToLLVM
 import scair.passes.normalize_refined_layout_accesses.NormalizeRefinedLayoutAccesses
-import scair.passes.refine_dynamic_layout_to_dmemref.RefineDynamicLayoutToDMemref
+import scair.passes.refine_dynamic_layout_to_d_memref.RefineDynamicLayoutToDMemref
 import scair.passes.dce.DeadCodeElimination
 import scair.transformations.ModulePass
 import scair.ir.Operation
@@ -75,7 +75,7 @@ final class LowerDynamicMemrefToLLVM(ctx: MLContext) extends ModulePass(ctx):
 // Example: `d_memref.load` / `d_memref.store`
 //   -> pointer-based LLVM GEP/load/store without descriptors.
 final class LowerDMemrefToLLVM(ctx: MLContext) extends ModulePass(ctx):
-  override val name: String = "lower-dmemref-to-llvm"
+  override val name: String = "lower-d-memref-to-llvm"
   private val passes = pointerBasedRefinedTail(ctx)
   override def transform(op: Operation): Operation =
     runPipeline(op, passes)

@@ -2,11 +2,11 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics | scair-opt --allow-unregistered-dialect --verify-diagnostics
 
 builtin.module {
-  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %n = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
+  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %n = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
   %lb = "arith.constant"() <{value = 0 : index}> : () -> index
-  %ub = "dtensor.shape.to_index"(%m) : (!dtensor.nat) -> index
-  %sym = "dtensor.shape.to_index"(%n) : (!dtensor.nat) -> index
+  %ub = "d_tensor.shape.to_index"(%m) : (!d_tensor.nat) -> index
+  %sym = "d_tensor.shape.to_index"(%n) : (!d_tensor.nat) -> index
   %step = "arith.constant"() <{value = 2 : index}> : () -> index
   %init = "arith.constant"() <{value = 0 : index}> : () -> index
   %value = "arith.constant"() <{value = 7 : i32}> : () -> i32

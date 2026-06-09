@@ -2,7 +2,7 @@ package scair.passes.convert_llvm_export_abi
 
 import scair.MLContext
 import scair.dialects.builtin.*
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_memref
 import scair.dialects.llvm
 import scair.ir.*
@@ -95,7 +95,7 @@ private def originalFunctionType(op: llvm.Func): FunctionType =
 
 private def containsInternalABIType(attr: Attribute): Boolean =
   attr match
-    case _: dTensor.dTensorNatLikeType | _: d_memref.dMemrefMemrefType =>
+    case _: DTensor.DTensorNatLikeType | _: d_memref.DMemrefMemrefType =>
       true
     case ValueRefType(ref) =>
       containsInternalABIType(ref.getVal().typ)

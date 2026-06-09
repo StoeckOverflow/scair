@@ -1,9 +1,9 @@
-package scair.passes.dtensor_to_dmemref
+package scair.passes.d_tensor_to_d_memref
 
 import scair.MLContext
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.dTensor.*
+import scair.dialects.d_tensor.*
 import scair.dialects.d_affine
 import scair.dialects.d_memref
 import scair.ir.*
@@ -17,12 +17,12 @@ import scair.transformations.{
 }
 
 object DTensorDMemrefConversion:
-  def tensorToMemrefType(t: dTensorTensorType): d_memref.dMemrefMemrefType =
-    d_memref.dMemrefMemrefType(t.params, t.elem)
+  def tensorToMemrefType(t: DTensorTensorType): d_memref.DMemrefMemrefType =
+    d_memref.DMemrefMemrefType(t.params, t.elem)
 
   def toMemrefValue(
       t: Value[Attribute],
-      asType: d_memref.dMemrefMemrefType,
+      asType: d_memref.DMemrefMemrefType,
   ): (Seq[Operation], Value[Attribute]) =
     val cast = UnrealizedConversionCastOp(
       inputs = Seq(t),
@@ -35,14 +35,14 @@ private def asIndex(v: Value[Attribute]): Operand[IndexType] =
 
 private def asMemref(
     v: Value[Attribute]
-): Operand[d_memref.dMemrefMemrefType] =
-  v.asInstanceOf[Operand[d_memref.dMemrefMemrefType]]
+): Operand[d_memref.DMemrefMemrefType] =
+  v.asInstanceOf[Operand[d_memref.DMemrefMemrefType]]
 
 private def idxConst(v: Int): arith.Constant =
   arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
 
 private def toIndex(nat: Value[Attribute]): ShapeToIndex =
-  ShapeToIndex(nat.asInstanceOf[Operand[dTensorNatLikeType]], Result(IndexType()))
+  ShapeToIndex(nat.asInstanceOf[Operand[DTensorNatLikeType]], Result(IndexType()))
 
 private def identityMap: AffineMapAttr =
   AffineMapAttr(
@@ -76,7 +76,7 @@ private def mkFor(
 
 private def castBackToTensor(
     memref: Value[Attribute],
-    tensorType: dTensorTensorType,
+    tensorType: DTensorTensorType,
 ): UnrealizedConversionCastOp =
   UnrealizedConversionCastOp(
     inputs = Seq(memref),
@@ -102,17 +102,17 @@ private def productMatches(
     product: Value[Attribute],
     factors: Seq[Value[Attribute]],
 ): Boolean =
-  dTensorTypeUtil.sameOrderedNatProduct(product, factors) match
+  DTensorTypeUtil.sameOrderedNatProduct(product, factors) match
     case OK(true) => true
     case _        => false
 
 private def productType(
     lhs: Value[Attribute],
     rhs: Value[Attribute],
-): dTensorNatLikeType =
+): DTensorNatLikeType =
   (lhs.typ, rhs.typ) match
-    case (_: dTensorPosNatType, _: dTensorPosNatType) => dTensorPosNatType()
-    case _                                            => dTensorNatType()
+    case (_: DTensorPosNatType, _: DTensorPosNatType) => DTensorPosNatType()
+    case _                                            => DTensorNatType()
 
 private def buildOrderedProduct(
     dims: Seq[Value[Attribute]]
@@ -126,8 +126,8 @@ private def buildOrderedProduct(
       val (ops, product) = rest.foldLeft((Seq.empty[Operation], first)) {
         case ((ops, acc), dim) =>
           val mul = NatMul(
-            acc.asInstanceOf[Operand[dTensorNatLikeType]],
-            dim.asInstanceOf[Operand[dTensorNatLikeType]],
+            acc.asInstanceOf[Operand[DTensorNatLikeType]],
+            dim.asInstanceOf[Operand[DTensorNatLikeType]],
             Result(productType(acc, dim)),
           )
           (ops :+ mul, mul.res)
@@ -135,8 +135,8 @@ private def buildOrderedProduct(
       (ops, ValueAttribute(product))
 
 private def rowMajorMemrefType(
-    tensorType: dTensorTensorType
-): (Seq[Operation], d_memref.dMemrefMemrefType) =
+    tensorType: DTensorTensorType
+): (Seq[Operation], d_memref.DMemrefMemrefType) =
   val dims = tensorType.params.map(_.getVal())
   val (strideOps, strides) =
     dims.indices.foldLeft((Seq.empty[Operation], Seq.empty[d_memref.LayoutParam])) {
@@ -144,7 +144,7 @@ private def rowMajorMemrefType(
         val (productOps, stride) = buildOrderedProduct(dims.drop(idx + 1))
         (ops ++ productOps, ss :+ stride)
     }
-  val memType = d_memref.dMemrefMemrefType(
+  val memType = d_memref.DMemrefMemrefType(
     tensorType.params,
     tensorType.elem,
     Some(IntegerAttr(IntData(0), IndexType())),
@@ -153,14 +153,14 @@ private def rowMajorMemrefType(
   (strideOps, memType)
 
 private def lowerReinterpretView(
-    src: Operand[dTensorTensorType],
-    resType: dTensorTensorType,
+    src: Operand[DTensorTensorType],
+    resType: DTensorTensorType,
 ): (Seq[Operation], Seq[Value[Attribute]]) =
   val srcMemType = DTensorDMemrefConversion.tensorToMemrefType(src.typ)
   val (prefix, memValue) = DTensorDMemrefConversion.toMemrefValue(src, srcMemType)
   val (strideOps, resMemType) = rowMajorMemrefType(resType)
   val reinterpret = d_memref.ReinterpretCast(
-    memValue.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+    memValue.asInstanceOf[Operand[d_memref.DMemrefMemrefType]],
     Result(resMemType),
   )
   val castBack = castBackToTensor(reinterpret.res, resType)
@@ -209,11 +209,11 @@ private val LowerFill = pattern {
 }
 
 private val LowerDim = pattern {
-  case dtensorDim @ Dim(t, axis, res) =>
+  case d_tensorDim @ Dim(t, axis, res) =>
     val memType = DTensorDMemrefConversion.tensorToMemrefType(t.typ)
     val (prefix, memValue) = DTensorDMemrefConversion.toMemrefValue(t, memType)
     val lowered = d_memref.DimExact(
-      memValue.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+      memValue.asInstanceOf[Operand[d_memref.DMemrefMemrefType]],
       axis,
       Result(res.typ),
     )
@@ -226,7 +226,7 @@ private val LowerCast = pattern {
     val resMemType = DTensorDMemrefConversion.tensorToMemrefType(res.typ)
     val (prefix, memValue) = DTensorDMemrefConversion.toMemrefValue(src, srcMemType)
     val lowered = d_memref.Cast(
-      memValue.asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+      memValue.asInstanceOf[Operand[d_memref.DMemrefMemrefType]],
       Result(resMemType),
     )
     val castBack = castBackToTensor(lowered.res, res.typ)
@@ -294,45 +294,45 @@ private val LowerSplitDim = pattern {
 }
 
 /**
- * Lowers a small shape-preserving subset of `dtensor` ops to `d_memref` while
+ * Lowers a small shape-preserving subset of `d_tensor` ops to `d_memref` while
  * keeping tensor-typed SSA results via unrealized casts.
  *
- * This pass rewrites `dtensor.empty` to buffer allocation, rewrites
- * `dtensor.fill` to allocate-and-store loop nests, rewrites `dtensor.dim` to
- * `d_memref.dim_exact`, and rewrites `dtensor.cast` to `d_memref.cast`.
+ * This pass rewrites `d_tensor.empty` to buffer allocation, rewrites
+ * `d_tensor.fill` to allocate-and-store loop nests, rewrites `d_tensor.dim` to
+ * `d_memref.dim_exact`, and rewrites `d_tensor.cast` to `d_memref.cast`.
  * In each case where a tensor result must remain visible, it bridges back with
  * `unrealized_conversion_cast` so value-dependent shapes are preserved in the
  * underlying `!d_memref.memref`.
  *
  * Rewrite shapes:
- * `<dtensor.empty -> !dtensor.tensor<...>>`
+ * `<d_tensor.empty -> !d_tensor.tensor<...>>`
  * `->`
- * `<d_memref.alloc + unrealized_conversion_cast to !dtensor.tensor<...>>`
+ * `<d_memref.alloc + unrealized_conversion_cast to !d_tensor.tensor<...>>`
  *
- * `<dtensor.fill %value -> !dtensor.tensor<...>>`
+ * `<d_tensor.fill %value -> !d_tensor.tensor<...>>`
  * `->`
  * `<shape-to-index setup + d_memref.alloc + nested d_affine.for + d_memref.store + unrealized_conversion_cast>`
  *
- * `<dtensor.dim %tensor, %axis>`
+ * `<d_tensor.dim %tensor, %axis>`
  * `->`
  * `<unrealized_conversion_cast to memref + d_memref.dim_exact>`
  *
- * `<dtensor.cast %src : !dtensor.tensor<...> to !dtensor.tensor<...>>`
+ * `<d_tensor.cast %src : !d_tensor.tensor<...> to !d_tensor.tensor<...>>`
  * `->`
  * `<unrealized_conversion_cast to source memref + d_memref.cast + unrealized_conversion_cast back to tensor>`
  */
 final class DTensorToDMemrefShapePreserving(ctx: MLContext)
     extends WalkerPass(ctx):
   /** Scope (intentionally narrow):
-    *   - lower a minimal executable subset: `dtensor.empty`, `dtensor.fill`,
-    *     `dtensor.cast`, and `dtensor.dim`
+    *   - lower a minimal executable subset: `d_tensor.empty`, `d_tensor.fill`,
+    *     `d_tensor.cast`, and `d_tensor.dim`
     *   - preserve value-dependent shapes in `!d_memref.memref`
-    *   - use unrealized casts as temporary bridges between `!dtensor.tensor`
+    *   - use unrealized casts as temporary bridges between `!d_tensor.tensor`
     *     and `!d_memref.memref`
     *
-    * This pass is still not a full dtensor->d_memref conversion.
+    * This pass is still not a full d_tensor->d_memref conversion.
     */
-  override val name: String = "dtensor-to-dmemref-shape-preserving"
+  override val name: String = "d-tensor-to-d-memref-shape-preserving"
 
   override val walker: PatternRewriteWalker = PatternRewriteWalker(
     GreedyRewritePatternApplier(

@@ -1,39 +1,39 @@
 builtin.module {
   func.func @conv2d_full_factorized_tiling(
-    %n0_nat : !dtensor.nat, %n1_nat : !dtensor.posnat,
-    %cin0_nat : !dtensor.nat, %cin1_nat : !dtensor.posnat,
-    %h_nat : !dtensor.nat, %w_nat : !dtensor.nat,
-    %cout0_nat : !dtensor.nat, %cout1_nat : !dtensor.posnat,
-    %kh_nat : !dtensor.posnat, %kw_nat : !dtensor.posnat,
-    %oh0_nat : !dtensor.nat, %oh1_nat : !dtensor.posnat,
-    %ow0_nat : !dtensor.nat, %ow1_nat : !dtensor.posnat,
+    %n0_nat : !d_tensor.nat, %n1_nat : !d_tensor.posnat,
+    %cin0_nat : !d_tensor.nat, %cin1_nat : !d_tensor.posnat,
+    %h_nat : !d_tensor.nat, %w_nat : !d_tensor.nat,
+    %cout0_nat : !d_tensor.nat, %cout1_nat : !d_tensor.posnat,
+    %kh_nat : !d_tensor.posnat, %kw_nat : !d_tensor.posnat,
+    %oh0_nat : !d_tensor.nat, %oh1_nat : !d_tensor.posnat,
+    %ow0_nat : !d_tensor.nat, %ow1_nat : !d_tensor.posnat,
     %Xflat : !d_memref.memref<[], f32>,
     %Kflat : !d_memref.memref<[], f32>,
     %Yflat : !d_memref.memref<[], f32>
   ) {
-    %n_nat = "dtensor.nat.mul"(%n0_nat, %n1_nat) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
-    %cin_nat = "dtensor.nat.mul"(%cin0_nat, %cin1_nat) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
-    %cout_nat = "dtensor.nat.mul"(%cout0_nat, %cout1_nat) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
-    %oh_nat = "dtensor.nat.mul"(%oh0_nat, %oh1_nat) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
-    %ow_nat = "dtensor.nat.mul"(%ow0_nat, %ow1_nat) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
-    %khkw_nat = "dtensor.nat.mul"(%kh_nat, %kw_nat) : (!dtensor.posnat, !dtensor.posnat) -> !dtensor.posnat
-    %red_tile_nat = "dtensor.nat.mul"(%cin1_nat, %khkw_nat) : (!dtensor.posnat, !dtensor.posnat) -> !dtensor.posnat
-    %cin_khkw_nat = "dtensor.nat.mul"(%cin0_nat, %red_tile_nat) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
+    %n_nat = "d_tensor.nat.mul"(%n0_nat, %n1_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
+    %cin_nat = "d_tensor.nat.mul"(%cin0_nat, %cin1_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
+    %cout_nat = "d_tensor.nat.mul"(%cout0_nat, %cout1_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
+    %oh_nat = "d_tensor.nat.mul"(%oh0_nat, %oh1_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
+    %ow_nat = "d_tensor.nat.mul"(%ow0_nat, %ow1_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
+    %khkw_nat = "d_tensor.nat.mul"(%kh_nat, %kw_nat) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
+    %red_tile_nat = "d_tensor.nat.mul"(%cin1_nat, %khkw_nat) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
+    %cin_khkw_nat = "d_tensor.nat.mul"(%cin0_nat, %red_tile_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
 
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-    %n = "dtensor.shape.to_index"(%n_nat) : (!dtensor.nat) -> index
-    %cin = "dtensor.shape.to_index"(%cin_nat) : (!dtensor.nat) -> index
-    %h = "dtensor.shape.to_index"(%h_nat) : (!dtensor.nat) -> index
-    %w = "dtensor.shape.to_index"(%w_nat) : (!dtensor.nat) -> index
-    %cout = "dtensor.shape.to_index"(%cout_nat) : (!dtensor.nat) -> index
-    %kh = "dtensor.shape.to_index"(%kh_nat) : (!dtensor.posnat) -> index
-    %kw = "dtensor.shape.to_index"(%kw_nat) : (!dtensor.posnat) -> index
-    %oh = "dtensor.shape.to_index"(%oh_nat) : (!dtensor.nat) -> index
-    %ow = "dtensor.shape.to_index"(%ow_nat) : (!dtensor.nat) -> index
-    %khkw = "dtensor.shape.to_index"(%khkw_nat) : (!dtensor.posnat) -> index
-    %cin_khkw = "dtensor.shape.to_index"(%cin_khkw_nat) : (!dtensor.nat) -> index
+    %n = "d_tensor.shape.to_index"(%n_nat) : (!d_tensor.nat) -> index
+    %cin = "d_tensor.shape.to_index"(%cin_nat) : (!d_tensor.nat) -> index
+    %h = "d_tensor.shape.to_index"(%h_nat) : (!d_tensor.nat) -> index
+    %w = "d_tensor.shape.to_index"(%w_nat) : (!d_tensor.nat) -> index
+    %cout = "d_tensor.shape.to_index"(%cout_nat) : (!d_tensor.nat) -> index
+    %kh = "d_tensor.shape.to_index"(%kh_nat) : (!d_tensor.posnat) -> index
+    %kw = "d_tensor.shape.to_index"(%kw_nat) : (!d_tensor.posnat) -> index
+    %oh = "d_tensor.shape.to_index"(%oh_nat) : (!d_tensor.nat) -> index
+    %ow = "d_tensor.shape.to_index"(%ow_nat) : (!d_tensor.nat) -> index
+    %khkw = "d_tensor.shape.to_index"(%khkw_nat) : (!d_tensor.posnat) -> index
+    %cin_khkw = "d_tensor.shape.to_index"(%cin_khkw_nat) : (!d_tensor.nat) -> index
     %hw = "arith.muli"(%h, %w) : (index, index) -> index
     %chw = "arith.muli"(%cin, %hw) : (index, index) -> index
     %ohow = "arith.muli"(%oh, %ow) : (index, index) -> index

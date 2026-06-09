@@ -3,7 +3,7 @@ package scair.passes.normalize_refined_layout_accesses
 import scair.MLContext
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_memref
 import scair.ir.*
 import scair.transformations.*
@@ -14,7 +14,7 @@ private def idxAttr(v: BigInt): IntegerAttr =
 private def asIndex(v: Value[Attribute]): Operand[IndexType] =
   v.asInstanceOf[Operand[IndexType]]
 
-// Layout parameters may be stored either as index-like integers or as dtensor
+// Layout parameters may be stored either as index-like integers or as d_tensor
 // nat values. This helper normalizes both cases to index SSA values so the
 // subsequent address arithmetic is purely arithmetic IR.
 private def materializeLayoutParam(param: d_memref.LayoutParam): (Vector[Operation], Value[Attribute]) =
@@ -25,8 +25,8 @@ private def materializeLayoutParam(param: d_memref.LayoutParam): (Vector[Operati
     case v: ValueAttribute =>
       v.getVal().typ match
         case _: IndexType => (Vector.empty, v.getVal())
-        case _: dTensor.dTensorNatLikeType =>
-          val cast = dTensor.ShapeToIndex(v.getVal().asInstanceOf[Operand[dTensor.dTensorNatLikeType]], Result(IndexType()))
+        case _: DTensor.DTensorNatLikeType =>
+          val cast = DTensor.ShapeToIndex(v.getVal().asInstanceOf[Operand[DTensor.DTensorNatLikeType]], Result(IndexType()))
           (Vector(cast), cast.res)
         case ValueRefType(ref) =>
           materializeLayoutParam(ValueAttribute(ref.getVal()))
@@ -37,14 +37,14 @@ private def addIndex(lhs: Value[Attribute], rhs: Value[Attribute]): arith.AddI =
 private def mulIndex(lhs: Value[Attribute], rhs: Value[Attribute]): arith.MulI =
   arith.MulI(asIndex(lhs), asIndex(rhs), Result(IndexType()))
 
-private def isCanonicalFlatCarrier(ty: d_memref.dMemrefMemrefType): Boolean =
+private def isCanonicalFlatCarrier(ty: d_memref.DMemrefMemrefType): Boolean =
   ty.params.size == 1 &&
   ty.offset.isEmpty &&
   ty.strides.isEmpty
 
 private def underlyingFlatBuffer(
-    memref: Operand[d_memref.dMemrefMemrefType]
-): Option[Operand[d_memref.dMemrefMemrefType]] =
+    memref: Operand[d_memref.DMemrefMemrefType]
+): Option[Operand[d_memref.DMemrefMemrefType]] =
   memref.owner match
     case Some(cast: d_memref.Cast) =>
       underlyingFlatBuffer(cast.src)
@@ -54,7 +54,7 @@ private def underlyingFlatBuffer(
       None
 
 private def linearizedIndexOps(
-    ty: d_memref.dMemrefMemrefType,
+    ty: d_memref.DMemrefMemrefType,
     indices: Seq[Operand[IndexType]],
 ): (Vector[Operation], Value[Attribute]) =
   val rank = indices.size

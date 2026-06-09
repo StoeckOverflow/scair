@@ -1,12 +1,12 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-dtensor-nat-products,dependent-context-band-exact-tile,canonicalize,cse,dce | filecheck %s
+// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-d-tensor-nat-products,dependent-context-band-exact-tile,canonicalize,cse,dce | filecheck %s
 
 builtin.module {
   func.func @context_band_does_not_tile_reduction(%init: f32) -> f32 {
-    %m0 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-    %tile_nat = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-    %m_nat = "dtensor.nat.mul"(%m0, %tile_nat) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+    %m0 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+    %tile_nat = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+    %m_nat = "d_tensor.nat.mul"(%m0, %tile_nat) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
-    %m = "dtensor.shape.to_index"(%m_nat) : (!dtensor.nat) -> index
+    %m = "d_tensor.shape.to_index"(%m_nat) : (!d_tensor.nat) -> index
 
     d_affine.for %i = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%m) step 1 : index {
       %sum = d_affine.for %k = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%m) step 1 : index iter_args(%acc = %init : f32) {

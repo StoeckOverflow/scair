@@ -35,7 +35,7 @@ COMPILER_FLAGS="-O2/-O3"
 
 MLIR_PIPELINE="--lower-affine --convert-scf-to-cf --expand-strided-metadata --finalize-memref-to-llvm --convert-arith-to-llvm --convert-index-to-llvm --convert-cf-to-llvm --convert-func-to-llvm --reconcile-unrealized-casts"
 SCAIR_BASELINE_PIPELINE="lower-dynamic-memref-to-llvm-baseline,convert-func-to-llvm,convert-llvm-export-abi"
-SCAIR_VALUE_DEP_PIPELINE="lower-dmemref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi"
+SCAIR_VALUE_DEP_PIPELINE="lower-d-memref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi"
 
 require_bin "$SCAIR_OPT"
 require_bin "$MLIR_OPT"
@@ -174,8 +174,8 @@ append_row() {
     "$(count_source_extract_strided_metadata_ops "$src")" \
     "$(count_source_memref_load_ops "$src")" \
     "$(count_source_memref_store_ops "$src")" \
-    "$(count_source_dmemref_load_ops "$src")" \
-    "$(count_source_dmemref_store_ops "$src")" \
+    "$(count_source_d_memref_load_ops "$src")" \
+    "$(count_source_d_memref_store_ops "$src")" \
     "$(count_func_defs "$lowered")" \
     "$(count_ops "$lowered")" \
     "$(count_ops_structural "$lowered")" \

@@ -70,7 +70,7 @@ private final class Builder(val funcOp: func.Func):
     val lowered = cfg.materializeAffineMap(current, operands.map(remap), map)
       .getOrElse(
         unsupportedLoop(
-          explainUnsupportedAffineMap(map)
+          explainUnsupporteDAffineMap(map)
             .getOrElse("unsupported d_affine.apply/min affine map")
         )
       )

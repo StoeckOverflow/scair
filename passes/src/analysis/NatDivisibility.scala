@@ -2,7 +2,7 @@ package scair.passes.analysis
 
 import scair.dialects.affine.*
 import scair.dialects.builtin.*
-import scair.dialects.dTensor.*
+import scair.dialects.d_tensor.*
 import scair.dialects.d_affine
 import scair.ir.*
 import scair.passes.NatProvenance

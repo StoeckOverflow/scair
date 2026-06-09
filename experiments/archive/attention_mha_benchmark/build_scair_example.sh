@@ -183,7 +183,7 @@ require_mlir_baseline_context_shape() {
 
   reject_ir_pattern \
     "$path" \
-    'dtensor\.|d_memref\.|d_affine\.' \
+    'd_tensor\.|d_memref\.|d_affine\.' \
     "MLIR attention baseline must stay stock ordinary MLIR/Affine"
   require_ir_pattern \
     "$path" \
@@ -203,7 +203,7 @@ require_ordinary_hidden_tile_with_tail_shape() {
     "ordinary attention control must compute hidden with ordinary index multiplication"
   reject_ir_pattern \
     "$path" \
-    'dtensor\.|d_memref\.|d_affine\.' \
+    'd_tensor\.|d_memref\.|d_affine\.' \
     "ordinary attention control must not use value-dependent or dependent-affine IR"
   require_ir_pattern \
     "$path" \
@@ -219,11 +219,11 @@ require_value_dependent_exact_hidden_tile_shape() {
   local path="$1"
   require_ir_pattern \
     "$path" \
-    'dtensor\.nat\.mul' \
+    'd_tensor\.nat\.mul' \
     "value-dependent attention exact route must preserve natmul provenance"
   require_ir_pattern \
     "$path" \
-    'dtensor\.shape\.to_index' \
+    'd_tensor\.shape\.to_index' \
     "value-dependent attention exact route must materialize factor-derived dynamic tile size"
   require_ir_pattern \
     "$path" \
@@ -473,8 +473,8 @@ append_row() {
     "$(count_source_extract_strided_metadata_ops "$src")" \
     "$(count_source_memref_load_ops "$src")" \
     "$(count_source_memref_store_ops "$src")" \
-    "$(count_source_dmemref_load_ops "$src")" \
-    "$(count_source_dmemref_store_ops "$src")" \
+    "$(count_source_d_memref_load_ops "$src")" \
+    "$(count_source_d_memref_store_ops "$src")" \
     "$(count_func_defs "$lowered_mlir")" \
     "$(count_ops "$lowered_mlir")" \
     "$(count_ops_structural "$lowered_mlir")" \
@@ -607,8 +607,8 @@ if route_enabled "value_dependent" || route_enabled "value_dependent_exact_tile"
   build_scair_variant \
     "$value_dep_variant" \
     "$VALUE_DEP_SRC" \
-    "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-exact-tile,dependent-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-dmemref-to-llvm" \
-    "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-exact-tile,dependent-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
+    "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-context-band-exact-tile,dependent-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-d-memref-to-llvm" \
+    "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-context-band-exact-tile,dependent-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
     "$VALUE_DEP_DRIVER_SRC"
 
   require_value_dependent_exact_hidden_tile_shape \
@@ -622,7 +622,7 @@ if route_enabled "value_dependent" || route_enabled "value_dependent_exact_tile"
     "$OUT_DIR/${value_dep_variant}.llvm.mlir" \
     "$OUT_DIR/${value_dep_variant}.ll" \
     "$OUT_DIR/${value_dep_variant}.output.txt" \
-    "claim_role=direct_value_dependent;claim_scope=dependent_natmul_guides_tail_free_exact_tiling_for_flattened_hidden_dynamic_head_dim_case;loop_transform=dependent_context_band_exact_tile+dependent_exact_tile;tile_loop=flattened_hidden;context_tile_step=NA;claim_tile_step=dynamic_head_dim;tile_step=dynamic_head_dim;shared_tile_size=$(shared_tile_size);tile_size=64;tile_size_source=posnat_head_dim;positivity_source=posnat_type;product_representation=dtensor.nat.mul;context_tail_bound=NA;claim_tail_bound=none;tail_bound=none;exact_divisibility_proof=dtensor.nat.mul;dynamic_step_present=$(dynamic_step_present "$OUT_DIR/${value_dep_variant}.tiled.mlir");tail_cleanup_present=$(tail_handling_present "$OUT_DIR/${value_dep_variant}.tiled.mlir");tail_handling_present=$(tail_handling_present "$OUT_DIR/${value_dep_variant}.tiled.mlir");affine_cleanup_present=$(affine_cleanup_present "$OUT_DIR/${value_dep_variant}.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${value_dep_variant}.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/${value_dep_variant}.tiled.mlir")"
+    "claim_role=direct_value_dependent;claim_scope=dependent_natmul_guides_tail_free_exact_tiling_for_flattened_hidden_dynamic_head_dim_case;loop_transform=dependent_context_band_exact_tile+dependent_exact_tile;tile_loop=flattened_hidden;context_tile_step=NA;claim_tile_step=dynamic_head_dim;tile_step=dynamic_head_dim;shared_tile_size=$(shared_tile_size);tile_size=64;tile_size_source=posnat_head_dim;positivity_source=posnat_type;product_representation=d_tensor.nat.mul;context_tail_bound=NA;claim_tail_bound=none;tail_bound=none;exact_divisibility_proof=d_tensor.nat.mul;dynamic_step_present=$(dynamic_step_present "$OUT_DIR/${value_dep_variant}.tiled.mlir");tail_cleanup_present=$(tail_handling_present "$OUT_DIR/${value_dep_variant}.tiled.mlir");tail_handling_present=$(tail_handling_present "$OUT_DIR/${value_dep_variant}.tiled.mlir");affine_cleanup_present=$(affine_cleanup_present "$OUT_DIR/${value_dep_variant}.tiled.mlir");factorized_tile_count=$(factorized_tile_count "$OUT_DIR/${value_dep_variant}.tiled.mlir");tail_free_factorized=$(tail_free_factorized "$OUT_DIR/${value_dep_variant}.tiled.mlir")"
 fi
 
 append_summary_metric_notes "$SUMMARY_MD"

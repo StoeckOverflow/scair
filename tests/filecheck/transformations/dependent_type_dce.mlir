@@ -1,12 +1,12 @@
 // RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize | filecheck %s
 
 builtin.module {
-  %dead = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %used = "dtensor.nat.const"() <{value = 1 : i32}> : () -> !dtensor.nat
-  "test.use"() {dep = !dtensor.vector<%used, f32>} : () -> ()
+  %dead = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %used = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
+  "test.use"() {dep = !d_tensor.vector<%used, f32>} : () -> ()
 }
 
 // CHECK: builtin.module {
-// CHECK: %0 = "dtensor.nat.const"() <{value = 1 : i32}> : () -> !dtensor.nat
-// CHECK: "test.use"() {dep = !dtensor.vector<%0, f32>} : () -> ()
+// CHECK: %0 = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
+// CHECK: "test.use"() {dep = !d_tensor.vector<%0, f32>} : () -> ()
 // CHECK: }

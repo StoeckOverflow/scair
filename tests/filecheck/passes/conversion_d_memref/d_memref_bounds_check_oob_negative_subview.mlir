@@ -1,9 +1,9 @@
 // RUN: ! scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p d-memref-bounds-check 2>&1 | filecheck %s -DFILE=%s
 
 builtin.module {
-  %eight = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %zero_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %zero = "dtensor.shape.to_index"(%zero_nat) : (!dtensor.nat) -> index
+  %eight = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %zero_nat = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %zero = "d_tensor.shape.to_index"(%zero_nat) : (!d_tensor.nat) -> index
   %neg_one = "arith.constant"() <{value = -1 : index}> : () -> index
   %one = "arith.constant"() <{value = 1 : index}> : () -> index
   %src = d_memref.alloc : () -> !d_memref.memref<[%eight], i32>

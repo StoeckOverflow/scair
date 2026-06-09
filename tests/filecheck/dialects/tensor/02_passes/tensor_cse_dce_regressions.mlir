@@ -5,31 +5,31 @@
 
 // CSE + deep RAUW: merged dim value must rewrite type-embedded use.
 builtin.module {
-  %m = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
-  %n = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-  %s0 = "dtensor.nat.add"(%m, %n) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %s1 = "dtensor.nat.add"(%m, %n) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %u = "test.use"() : () -> !dtensor.tensor<[%s1], f32>
+  %m = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
+  %n = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+  %s0 = "d_tensor.nat.add"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %s1 = "d_tensor.nat.add"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %u = "test.use"() : () -> !d_tensor.tensor<[%s1], f32>
 }
 
 // CSE: builtin.module {
-// CSE:   %0 = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
-// CSE:   %1 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-// CSE:   %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// CSE:   %3 = "test.use"() : () -> !dtensor.tensor<[%2], f32>
+// CSE:   %0 = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
+// CSE:   %1 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+// CSE:   %2 = "d_tensor.nat.add"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CSE:   %3 = "test.use"() : () -> !d_tensor.tensor<[%2], f32>
 // CSE: }
 
 // -----
 
 // DCE removes truly dead nat ops while preserving used dims.
 builtin.module {
-  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %z = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %dead = "dtensor.nat.add"(%m, %z) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %u = "test.keep"() : () -> !dtensor.tensor<[%m], f32>
+  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %dead = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %u = "test.keep"() : () -> !d_tensor.tensor<[%m], f32>
 }
 
 // DCE: builtin.module {
-// DCE:   %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-// DCE:   %1 = "test.keep"() : () -> !dtensor.tensor<[%0], f32>
+// DCE:   %0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+// DCE:   %1 = "test.keep"() : () -> !d_tensor.tensor<[%0], f32>
 // DCE: }

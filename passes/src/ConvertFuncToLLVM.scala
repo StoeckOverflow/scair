@@ -31,8 +31,8 @@ private final class Builder(val funcOp: func.Func):
         ValueRefType(cloneValueAttr(ref))
       case v: ValueAttribute =>
         cloneValueAttr(v)
-      case d_memref.dMemrefMemrefType(params, elem, offset, strides) =>
-        d_memref.dMemrefMemrefType(
+      case d_memref.DMemrefMemrefType(params, elem, offset, strides) =>
+        d_memref.DMemrefMemrefType(
           params.map {
             case v: ValueAttribute => cloneValueAttr(v)
             case i: IntegerAttr    => i

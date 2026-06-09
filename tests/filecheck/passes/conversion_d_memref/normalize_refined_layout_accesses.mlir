@@ -2,9 +2,9 @@
 
 builtin.module {
   func.func @normalize(%stride0 : index, %stride1 : index, %i : index, %j : index) -> f32 {
-    %d0 = "dtensor.nat.const"() <{value = 256 : i32}> : () -> !dtensor.nat
-    %d1 = "dtensor.nat.const"() <{value = 1024 : i32}> : () -> !dtensor.nat
-    %flat = "dtensor.nat.const"() <{value = 262144 : i32}> : () -> !dtensor.nat
+    %d0 = "d_tensor.nat.const"() <{value = 256 : i32}> : () -> !d_tensor.nat
+    %d1 = "d_tensor.nat.const"() <{value = 1024 : i32}> : () -> !d_tensor.nat
+    %flat = "d_tensor.nat.const"() <{value = 262144 : i32}> : () -> !d_tensor.nat
     %buf = d_memref.alloc : () -> !d_memref.memref<[%flat], f32>
     %c256 = "arith.constant"() <{value = 256 : index}> : () -> index
     %c1024 = "arith.constant"() <{value = 1024 : index}> : () -> index
@@ -16,9 +16,9 @@ builtin.module {
   }
 
   func.func @normalize_store(%stride0 : index, %stride1 : index, %i : index, %j : index, %v : f32) {
-    %d0 = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-    %d1 = "dtensor.nat.const"() <{value = 16 : i32}> : () -> !dtensor.nat
-    %flat = "dtensor.nat.const"() <{value = 128 : i32}> : () -> !dtensor.nat
+    %d0 = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+    %d1 = "d_tensor.nat.const"() <{value = 16 : i32}> : () -> !d_tensor.nat
+    %flat = "d_tensor.nat.const"() <{value = 128 : i32}> : () -> !d_tensor.nat
     %buf = d_memref.alloc : () -> !d_memref.memref<[%flat], f32>
     %c3 = "arith.constant"() <{value = 3 : index}> : () -> index
     %view = d_memref.reinterpret_cast %buf
@@ -28,12 +28,12 @@ builtin.module {
   }
 
   func.func @normalize_subview_load(%i : index) -> f32 {
-    %d0 = "dtensor.nat.const"() <{value = 16 : i32}> : () -> !dtensor.nat
-    %d1 = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-    %flat = "dtensor.nat.const"() <{value = 16 : i32}> : () -> !dtensor.nat
+    %d0 = "d_tensor.nat.const"() <{value = 16 : i32}> : () -> !d_tensor.nat
+    %d1 = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+    %flat = "d_tensor.nat.const"() <{value = 16 : i32}> : () -> !d_tensor.nat
     %src = d_memref.alloc : () -> !d_memref.memref<[%d0], f32>
     %off = "arith.constant"() <{value = 4 : index}> : () -> index
-    %size = "dtensor.shape.to_index"(%d1) : (!dtensor.nat) -> index
+    %size = "d_tensor.shape.to_index"(%d1) : (!d_tensor.nat) -> index
     %stride = "arith.constant"() <{value = 2 : index}> : () -> index
     %sv = d_memref.subview %src[%off][%size][%stride] : !d_memref.memref<[%d0], f32> -> !d_memref.memref<[%d1], f32>
     %v = d_memref.load %sv[%i] : !d_memref.memref<[%d1], f32> -> f32
@@ -42,9 +42,9 @@ builtin.module {
 }
 
 // CHECK-LABEL: func.func @normalize(%0: index, %1: index, %2: index, %3: index) -> f32 {
-// CHECK-NEXT:    %4 = "dtensor.nat.const"() <{value = 256 : i32}> : () -> !dtensor.nat
-// CHECK-NEXT:    %5 = "dtensor.nat.const"() <{value = 1024 : i32}> : () -> !dtensor.nat
-// CHECK-NEXT:    %6 = "dtensor.nat.const"() <{value = 262144 : i32}> : () -> !dtensor.nat
+// CHECK-NEXT:    %4 = "d_tensor.nat.const"() <{value = 256 : i32}> : () -> !d_tensor.nat
+// CHECK-NEXT:    %5 = "d_tensor.nat.const"() <{value = 1024 : i32}> : () -> !d_tensor.nat
+// CHECK-NEXT:    %6 = "d_tensor.nat.const"() <{value = 262144 : i32}> : () -> !d_tensor.nat
 // CHECK-NEXT:    %7 = d_memref.alloc : () -> !d_memref.memref<[%6], f32>
 // CHECK-NEXT:    %8 = "arith.constant"() <{value = 256 : index}> : () -> index
 // CHECK-NEXT:    %9 = "arith.constant"() <{value = 1024 : index}> : () -> index

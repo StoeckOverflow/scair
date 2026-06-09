@@ -146,8 +146,8 @@ append_row() {
     "$(count_source_extract_strided_metadata_ops "$src")" \
     "$(count_source_memref_load_ops "$src")" \
     "$(count_source_memref_store_ops "$src")" \
-    "$(count_source_dmemref_load_ops "$src")" \
-    "$(count_source_dmemref_store_ops "$src")" \
+    "$(count_source_d_memref_load_ops "$src")" \
+    "$(count_source_d_memref_store_ops "$src")" \
     "$(count_func_defs "$lowered_mlir")" \
     "$(count_ops "$lowered_mlir")" \
     "$(count_ops_structural "$lowered_mlir")" \
@@ -244,7 +244,7 @@ cat "$OUT_DIR/semi_affine_baseline_kernel_only_scair_metrics.txt" >> "$OUT_DIR/s
 
 echo "==> Building ScaIR semi-affine value-dependent kernel-only"
 build_kernel \
-  "lower-dmemref-to-llvm" \
+  "lower-d-memref-to-llvm" \
   "$VALUE_DEP_SRC" \
   "$OUT_DIR/semi_affine_value_dependent_scair.o" \
   "$OUT_DIR/semi_affine_value_dependent_scair.ll" \

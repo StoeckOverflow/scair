@@ -1,10 +1,10 @@
-package scair.passes.refine_dynamic_layout_to_dmemref
+package scair.passes.refine_dynamic_layout_to_d_memref
 
 import scair.MLContext
 import scair.dialects.affine
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_affine
 import scair.dialects.d_memref
 import scair.dialects.func
@@ -40,17 +40,17 @@ private def identityMap(map: AffineMapAttr, rank: Int): Boolean =
     }
 
 private def staticNat(v: BigInt): (Seq[Operation], ValueAttribute) =
-  val c = dTensor.NatConst(i32Attr(v), Result(dTensor.dTensorNatType()))
+  val c = DTensor.NatConst(i32Attr(v), Result(DTensor.DTensorNatType()))
   (Seq(c), ValueAttribute(c.res))
 
 private def dynamicNat(v: Operand[IndexType]): (Seq[Operation], ValueAttribute) =
-  val cast = dTensor.IndexToNat(v, Result(dTensor.dTensorNatType()))
+  val cast = DTensor.IndexToNat(v, Result(DTensor.DTensorNatType()))
   (Seq(cast), ValueAttribute(cast.res))
 
 private def refineBaseMemrefType(
     ty: RankedMemrefType,
     dynamicDims: Seq[Operand[IndexType]],
-): (Seq[Operation], d_memref.dMemrefMemrefType) =
+): (Seq[Operation], d_memref.DMemrefMemrefType) =
   var dynIdx = 0
   val emitted = mutable.ArrayBuffer.empty[Operation]
   val dims = ty.shape.attrValues.map { dim =>
@@ -66,7 +66,7 @@ private def refineBaseMemrefType(
   }
   (
     emitted.toSeq,
-    d_memref.dMemrefMemrefType(dims, ty.elementType.asInstanceOf[TypeAttribute]),
+    d_memref.DMemrefMemrefType(dims, ty.elementType.asInstanceOf[TypeAttribute]),
   )
 
 private def refineReinterpretType(
@@ -74,7 +74,7 @@ private def refineReinterpretType(
     sizes: Seq[Operand[IndexType]],
     offset: Operand[IndexType],
     strides: Seq[Operand[IndexType]],
-): (Seq[Operation], d_memref.dMemrefMemrefType) =
+): (Seq[Operation], d_memref.DMemrefMemrefType) =
   val emitted = mutable.ArrayBuffer.empty[Operation]
   var sizeIdx = 0
   val dims = ty.shape.attrValues.map { dim =>
@@ -101,7 +101,7 @@ private def refineReinterpretType(
   val refinedOffset: d_memref.LayoutParam = ValueAttribute(offset)
   (
     emitted.toSeq,
-    d_memref.dMemrefMemrefType(
+    d_memref.DMemrefMemrefType(
       dims,
       ty.elementType.asInstanceOf[TypeAttribute],
       Some(refinedOffset),
@@ -112,8 +112,8 @@ private def refineReinterpretType(
 private def refinedArgType(
     ranked: RankedMemrefType,
     dimArgs: Seq[Value[Attribute]],
-): d_memref.dMemrefMemrefType =
-  d_memref.dMemrefMemrefType(
+): d_memref.DMemrefMemrefType =
+  d_memref.DMemrefMemrefType(
     dimArgs.map(v => ValueAttribute(v)),
     ranked.elementType.asInstanceOf[TypeAttribute],
   )
@@ -132,10 +132,10 @@ private def newFunctionArguments(
     oldArg.typ match
       case ranked: RankedMemrefType =>
         val dimArgs = ranked.shape.attrValues.indices.map(_ =>
-          BlockArgument(dTensor.dTensorNatType()).asInstanceOf[Value[Attribute]]
+          BlockArgument(DTensor.DTensorNatType()).asInstanceOf[Value[Attribute]]
         )
         newArgs ++= dimArgs
-        signatureInputs ++= Seq.fill(dimArgs.size)(dTensor.dTensorNatType())
+        signatureInputs ++= Seq.fill(dimArgs.size)(DTensor.DTensorNatType())
         val memArg =
           BlockArgument(refinedArgType(ranked, dimArgs)).asInstanceOf[Value[Attribute]]
         newArgs += memArg
@@ -162,32 +162,32 @@ private def materializeDimOperands(
           axisConst.result.asInstanceOf[Operand[IndexType]],
           Result(IndexType()),
         )
-        val nat = dTensor.IndexToNat(dim.result.asInstanceOf[Operand[IndexType]], Result(dTensor.dTensorNatType()))
+        val nat = DTensor.IndexToNat(dim.result.asInstanceOf[Operand[IndexType]], Result(DTensor.DTensorNatType()))
         emitted += axisConst
         emitted += dim
         emitted += nat
         nat.res.asInstanceOf[Operand[Attribute]]
       }
-    case ranked: d_memref.dMemrefMemrefType =>
+    case ranked: d_memref.DMemrefMemrefType =>
       ranked.params.map { param =>
         param match
           case p: ValueAttribute =>
             p.getVal().typ match
-              case _: dTensor.dTensorNatLikeType =>
+              case _: DTensor.DTensorNatLikeType =>
                 p.getVal().asInstanceOf[Operand[Attribute]]
               case _: IndexType =>
-                val nat = dTensor.IndexToNat(
+                val nat = DTensor.IndexToNat(
                   p.getVal().asInstanceOf[Operand[IndexType]],
-                  Result(dTensor.dTensorNatType()),
+                  Result(DTensor.DTensorNatType()),
                 )
                 emitted += nat
                 nat.res.asInstanceOf[Operand[Attribute]]
               case ValueRefType(ref) =>
                 ref.getVal().asInstanceOf[Operand[Attribute]]
           case IntegerAttr(IntData(v), _) =>
-            val nat = dTensor.NatConst(
+            val nat = DTensor.NatConst(
               i32Attr(v),
-              Result(dTensor.dTensorNatType()),
+              Result(DTensor.DTensorNatType()),
             )
             emitted += nat
             nat.res.asInstanceOf[Operand[Attribute]]
@@ -203,7 +203,7 @@ private def lowerCall(
   op._operands.foreach { oldOperand =>
     val remapped = remapValue(oldOperand, valueMapper)
     remapped.typ match
-      case _: RankedMemrefType | _: d_memref.dMemrefMemrefType =>
+      case _: RankedMemrefType | _: d_memref.DMemrefMemrefType =>
         operands ++= materializeDimOperands(remapped, emitted)
         operands += remapped.asInstanceOf[Operand[Attribute]]
       case _ =>
@@ -269,13 +269,13 @@ private def lowerOps(
       case op: memref.Dealloc =>
         Seq(
           d_memref.Dealloc(
-            remapValue(op.memref, valueMapper).asInstanceOf[Operand[d_memref.dMemrefMemrefType]]
+            remapValue(op.memref, valueMapper).asInstanceOf[Operand[d_memref.DMemrefMemrefType]]
           )
         )
       case op: memref.Load =>
         Seq(
           d_memref.Load(
-            remapValue(op.memref, valueMapper).asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+            remapValue(op.memref, valueMapper).asInstanceOf[Operand[d_memref.DMemrefMemrefType]],
             op.indices.map(v => remapValue(v, valueMapper).asInstanceOf[Operand[IndexType]]),
             Result(op.result.typ.asInstanceOf[TypeAttribute]),
           )
@@ -284,7 +284,7 @@ private def lowerOps(
         Seq(
           d_memref.Store(
             remapValue(op.value, valueMapper).asInstanceOf[Operand[TypeAttribute]],
-            remapValue(op.memref, valueMapper).asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+            remapValue(op.memref, valueMapper).asInstanceOf[Operand[d_memref.DMemrefMemrefType]],
             op.indices.map(v => remapValue(v, valueMapper).asInstanceOf[Operand[IndexType]]),
           )
         )
@@ -297,7 +297,7 @@ private def lowerOps(
               op.strides.map(v => remapValue(v, valueMapper).asInstanceOf[Operand[IndexType]])
             val (prefix, refinedTy) = refineReinterpretType(ty, sizes, offset, strides)
             val refined = d_memref.ReinterpretCast(
-              remapValue(op.src, valueMapper).asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+              remapValue(op.src, valueMapper).asInstanceOf[Operand[d_memref.DMemrefMemrefType]],
               Result(refinedTy),
             )
             prefix :+ refined
@@ -348,7 +348,7 @@ private def lowerOps(
       case op: affine.Load if identityMap(op.map, op.indices.size) =>
         Seq(
           d_memref.Load(
-            remapValue(op.memref, valueMapper).asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+            remapValue(op.memref, valueMapper).asInstanceOf[Operand[d_memref.DMemrefMemrefType]],
             op.indices.map(v => remapValue(v, valueMapper).asInstanceOf[Operand[IndexType]]),
             Result(op.result.typ.asInstanceOf[TypeAttribute]),
           )
@@ -357,7 +357,7 @@ private def lowerOps(
         Seq(
           d_memref.Store(
             remapValue(op.value, valueMapper).asInstanceOf[Operand[TypeAttribute]],
-            remapValue(op.memref, valueMapper).asInstanceOf[Operand[d_memref.dMemrefMemrefType]],
+            remapValue(op.memref, valueMapper).asInstanceOf[Operand[d_memref.DMemrefMemrefType]],
             op.indices.map(v => remapValue(v, valueMapper).asInstanceOf[Operand[IndexType]]),
           )
         )
@@ -435,6 +435,6 @@ private val LowerFunc = pattern {
 //   -> `d_memref.alloc` / `d_memref.reinterpret_cast` / `d_affine.for`,
 //      with dynamic dimensions reified as refined type parameters.
 final class RefineDynamicLayoutToDMemref(ctx: MLContext) extends WalkerPass(ctx):
-  override val name: String = "refine-dynamic-layout-to-dmemref"
+  override val name: String = "refine-dynamic-layout-to-d-memref"
   override val walker: PatternRewriteWalker =
     PatternRewriteWalker(GreedyRewritePatternApplier(Seq(LowerFunc)))

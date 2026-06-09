@@ -7,48 +7,48 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | scair-opt --allow-unregistered-dialect --verify-diagnostics --split-input-file
 
 builtin.module {
-  %x = "dtensor.nat.param"() : () -> !dtensor.nat
-  %z = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %s = "dtensor.nat.add"(%x, %z) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %x = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %s = "d_tensor.nat.add"(%x, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
 
-  %e0 = "dtensor.empty"() : () -> !dtensor.tensor<[%s], f32>
-  %e1 = "dtensor.empty"() : () -> !dtensor.tensor<[%s], f32>
-  %c1 = "dtensor.cast"(%e1) : (!dtensor.tensor<[%s], f32>) -> !dtensor.tensor<[%s], f32>
-  %a = "dtensor.add"(%e0, %c1)
-    : (!dtensor.tensor<[%s], f32>, !dtensor.tensor<[%s], f32>) -> !dtensor.tensor<[%s], f32>
-  %m = "dtensor.mul"(%a, %e0)
-    : (!dtensor.tensor<[%s], f32>, !dtensor.tensor<[%s], f32>) -> !dtensor.tensor<[%s], f32>
-  "test.keep"(%m) : (!dtensor.tensor<[%s], f32>) -> ()
+  %e0 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%s], f32>
+  %e1 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%s], f32>
+  %c1 = "d_tensor.cast"(%e1) : (!d_tensor.tensor<[%s], f32>) -> !d_tensor.tensor<[%s], f32>
+  %a = "d_tensor.add"(%e0, %c1)
+    : (!d_tensor.tensor<[%s], f32>, !d_tensor.tensor<[%s], f32>) -> !d_tensor.tensor<[%s], f32>
+  %m = "d_tensor.mul"(%a, %e0)
+    : (!d_tensor.tensor<[%s], f32>, !d_tensor.tensor<[%s], f32>) -> !d_tensor.tensor<[%s], f32>
+  "test.keep"(%m) : (!d_tensor.tensor<[%s], f32>) -> ()
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// VERIFY:   %1 = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-// VERIFY:   %2 = "dtensor.nat.add"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// VERIFY:   %3 = "dtensor.empty"() : () -> !dtensor.tensor<[%2], f32>
-// VERIFY:   %4 = "dtensor.empty"() : () -> !dtensor.tensor<[%2], f32>
-// VERIFY:   %5 = "dtensor.cast"(%4) : (!dtensor.tensor<[%2], f32>) -> !dtensor.tensor<[%2], f32>
-// VERIFY:   %6 = "dtensor.add"(%3, %5) : (!dtensor.tensor<[%2], f32>, !dtensor.tensor<[%2], f32>) -> !dtensor.tensor<[%2], f32>
-// VERIFY:   %7 = "dtensor.mul"(%6, %3) : (!dtensor.tensor<[%2], f32>, !dtensor.tensor<[%2], f32>) -> !dtensor.tensor<[%2], f32>
-// VERIFY:   "test.keep"(%7) : (!dtensor.tensor<[%2], f32>) -> ()
+// VERIFY:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY:   %1 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+// VERIFY:   %2 = "d_tensor.nat.add"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   %3 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%2], f32>
+// VERIFY:   %4 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%2], f32>
+// VERIFY:   %5 = "d_tensor.cast"(%4) : (!d_tensor.tensor<[%2], f32>) -> !d_tensor.tensor<[%2], f32>
+// VERIFY:   %6 = "d_tensor.add"(%3, %5) : (!d_tensor.tensor<[%2], f32>, !d_tensor.tensor<[%2], f32>) -> !d_tensor.tensor<[%2], f32>
+// VERIFY:   %7 = "d_tensor.mul"(%6, %3) : (!d_tensor.tensor<[%2], f32>, !d_tensor.tensor<[%2], f32>) -> !d_tensor.tensor<[%2], f32>
+// VERIFY:   "test.keep"(%7) : (!d_tensor.tensor<[%2], f32>) -> ()
 // VERIFY: }
 
 // CANON: builtin.module {
-// CANON:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CANON:   %1 = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-// CANON:   %2 = "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// CANON:   %3 = "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// CANON:   %4 = "dtensor.cast"(%3) : (!dtensor.tensor<[%0], f32>) -> !dtensor.tensor<[%0], f32>
-// CANON:   %5 = "dtensor.add"(%2, %4) : (!dtensor.tensor<[%0], f32>, !dtensor.tensor<[%0], f32>) -> !dtensor.tensor<[%0], f32>
-// CANON:   %6 = "dtensor.mul"(%5, %2) : (!dtensor.tensor<[%0], f32>, !dtensor.tensor<[%0], f32>) -> !dtensor.tensor<[%0], f32>
-// CANON:   "test.keep"(%6) : (!dtensor.tensor<[%0], f32>) -> ()
+// CANON:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON:   %1 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+// CANON:   %2 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0], f32>
+// CANON:   %3 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0], f32>
+// CANON:   %4 = "d_tensor.cast"(%3) : (!d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
+// CANON:   %5 = "d_tensor.add"(%2, %4) : (!d_tensor.tensor<[%0], f32>, !d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
+// CANON:   %6 = "d_tensor.mul"(%5, %2) : (!d_tensor.tensor<[%0], f32>, !d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
+// CANON:   "test.keep"(%6) : (!d_tensor.tensor<[%0], f32>) -> ()
 // CANON: }
 
 // PIPE: builtin.module {
-// PIPE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE:   %1 = "dtensor.empty"() : () -> !dtensor.tensor<[%0], f32>
-// PIPE:   %2 = "dtensor.cast"(%1) : (!dtensor.tensor<[%0], f32>) -> !dtensor.tensor<[%0], f32>
-// PIPE:   %3 = "dtensor.add"(%1, %2) : (!dtensor.tensor<[%0], f32>, !dtensor.tensor<[%0], f32>) -> !dtensor.tensor<[%0], f32>
-// PIPE:   %4 = "dtensor.mul"(%3, %1) : (!dtensor.tensor<[%0], f32>, !dtensor.tensor<[%0], f32>) -> !dtensor.tensor<[%0], f32>
-// PIPE:   "test.keep"(%4) : (!dtensor.tensor<[%0], f32>) -> ()
+// PIPE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE:   %1 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0], f32>
+// PIPE:   %2 = "d_tensor.cast"(%1) : (!d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
+// PIPE:   %3 = "d_tensor.add"(%1, %2) : (!d_tensor.tensor<[%0], f32>, !d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
+// PIPE:   %4 = "d_tensor.mul"(%3, %1) : (!d_tensor.tensor<[%0], f32>, !d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
+// PIPE:   "test.keep"(%4) : (!d_tensor.tensor<[%0], f32>) -> ()
 // PIPE: }

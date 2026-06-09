@@ -1,9 +1,9 @@
-// RUN: scair-opt %s --passes lower-dmemref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi | filecheck %s
-// RUN: scair-opt %s --passes lower-dmemref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi | scair-opt --verify-diagnostics
+// RUN: scair-opt %s --passes lower-d-memref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi | filecheck %s
+// RUN: scair-opt %s --passes lower-d-memref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi | scair-opt --verify-diagnostics
 
 builtin.module {
   func.func @refined_rank1(
-    %n_nat : !dtensor.nat,
+    %n_nat : !d_tensor.nat,
     %buf : !d_memref.memref<[%n_nat], f32>
   ) attributes {scair.emit_bare_interface = true} {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
@@ -13,8 +13,8 @@ builtin.module {
   }
 
   func.func @refined_rank2(
-    %m_nat : !dtensor.nat,
-    %n_nat : !dtensor.nat,
+    %m_nat : !d_tensor.nat,
+    %n_nat : !d_tensor.nat,
     %buf : !d_memref.memref<[%m_nat, %n_nat], f32>
   ) attributes {scair.emit_bare_interface = true} {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index

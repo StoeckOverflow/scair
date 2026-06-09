@@ -3,7 +3,7 @@ package scair
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import scair.dialects.builtin.*
-import scair.dialects.dTensor.*
+import scair.dialects.d_tensor.*
 import scair.ir.*
 import scair.transformations.RewriteMethods
 import scair.utils.Err
@@ -11,16 +11,16 @@ import scair.verify.Verifier
 
 final class DTensorTransformationSafetyTest extends AnyFlatSpec:
 
-  private def tensorOf(dim: Value[Attribute]): dTensorTensorType =
-    dTensorTensorType(Seq(ValueAttribute(dim)), Float32Type())
+  private def tensorOf(dim: Value[Attribute]): DTensorTensorType =
+    DTensorTensorType(Seq(ValueAttribute(dim)), Float32Type())
 
-  private def tensorOf(dims: Seq[Value[Attribute]]): dTensorTensorType =
-    dTensorTensorType(dims.map(ValueAttribute(_)), Float32Type())
+  private def tensorOf(dims: Seq[Value[Attribute]]): DTensorTensorType =
+    DTensorTensorType(dims.map(ValueAttribute(_)), Float32Type())
 
-  private def embeddedDim(t: dTensorTensorType): Value[Attribute] =
+  private def embeddedDim(t: DTensorTensorType): Value[Attribute] =
     t.params.head.getVal()
 
-  private def embeddedDims(t: dTensorTensorType): Seq[Value[Attribute]] =
+  private def embeddedDims(t: DTensorTensorType): Seq[Value[Attribute]] =
     t.params.map(_.getVal())
 
   private def reassociation(groups: Seq[Seq[Int]]): ArrayAttribute[Attribute] =
@@ -34,9 +34,9 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   private def i32Array(values: Seq[Int]): ArrayAttribute[Attribute] =
     ArrayAttribute(values.map(i32Attr))
 
-  "dtensor type uses" should "track and rewrite embedded dimension references during RAUW" in {
-    val keptDim = Result(dTensorNatType())
-    val replacedDim = Result(dTensorNatType())
+  "d_tensor type uses" should "track and rewrite embedded dimension references during RAUW" in {
+    val keptDim = Result(DTensorNatType())
+    val replacedDim = Result(DTensorNatType())
     val kept = NatParam(keptDim)
     val replaced = NatParam(replacedDim)
     val user =
@@ -50,33 +50,33 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
 
     RewriteMethods.replaceValue(replacedDim, keptDim)
 
-    embeddedDim(user.results.head.typ.asInstanceOf[dTensorTensorType]) should be
+    embeddedDim(user.results.head.typ.asInstanceOf[DTensorTensorType]) should be
       theSameInstanceAs(keptDim)
     replacedDim.typeUses shouldBe empty
     keptDim.typeUses.size shouldBe 1
     block.operations.toSeq should contain(user)
   }
 
-  "Block.deepCopy" should "remap embedded dtensor dimensions to copied SSA values without mutating the original" in {
-    val dim = Result(dTensorNatType())
+  "Block.deepCopy" should "remap embedded d_tensor dimensions to copied SSA values without mutating the original" in {
+    val dim = Result(DTensorNatType())
     val producer = NatParam(dim)
     val tensor = Empty(Result(tensorOf(dim)))
     val original = Block(operations = Seq(producer, tensor))
 
     val copied = original.deepCopy
     val copiedProducer = copied.operations.head.asInstanceOf[NatParam]
-    val copiedTensor = copied.operations.toSeq(1).asInstanceOf[Empty]
+    val copieDTensor = copied.operations.toSeq(1).asInstanceOf[Empty]
 
     copiedProducer.res should not be theSameInstanceAs(dim)
-    embeddedDim(copiedTensor.res.typ) should be theSameInstanceAs copiedProducer.res
+    embeddedDim(copieDTensor.res.typ) should be theSameInstanceAs copiedProducer.res
     embeddedDim(tensor.res.typ) should be theSameInstanceAs dim
     embeddedDim(tensor.res.typ) should not be theSameInstanceAs(copiedProducer.res)
   }
 
   it should "remap collapse_shape embedded dimensions without mutating the original" in {
-    val m = Result(dTensorNatType())
-    val n = Result(dTensorNatType())
-    val mn = Result(dTensorNatType())
+    val m = Result(DTensorNatType())
+    val n = Result(DTensorNatType())
+    val mn = Result(DTensorNatType())
     val mProducer = NatParam(m)
     val nProducer = NatParam(n)
     val mnProducer = NatMul(m, n, mn)
@@ -103,9 +103,9 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   }
 
   it should "remap join_dim embedded dimensions without mutating the original" in {
-    val m = Result(dTensorNatType())
-    val n = Result(dTensorNatType())
-    val mn = Result(dTensorNatType())
+    val m = Result(DTensorNatType())
+    val n = Result(DTensorNatType())
+    val mn = Result(DTensorNatType())
     val mProducer = NatParam(m)
     val nProducer = NatParam(n)
     val mnProducer = NatMul(m, n, mn)
@@ -131,10 +131,10 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   }
 
   it should "remap split_dim embedded dimensions without mutating the original" in {
-    val m = Result(dTensorNatType())
-    val mt = Result(dTensorNatType())
-    val tm = Result(dTensorNatType())
-    val n = Result(dTensorNatType())
+    val m = Result(DTensorNatType())
+    val mt = Result(DTensorNatType())
+    val tm = Result(DTensorNatType())
+    val n = Result(DTensorNatType())
     val mProducer = NatParam(m)
     val mtProducer = NatParam(mt)
     val tmProducer = NatParam(tm)
@@ -168,8 +168,8 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
   }
 
   it should "remap permute_dims embedded dimensions without mutating the original" in {
-    val m = Result(dTensorNatType())
-    val n = Result(dTensorNatType())
+    val m = Result(DTensorNatType())
+    val n = Result(DTensorNatType())
     val mProducer = NatParam(m)
     val nProducer = NatParam(n)
     val source = Empty(Result(tensorOf(Seq(m, n))))
@@ -191,8 +191,8 @@ final class DTensorTransformationSafetyTest extends AnyFlatSpec:
     embeddedDims(permute.res.typ) should contain theSameElementsInOrderAs Seq(n, m)
   }
 
-  "Verifier" should "reject out-of-scope dtensor dimensions embedded in result types" in {
-    val laterDim = Result(dTensorNatType())
+  "Verifier" should "reject out-of-scope d_tensor dimensions embedded in result types" in {
+    val laterDim = Result(DTensorNatType())
     val use =
       UnregisteredOperation("test.tensor")(results =
         Seq(Result(tensorOf(laterDim)))

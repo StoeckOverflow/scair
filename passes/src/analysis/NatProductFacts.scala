@@ -1,6 +1,6 @@
 package scair.passes.analysis
 
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.ir.*
 import scair.passes.NatProvenance
 
@@ -26,7 +26,7 @@ object NatProductFacts:
 
     def key: FactorKey =
       constValue match
-        case Some(k) if value.owner.exists(_.isInstanceOf[dTensor.NatConst]) =>
+        case Some(k) if value.owner.exists(_.isInstanceOf[DTensor.NatConst]) =>
           FactorKey.Const(k)
         case _ => FactorKey.Atom(NatProvenance.resolveNat(value).getOrElse(value))
 
@@ -149,10 +149,10 @@ object NatProductFacts:
         var prelude = Seq.empty[Operation]
         var acc = first.value
         rest.foreach { factor =>
-          val mul = dTensor.NatMul(
-            acc.asInstanceOf[Operand[dTensor.dTensorNatLikeType]],
-            factor.value.asInstanceOf[Operand[dTensor.dTensorNatLikeType]],
-            Result(dTensor.dTensorNatType()),
+          val mul = DTensor.NatMul(
+            acc.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
+            factor.value.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
+            Result(DTensor.DTensorNatType()),
           )
           prelude = prelude :+ mul
           acc = mul.res
@@ -162,11 +162,11 @@ object NatProductFacts:
   private def flattenNat(v: Value[Attribute]): Seq[Factor] =
     val base = NatProvenance.resolveNat(v).getOrElse(v)
     NatProvenance.exactConst(base) match
-      case Some(k) if base.owner.exists(_.isInstanceOf[dTensor.NatConst]) =>
+      case Some(k) if base.owner.exists(_.isInstanceOf[DTensor.NatConst]) =>
         Seq(Factor(base, Some(k)))
       case _ =>
         base.owner match
-          case Some(dTensor.NatMul(lhs, rhs, _)) =>
+          case Some(DTensor.NatMul(lhs, rhs, _)) =>
             flattenNat(lhs) ++ flattenNat(rhs)
           case _ =>
             Seq(Factor(base, NatProvenance.exactConst(base)))

@@ -2,12 +2,12 @@
 
 builtin.module {
   func.func @dynamic_product_exact_tile_factorize_bridge(
-    %k0_nat: !dtensor.nat,
-    %k1_nat: !dtensor.posnat,
+    %k0_nat: !d_tensor.nat,
+    %k1_nat: !d_tensor.posnat,
     %out: memref<?xf32>
   ) {
-    %k_nat = "dtensor.nat.mul"(%k0_nat, %k1_nat) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
-    %ub = "dtensor.shape.to_index"(%k_nat) : (!dtensor.nat) -> index
+    %k_nat = "d_tensor.nat.mul"(%k0_nat, %k1_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
+    %ub = "d_tensor.shape.to_index"(%k_nat) : (!d_tensor.nat) -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 
@@ -21,11 +21,11 @@ builtin.module {
 }
 
 // CHECK-LABEL: func.func @dynamic_product_exact_tile_factorize_bridge
-// CHECK-SAME: %[[K0:[0-9]+]]: !dtensor.nat
-// CHECK-SAME: %[[K1:[0-9]+]]: !dtensor.posnat
+// CHECK-SAME: %[[K0:[0-9]+]]: !d_tensor.nat
+// CHECK-SAME: %[[K1:[0-9]+]]: !d_tensor.posnat
 // CHECK-NOT: d_affine.for
-// CHECK: %[[OUTER_UB:[0-9]+]] = "dtensor.shape.to_index"(%[[K0]]) : (!dtensor.nat) -> index
-// CHECK: %[[INNER_UB:[0-9]+]] = "dtensor.shape.to_index"(%[[K1]]) : (!dtensor.posnat) -> index
+// CHECK: %[[OUTER_UB:[0-9]+]] = "d_tensor.shape.to_index"(%[[K0]]) : (!d_tensor.nat) -> index
+// CHECK: %[[INNER_UB:[0-9]+]] = "d_tensor.shape.to_index"(%[[K1]]) : (!d_tensor.posnat) -> index
 // CHECK: affine.for %[[OI:[0-9]+]] = #map(%{{.*}}) to #map(%[[OUTER_UB]]) step 1
 // CHECK: %[[TILE_START:[0-9]+]] = "arith.muli"(%[[OI]], %[[INNER_UB]])
 // CHECK: %[[TILE_END:[0-9]+]] = "arith.addi"(%[[TILE_START]], %{{[0-9]+}})

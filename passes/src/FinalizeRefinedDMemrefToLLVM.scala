@@ -1,8 +1,8 @@
-package scair.passes.finalize_refined_dmemref_to_llvm
+package scair.passes.finalize_refined_d_memref_to_llvm
 
 import scair.MLContext
 import scair.dialects.builtin.*
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_memref
 import scair.dialects.func
 import scair.dialects.llvm
@@ -37,8 +37,8 @@ private final class Builder(val funcOp: func.Func):
 
   private def convertCarrierType(attr: Attribute): Attribute =
     attr match
-      case _: d_memref.dMemrefMemrefType => llvm.Ptr()
-      case _: dTensor.dTensorNatLikeType => llvmIndexType
+      case _: d_memref.DMemrefMemrefType => llvm.Ptr()
+      case _: DTensor.DTensorNatLikeType => llvmIndexType
       case _: IndexType                  => llvmIndexType
       case other                         => other
 
@@ -66,36 +66,36 @@ private final class Builder(val funcOp: func.Func):
         ValueRefType(cloneValueAttr(ref))
       case v: ValueAttribute =>
         cloneValueAttr(v)
-      case d_memref.dMemrefMemrefType(params, elem, offset, strides) =>
-        d_memref.dMemrefMemrefType(
+      case d_memref.DMemrefMemrefType(params, elem, offset, strides) =>
+        d_memref.DMemrefMemrefType(
           params.map(cloneDimParam),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
           offset.map(cloneLayoutParam),
           strides.map(_.map(cloneLayoutParam)),
         )
-      case d_memref.dMemrefVectorType(param, elem) =>
-        d_memref.dMemrefVectorType(
+      case d_memref.DMemrefVectorType(param, elem) =>
+        d_memref.DMemrefVectorType(
           cloneDimParam(param),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
         )
-      case d_memref.dMemrefMatrixType(rows, cols, elem) =>
-        d_memref.dMemrefMatrixType(
+      case d_memref.DMemrefMatrixType(rows, cols, elem) =>
+        d_memref.DMemrefMatrixType(
           cloneDimParam(rows),
           cloneDimParam(cols),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
         )
-      case dTensor.dTensorTensorType(params, elem) =>
-        dTensor.dTensorTensorType(
+      case DTensor.DTensorTensorType(params, elem) =>
+        DTensor.DTensorTensorType(
           params.map(cloneValueAttr),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
         )
-      case dTensor.dTensorVectorType(param, elem) =>
-        dTensor.dTensorVectorType(
+      case DTensor.DTensorVectorType(param, elem) =>
+        DTensor.DTensorVectorType(
           cloneValueAttr(param),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
         )
-      case dTensor.dTensorMatrixType(rows, cols, elem) =>
-        dTensor.dTensorMatrixType(
+      case DTensor.DTensorMatrixType(rows, cols, elem) =>
+        DTensor.DTensorMatrixType(
           cloneValueAttr(rows),
           cloneValueAttr(cols),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
@@ -137,7 +137,7 @@ private final class Builder(val funcOp: func.Func):
           )
           emit(entry, alias)
           state.valueMap(oldArg) = alias.res
-        case _: dTensor.dTensorNatLikeType =>
+        case _: DTensor.DTensorNatLikeType =>
           state.valueMap(oldArg) = newArg
         case _ => ()
     }
@@ -151,10 +151,10 @@ private final class Builder(val funcOp: func.Func):
   private def materializeLayoutParam(param: d_memref.LayoutParam, block: Block): Value[Attribute] =
     indexMaterializer.materializeLayoutParam(param, block)
 
-  private def layoutOffset(ty: d_memref.dMemrefMemrefType, block: Block): Value[Attribute] =
+  private def layoutOffset(ty: d_memref.DMemrefMemrefType, block: Block): Value[Attribute] =
     ty.offset.map(materializeLayoutParam(_, block)).getOrElse(constIndex(0, block))
 
-  private def layoutDims(ty: d_memref.dMemrefMemrefType, block: Block): Seq[Value[Attribute]] =
+  private def layoutDims(ty: d_memref.DMemrefMemrefType, block: Block): Seq[Value[Attribute]] =
     ty.params.map {
       case d: ValueAttribute => materializeNatOrIndex(d.getVal(), block)
       case IntegerAttr(IntData(v), _: IndexType | _: IntegerType) =>
@@ -162,7 +162,7 @@ private final class Builder(val funcOp: func.Func):
     }
 
   private def layoutStrides(
-      ty: d_memref.dMemrefMemrefType,
+      ty: d_memref.DMemrefMemrefType,
       dims: Seq[Value[Attribute]],
       block: Block,
   ): Seq[Value[Attribute]] =
@@ -173,13 +173,13 @@ private final class Builder(val funcOp: func.Func):
       case Some(llvm.Constant(IntegerAttr(IntData(k), _: IntegerType | _: IndexType), _)) => Some(k)
       case _                                                              => None
 
-  private def hasZeroOffset(ty: d_memref.dMemrefMemrefType): Boolean =
+  private def hasZeroOffset(ty: d_memref.DMemrefMemrefType): Boolean =
     ty.offset match
       case Some(IntegerAttr(IntData(v), _)) => v == 0
       case _                                => false
 
   private def computeLinearIndex(
-      ty: d_memref.dMemrefMemrefType,
+      ty: d_memref.DMemrefMemrefType,
       idxs: Seq[Value[Attribute]],
       block: Block,
       useFlags: Boolean,
@@ -212,7 +212,7 @@ private final class Builder(val funcOp: func.Func):
       add.res
     }
 
-  private def lowerAllocLike(ty: d_memref.dMemrefMemrefType, block: Block): Value[Attribute] =
+  private def lowerAllocLike(ty: d_memref.DMemrefMemrefType, block: Block): Value[Attribute] =
     requiredRuntimeDecls += mallocRuntimeName
     val dims = layoutDims(ty, block)
     val numElems =
@@ -307,7 +307,7 @@ private final class Builder(val funcOp: func.Func):
   private def lowerCall(call: func.Call, block: Block): func.Call =
     val loweredOperands = call._operands.map { operand =>
       operand.typ match
-        case _: dTensor.dTensorNatLikeType =>
+        case _: DTensor.DTensorNatLikeType =>
           materializeNatOrIndex(operand, block).asInstanceOf[Operand[Attribute]]
         case ValueRefType(_) =>
           materializeNatOrIndex(operand, block).asInstanceOf[Operand[Attribute]]
@@ -392,14 +392,14 @@ private final class Builder(val funcOp: func.Func):
           )
           emit(newBlock, lowered)
           state.valueMap(ptrtoint.out) = lowered.out
-        case op: dTensor.NatConst =>
+        case op: DTensor.NatConst =>
           val lowered = constIndex(op.value.value.value, newBlock)
           state.valueMap(op.res) = lowered
-        case op: dTensor.IndexToNat =>
+        case op: DTensor.IndexToNat =>
           state.valueMap(op.res) = materializeNatOrIndex(op.index, newBlock)
-        case op: dTensor.ShapeToIndex =>
+        case op: DTensor.ShapeToIndex =>
           state.valueMap(op.res) = materializeNatOrIndex(op.nat, newBlock)
-        case op: dTensor.NatAdd =>
+        case op: DTensor.NatAdd =>
           val lowered = llvm.Add(
             asLLVMIndex(materializeNatOrIndex(op.lhs, newBlock)),
             asLLVMIndex(materializeNatOrIndex(op.rhs, newBlock)),
@@ -407,7 +407,7 @@ private final class Builder(val funcOp: func.Func):
           )
           emit(newBlock, lowered)
           state.valueMap(op.res) = lowered.res
-        case op: dTensor.NatMul =>
+        case op: DTensor.NatMul =>
           val lowered = llvm.Mul(
             asLLVMIndex(materializeNatOrIndex(op.lhs, newBlock)),
             asLLVMIndex(materializeNatOrIndex(op.rhs, newBlock)),
@@ -472,6 +472,6 @@ private val LowerFunc = pattern {
 }
 
 final class FinalizeRefinedDMemrefToLLVM(ctx: MLContext) extends WalkerPass(ctx):
-  override val name: String = "finalize-refined-dmemref-to-llvm"
+  override val name: String = "finalize-refined-d-memref-to-llvm"
   override val walker: PatternRewriteWalker =
     PatternRewriteWalker(GreedyRewritePatternApplier(Seq(LowerFunc)))

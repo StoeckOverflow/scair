@@ -3,12 +3,12 @@
 // Purpose: dedicated reinterpret-cast relation coverage for dependent memrefs.
 
 builtin.module {
-  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %n = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %mn = "dtensor.nat.mul"(%m, %n) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %n = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %mn = "d_tensor.nat.mul"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
   %z = "arith.constant"() <{value = 0 : index}> : () -> index
   %o = "arith.constant"() <{value = 1 : index}> : () -> index
-  %n_idx = "dtensor.shape.to_index"(%n) : (!dtensor.nat) -> index
+  %n_idx = "d_tensor.shape.to_index"(%n) : (!d_tensor.nat) -> index
   %flat = d_memref.alloc : () -> !d_memref.memref<[%mn], f32>
   %view = d_memref.reinterpret_cast %flat
     : !d_memref.memref<[%mn], f32>
@@ -20,12 +20,12 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-// CHECK-NEXT:   %1 = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-// CHECK-NEXT:   %2 = "dtensor.nat.mul"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+// CHECK-NEXT:   %0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+// CHECK-NEXT:   %1 = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+// CHECK-NEXT:   %2 = "d_tensor.nat.mul"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
 // CHECK-NEXT:   %3 = "arith.constant"() <{value = 0 : index}> : () -> index
 // CHECK-NEXT:   %4 = "arith.constant"() <{value = 1 : index}> : () -> index
-// CHECK-NEXT:   %5 = "dtensor.shape.to_index"(%1) : (!dtensor.nat) -> index
+// CHECK-NEXT:   %5 = "d_tensor.shape.to_index"(%1) : (!d_tensor.nat) -> index
 // CHECK-NEXT:   %6 = d_memref.alloc : () -> !d_memref.memref<[%2], f32>
 // CHECK-NEXT:   %7 = d_memref.reinterpret_cast %6
 // CHECK-NEXT:   : !d_memref.memref<[%2], f32> to !d_memref.memref<[%0, %1], f32, offset: %3, strides: [%5, %4]>
@@ -37,12 +37,12 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %n = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %mn = "dtensor.nat.mul"(%m, %n) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %n = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %mn = "d_tensor.nat.mul"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
   %z = "arith.constant"() <{value = 0 : index}> : () -> index
   %o = "arith.constant"() <{value = 1 : index}> : () -> index
-  %n_idx = "dtensor.shape.to_index"(%n) : (!dtensor.nat) -> index
+  %n_idx = "d_tensor.shape.to_index"(%n) : (!d_tensor.nat) -> index
   %flat = d_memref.alloc : () -> !d_memref.memref<[%mn], f32>
   %view = d_memref.reinterpret_cast %flat
     : !d_memref.memref<[%mn], f32>

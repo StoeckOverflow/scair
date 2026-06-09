@@ -12,80 +12,80 @@
 
 // Parse/print + verify with nat.param in type params (tensor + sugar forms).
 builtin.module {
-  %m = "dtensor.nat.param"() : () -> !dtensor.nat
-  %n = "dtensor.nat.param"() : () -> !dtensor.nat
-  %v = "test.v"() : () -> !dtensor.vector<%m, f32>
-  %mat = "test.mat"() : () -> !dtensor.matrix<%m, %n, f32>
-  %t = "test.t"() : () -> !dtensor.tensor<[%m, %n], f32>
+  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %v = "test.v"() : () -> !d_tensor.vector<%m, f32>
+  %mat = "test.mat"() : () -> !d_tensor.matrix<%m, %n, f32>
+  %t = "test.t"() : () -> !d_tensor.tensor<[%m, %n], f32>
   "test.keep_types"(%v, %mat, %t)
-    : (!dtensor.vector<%m, f32>, !dtensor.matrix<%m, %n, f32>, !dtensor.tensor<[%m, %n], f32>) -> ()
+    : (!d_tensor.vector<%m, f32>, !d_tensor.matrix<%m, %n, f32>, !d_tensor.tensor<[%m, %n], f32>) -> ()
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// VERIFY:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// VERIFY:   %2 = "test.v"() : () -> !dtensor.vector<%0, f32>
-// VERIFY:   %3 = "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
-// VERIFY:   %4 = "test.t"() : () -> !dtensor.tensor<[%0, %1], f32>
-// VERIFY:   "test.keep_types"(%2, %3, %4) : (!dtensor.vector<%0, f32>, !dtensor.matrix<%0, %1, f32>, !dtensor.tensor<[%0, %1], f32>) -> ()
+// VERIFY:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
+// VERIFY:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
+// VERIFY:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
+// VERIFY:   "test.keep_types"(%2, %3, %4) : (!d_tensor.vector<%0, f32>, !d_tensor.matrix<%0, %1, f32>, !d_tensor.tensor<[%0, %1], f32>) -> ()
 // VERIFY: }
 
 // CANON: builtin.module {
-// CANON:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CANON:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CANON:   %2 = "test.v"() : () -> !dtensor.vector<%0, f32>
-// CANON:   %3 = "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
-// CANON:   %4 = "test.t"() : () -> !dtensor.tensor<[%0, %1], f32>
-// CANON:   "test.keep_types"(%2, %3, %4) : (!dtensor.vector<%0, f32>, !dtensor.matrix<%0, %1, f32>, !dtensor.tensor<[%0, %1], f32>) -> ()
+// CANON:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
+// CANON:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
+// CANON:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
+// CANON:   "test.keep_types"(%2, %3, %4) : (!d_tensor.vector<%0, f32>, !d_tensor.matrix<%0, %1, f32>, !d_tensor.tensor<[%0, %1], f32>) -> ()
 // CANON: }
 
 // CSE: builtin.module {
-// CSE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CSE:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CSE:   %2 = "test.v"() : () -> !dtensor.vector<%0, f32>
-// CSE:   %3 = "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
-// CSE:   %4 = "test.t"() : () -> !dtensor.tensor<[%0, %1], f32>
-// CSE:   "test.keep_types"(%2, %3, %4) : (!dtensor.vector<%0, f32>, !dtensor.matrix<%0, %1, f32>, !dtensor.tensor<[%0, %1], f32>) -> ()
+// CSE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CSE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CSE:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
+// CSE:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
+// CSE:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
+// CSE:   "test.keep_types"(%2, %3, %4) : (!d_tensor.vector<%0, f32>, !d_tensor.matrix<%0, %1, f32>, !d_tensor.tensor<[%0, %1], f32>) -> ()
 // CSE: }
 
 // DCE: builtin.module {
-// DCE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// DCE:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// DCE:   %2 = "test.v"() : () -> !dtensor.vector<%0, f32>
-// DCE:   %3 = "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
-// DCE:   %4 = "test.t"() : () -> !dtensor.tensor<[%0, %1], f32>
-// DCE:   "test.keep_types"(%2, %3, %4) : (!dtensor.vector<%0, f32>, !dtensor.matrix<%0, %1, f32>, !dtensor.tensor<[%0, %1], f32>) -> ()
+// DCE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// DCE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// DCE:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
+// DCE:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
+// DCE:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
+// DCE:   "test.keep_types"(%2, %3, %4) : (!d_tensor.vector<%0, f32>, !d_tensor.matrix<%0, %1, f32>, !d_tensor.tensor<[%0, %1], f32>) -> ()
 // DCE: }
 
 // PIPE: builtin.module {
-// PIPE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE:   %2 = "test.v"() : () -> !dtensor.vector<%0, f32>
-// PIPE:   %3 = "test.mat"() : () -> !dtensor.matrix<%0, %1, f32>
-// PIPE:   %4 = "test.t"() : () -> !dtensor.tensor<[%0, %1], f32>
-// PIPE:   "test.keep_types"(%2, %3, %4) : (!dtensor.vector<%0, f32>, !dtensor.matrix<%0, %1, f32>, !dtensor.tensor<[%0, %1], f32>) -> ()
+// PIPE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
+// PIPE:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
+// PIPE:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
+// PIPE:   "test.keep_types"(%2, %3, %4) : (!d_tensor.vector<%0, f32>, !d_tensor.matrix<%0, %1, f32>, !d_tensor.tensor<[%0, %1], f32>) -> ()
 // PIPE: }
 
 // -----
 
 // CSE must not merge nat.param producers (fresh identity).
 builtin.module {
-  %p0 = "dtensor.nat.param"() : () -> !dtensor.nat
-  %p1 = "dtensor.nat.param"() : () -> !dtensor.nat
-  "test.keep_params"(%p0, %p1) : (!dtensor.nat, !dtensor.nat) -> ()
+  %p0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %p1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  "test.keep_params"(%p0, %p1) : (!d_tensor.nat, !d_tensor.nat) -> ()
 }
 
 // CSE: builtin.module {
-// CSE:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CSE:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CSE:   "test.keep_params"(%0, %1) : (!dtensor.nat, !dtensor.nat) -> ()
+// CSE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CSE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CSE:   "test.keep_params"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> ()
 // CSE: }
 
 // -----
 
 // Dead nat.param should be removed by DCE.
 builtin.module {
-  %p = "dtensor.nat.param"() : () -> !dtensor.nat
+  %p = "d_tensor.nat.param"() : () -> !d_tensor.nat
 }
 
 // DCE: builtin.module {

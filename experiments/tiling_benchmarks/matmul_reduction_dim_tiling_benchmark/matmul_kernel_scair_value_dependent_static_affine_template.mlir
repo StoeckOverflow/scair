@@ -8,10 +8,10 @@ builtin.module {
     %Bflat : memref<?xf32>,
     %Cflat : memref<?xf32>
   ) attributes {llvm.emit_c_interface = true} {
-    %k0_nat = "dtensor.index_to_nat"(%k0) : (index) -> !dtensor.nat
-    %k1_nat = "dtensor.nat.const"() <{value = __K1__ : i32}> : () -> !dtensor.nat
-    %k_nat = "dtensor.nat.mul"(%k0_nat, %k1_nat) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-    %k = "dtensor.shape.to_index"(%k_nat) : (!dtensor.nat) -> index
+    %k0_nat = "d_tensor.index_to_nat"(%k0) : (index) -> !d_tensor.nat
+    %k1_nat = "d_tensor.nat.const"() <{value = __K1__ : i32}> : () -> !d_tensor.nat
+    %k_nat = "d_tensor.nat.mul"(%k0_nat, %k1_nat) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+    %k = "d_tensor.shape.to_index"(%k_nat) : (!d_tensor.nat) -> index
 
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %c1 = "arith.constant"() <{value = 1 : index}> : () -> index

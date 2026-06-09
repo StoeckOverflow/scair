@@ -1,7 +1,7 @@
 builtin.module {
   func.func @semi_affine_fill_and_sum(
-    %rows_nat : !dtensor.nat,
-    %cols_nat : !dtensor.nat,
+    %rows_nat : !d_tensor.nat,
+    %cols_nat : !d_tensor.nat,
     %stride0 : index,
     %stride1 : index,
     %flat : !d_memref.memref<[], f32>,
@@ -10,8 +10,8 @@ builtin.module {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
     %f1 = "arith.constant"() <{value = 1.0 : f32}> : () -> f32
-    %rows = "dtensor.shape.to_index"(%rows_nat) : (!dtensor.nat) -> index
-    %cols = "dtensor.shape.to_index"(%cols_nat) : (!dtensor.nat) -> index
+    %rows = "d_tensor.shape.to_index"(%rows_nat) : (!d_tensor.nat) -> index
+    %cols = "d_tensor.shape.to_index"(%cols_nat) : (!d_tensor.nat) -> index
 
     %buf = d_memref.reinterpret_cast %flat
       : !d_memref.memref<[], f32>

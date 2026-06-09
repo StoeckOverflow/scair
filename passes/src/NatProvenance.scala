@@ -2,7 +2,7 @@ package scair.passes
 
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.dTensor.*
+import scair.dialects.d_tensor.*
 import scair.dialects.d_affine
 import scair.ir.*
 import scair.utils.OK
@@ -92,20 +92,20 @@ object NatProvenance:
             val idx = dimNames.indexOf(position)
             if idx < 0 then None
             else
-              dTensorTypeUtil.resolveNatFromIndexValue(dimOperands(idx)) match
+              DTensorTypeUtil.resolveNatFromIndexValue(dimOperands(idx)) match
                 case OK(nat) => Some(nat)
                 case _       => None
           case AffineSymExpr(position) =>
             val idx = symNames.indexOf(position)
             if idx < 0 then None
             else
-              dTensorTypeUtil.resolveNatFromIndexValue(symbolOperands(idx)) match
+              DTensorTypeUtil.resolveNatFromIndexValue(symbolOperands(idx)) match
                 case OK(nat) => Some(nat)
                 case _       => None
           case _ => None
 
   def resolveNat(v: Value[Attribute]): Option[Value[Attribute]] =
-    dTensorTypeUtil.resolveNatProvenance(v) match
+    DTensorTypeUtil.resolveNatProvenance(v) match
       case OK(nat) => Some(nat)
       case _       =>
         v.owner match
@@ -177,7 +177,7 @@ object NatProvenance:
           else
             inProgress += base
             val out =
-              base.typ.isInstanceOf[dTensorPosNatType] ||
+              base.typ.isInstanceOf[DTensorPosNatType] ||
                 exactConst(base).exists(_ > 0) ||
                 (base.owner match
                   case Some(ShapeToIndex(nat, _))    => eval(nat)

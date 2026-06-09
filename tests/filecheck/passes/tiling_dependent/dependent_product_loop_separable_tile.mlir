@@ -12,11 +12,11 @@ builtin.module {
   }
 
   func.func @natmul_still_prefers_exact(%init: f32) -> f32 {
-    %n0 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-    %tile_nat = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-    %n_nat = "dtensor.nat.mul"(%n0, %tile_nat) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+    %n0 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+    %tile_nat = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+    %n_nat = "d_tensor.nat.mul"(%n0, %tile_nat) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
-    %n = "dtensor.shape.to_index"(%n_nat) : (!dtensor.nat) -> index
+    %n = "d_tensor.shape.to_index"(%n_nat) : (!d_tensor.nat) -> index
     %sum = d_affine.for %i = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%n) step 1 : index iter_args(%acc = %init : f32) {
       d_affine.yield %acc : (f32)
     }

@@ -3,7 +3,7 @@ package scair.passes.dependent_natmul_loop_factorization
 import scair.MLContext
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_affine
 import scair.ir.*
 import scair.passes.NatProvenance
@@ -20,9 +20,9 @@ private def asIndex(v: Value[Attribute]): Operand[IndexType] =
 private def idxConst(v: BigInt): arith.Constant =
   arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
 
-private def toIndex(nat: Value[Attribute]): dTensor.ShapeToIndex =
-  dTensor.ShapeToIndex(
-    nat.asInstanceOf[Operand[dTensor.dTensorNatLikeType]],
+private def toIndex(nat: Value[Attribute]): DTensor.ShapeToIndex =
+  DTensor.ShapeToIndex(
+    nat.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
     Result(IndexType()),
   )
 

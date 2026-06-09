@@ -1,19 +1,19 @@
 builtin.module {
   func.func @checksum_dynamic(
-    %n_nat : !dtensor.nat,
-    %cout_nat : !dtensor.nat,
-    %oh_nat : !dtensor.nat,
-    %ow_nat : !dtensor.nat,
+    %n_nat : !d_tensor.nat,
+    %cout_nat : !d_tensor.nat,
+    %oh_nat : !d_tensor.nat,
+    %ow_nat : !d_tensor.nat,
     %Yflat : !d_memref.memref<[], f32>,
     %out : !d_memref.memref<[1], f32>
   ) attributes {scair.emit_bare_interface = true} {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-    %n = "dtensor.shape.to_index"(%n_nat) : (!dtensor.nat) -> index
-    %cout = "dtensor.shape.to_index"(%cout_nat) : (!dtensor.nat) -> index
-    %oh = "dtensor.shape.to_index"(%oh_nat) : (!dtensor.nat) -> index
-    %ow = "dtensor.shape.to_index"(%ow_nat) : (!dtensor.nat) -> index
+    %n = "d_tensor.shape.to_index"(%n_nat) : (!d_tensor.nat) -> index
+    %cout = "d_tensor.shape.to_index"(%cout_nat) : (!d_tensor.nat) -> index
+    %oh = "d_tensor.shape.to_index"(%oh_nat) : (!d_tensor.nat) -> index
+    %ow = "d_tensor.shape.to_index"(%ow_nat) : (!d_tensor.nat) -> index
     %ohow = "arith.muli"(%oh, %ow) : (index, index) -> index
     %cout_ohow = "arith.muli"(%cout, %ohow) : (index, index) -> index
 

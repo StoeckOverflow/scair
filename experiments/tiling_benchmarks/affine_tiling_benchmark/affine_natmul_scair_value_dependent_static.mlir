@@ -1,11 +1,11 @@
 builtin.module {
   func.func @affine_value_dependent_static_product(
-    %k0_nat: !dtensor.nat,
+    %k0_nat: !d_tensor.nat,
     %out: memref<?xf32>
   ) {
-    %k1_nat = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-    %k_nat = "dtensor.nat.mul"(%k0_nat, %k1_nat) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-    %k = "dtensor.shape.to_index"(%k_nat) : (!dtensor.nat) -> index
+    %k1_nat = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+    %k_nat = "d_tensor.nat.mul"(%k0_nat, %k1_nat) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+    %k = "d_tensor.shape.to_index"(%k_nat) : (!d_tensor.nat) -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 

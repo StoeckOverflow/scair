@@ -49,7 +49,7 @@ Stock MLIR already has useful local shape cleanup:
   use a global symbolic shape contract for unrelated tensor SSA values.
 
 The dependent route does not replace those mechanisms. It exposes the same-shape contract earlier
-and more directly: `!dtensor.tensor<[%m, %n], f32>` records that different tensor SSA values share
+and more directly: `!d_tensor.tensor<[%m, %n], f32>` records that different tensor SSA values share
 the same dimensions.
 
 ## Run

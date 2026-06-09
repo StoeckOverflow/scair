@@ -58,7 +58,7 @@ write_route_manifest() {
 |---|---|---|
 | `ordinary_tail` | `ordinary_tail` | Ordinary `arith.muli` product keeps affine min tail. |
 | `non_divisible_ordinary` | `ordinary_tail` | Ordinary static product that is not divisible by the benchmark tile keeps affine min tail. |
-| `dependent_exact_dynamic` | `dependent_exact_dynamic` | Explicit `dtensor.nat.mul` with `!dtensor.posnat` factor exact-tiles with dynamic step and no tail. |
+| `dependent_exact_dynamic` | `dependent_exact_dynamic` | Explicit `d_tensor.nat.mul` with `!d_tensor.posnat` factor exact-tiles with dynamic step and no tail. |
 | `dependent_static_affine` | `dependent_exact_static_affine` | Static nat factor exact-tiles and bridges to stock `affine.for` with static step. |
 | `runtime_checked_dynamic` | `dependent_exact_runtime_checked` | `cf.assert` refinement enables dynamic exact tiling, then lowers to aborting LLVM-style CFG and erases nat proofs late. |
 | `zero_negative` | `zero_negative_control` | Explicit `nat.const 0` blocks exact tiling. |
@@ -89,35 +89,35 @@ MD
   {
     "case": "dependent_exact_dynamic",
     "canonical_route": "dependent_exact_dynamic",
-    "script_route": "canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps",
+    "script_route": "canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps",
     "expected_tail": "none",
     "positivity_source": "posnat_type"
   },
   {
     "case": "dependent_static_affine",
     "canonical_route": "dependent_exact_static_affine",
-    "script_route": "canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible",
+    "script_route": "canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible",
     "expected_tail": "none",
     "positivity_source": "nat_const_positive"
   },
   {
     "case": "runtime_checked_dynamic",
     "canonical_route": "dependent_exact_runtime_checked",
-    "script_route": "refine-positive-nats-from-asserts,canonicalize-dtensor-nat-products,dependent-exact-tile,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,lower-refined-control-flow-to-llvm,lower-cf-assert-to-llvm,erase-dtensor-nat-proofs-to-index",
+    "script_route": "refine-positive-nats-from-asserts,canonicalize-d-tensor-nat-products,dependent-exact-tile,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,lower-refined-control-flow-to-llvm,lower-cf-assert-to-llvm,erase-d-tensor-nat-proofs-to-index",
     "expected_tail": "none",
     "positivity_source": "cf_assert_refinement"
   },
   {
     "case": "zero_negative",
     "canonical_route": "zero_negative_control",
-    "script_route": "canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile",
+    "script_route": "canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile",
     "expected_tail": "not_tiled",
     "positivity_source": "explicit_zero_rejected"
   },
   {
     "case": "nested_commuted_product",
     "canonical_route": "dependent_exact_dynamic",
-    "script_route": "canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile",
+    "script_route": "canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile",
     "expected_tail": "none",
     "positivity_source": "nat_const_positive"
   },
@@ -165,7 +165,7 @@ append_case_row() {
     printf '%s,' "$(tail_bound_kind "$tiled")"
     printf '%s,' "$(count_dynamic_step_ops "$tiled")"
     printf '%s,' "$(count_static_step_ops "$tiled")"
-    printf '%s,' "$(count_dtensor_nat_ops "$tiled")"
+    printf '%s,' "$(count_d_tensor_nat_ops "$tiled")"
     printf '%s,' "$(count_d_affine_for_ops "$tiled")"
     printf '%s,' "$(count_affine_for_ops "$tiled")"
     printf '%s,' "$(count_min_ops "$tiled")"
@@ -185,15 +185,15 @@ validate_case() {
     ordinary_tail)
       require_ir_pattern "$path" 'arith\.muli' "ordinary route must keep operational index product"
       require_ir_pattern "$path" ' to min ' "ordinary route must keep affine min tail"
-      reject_ir_pattern "$path" 'dtensor\.nat\.mul|d_affine\.for' "ordinary route must not use dependent product proof or d_affine loop"
+      reject_ir_pattern "$path" 'd_tensor\.nat\.mul|d_affine\.for' "ordinary route must not use dependent product proof or d_affine loop"
       ;;
     non_divisible_ordinary)
       require_ir_pattern "$path" 'arith\.muli' "non-divisible ordinary route must keep operational index product"
       require_ir_pattern "$path" ' to min ' "non-divisible ordinary route must keep affine min tail"
-      reject_ir_pattern "$path" 'dtensor\.nat\.mul|d_affine\.for' "non-divisible ordinary route must not use dependent product proof or d_affine loop"
+      reject_ir_pattern "$path" 'd_tensor\.nat\.mul|d_affine\.for' "non-divisible ordinary route must not use dependent product proof or d_affine loop"
       ;;
     dependent_exact_dynamic)
-      require_ir_pattern "$path" 'dtensor\.nat\.mul' "dependent dynamic route must preserve natmul proof before erasure"
+      require_ir_pattern "$path" 'd_tensor\.nat\.mul' "dependent dynamic route must preserve natmul proof before erasure"
       require_ir_pattern "$path" 'step %[A-Za-z0-9_]+ : index' "dependent dynamic route must use proven positive dynamic step"
       reject_ir_pattern "$path" 'arith\.minsi| to min |affine\.min|d_affine\.min' "dependent exact route must not keep tail/min"
       ;;
@@ -205,25 +205,25 @@ validate_case() {
       require_ir_pattern "$path" 'llvm\.cond_br' "runtime checked route must lower assertion/control flow"
       require_ir_pattern "$path" 'llvm\.call @abort|callee = @abort' "runtime checked route must lower failing assert to abort"
       require_ir_pattern "$path" 'llvm\.unreachable' "runtime checked route must terminate assert failure block"
-      reject_ir_pattern "$path" 'dtensor\.|d_affine\.for|cf\.assert|arith\.minsi| to min |affine\.min|d_affine\.min' "runtime checked route must erase proofs and tails"
+      reject_ir_pattern "$path" 'd_tensor\.|d_affine\.for|cf\.assert|arith\.minsi| to min |affine\.min|d_affine\.min' "runtime checked route must erase proofs and tails"
       ;;
     zero_negative)
-      require_ir_pattern "$path" 'dtensor\.nat\.const.*value = 0' "zero negative control must keep explicit zero factor"
+      require_ir_pattern "$path" 'd_tensor\.nat\.const.*value = 0' "zero negative control must keep explicit zero factor"
       require_ir_pattern "$path" 'd_affine\.for %[A-Za-z0-9_]+ = .* step 1 : index' "zero factor must not exact-tile"
       reject_ir_pattern "$path" 'scair\.dependent_product_loop_exact_tile|step 4 : i32|step %[A-Za-z0-9_]+' "zero factor must not produce exact tile loop"
       ;;
     nested_commuted_product)
-      require_ir_pattern "$path" 'dtensor\.nat\.mul' "nested/commuted route must preserve explicit product proof before erasure"
+      require_ir_pattern "$path" 'd_tensor\.nat\.mul' "nested/commuted route must preserve explicit product proof before erasure"
       require_ir_pattern "$path" 'd_affine\.for %[A-Za-z0-9_]+ = .* step 7 : i32' "nested/commuted route must tile by explicit rightmost positive factor"
       reject_ir_pattern "$path" 'arith\.minsi| to min |affine\.min|d_affine\.min' "nested/commuted exact route must not keep tail/min"
       ;;
     nested_commuted_product_lazy)
-      require_ir_pattern "$path" 'dtensor\.nat\.mul' "lazy nested/commuted route must preserve explicit product proof before erasure"
+      require_ir_pattern "$path" 'd_tensor\.nat\.mul' "lazy nested/commuted route must preserve explicit product proof before erasure"
       require_ir_pattern "$path" 'd_affine\.for %[A-Za-z0-9_]+ = .* step 7 : i32' "lazy nested/commuted route must tile without eager product canonicalization"
       reject_ir_pattern "$path" 'arith\.minsi| to min |affine\.min|d_affine\.min' "lazy nested/commuted exact route must not keep tail/min"
       ;;
     tail_product_factor_lazy)
-      require_ir_pattern "$path" 'dtensor\.nat\.mul' "tail product-factor route must preserve explicit product proof before erasure"
+      require_ir_pattern "$path" 'd_tensor\.nat\.mul' "tail product-factor route must preserve explicit product proof before erasure"
       require_ir_pattern "$path" 'step %[A-Za-z0-9_]+ : index' "tail product-factor route must retain a proven dynamic step"
       reject_ir_pattern "$path" 'arith\.minsi| to min |affine\.min|d_affine\.min' "tail product-factor route must remove the explicit product-factor clamp"
       ;;
@@ -279,7 +279,7 @@ run_case "non_divisible_ordinary" \
 
 run_case "dependent_exact_dynamic" \
   "dependent_exact_dynamic" \
-  "canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps" \
+  "canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps" \
   "positive_exact" \
   "K0*K1" \
   "posnat_type" \
@@ -288,7 +288,7 @@ run_case "dependent_exact_dynamic" \
 
 run_case "dependent_static_affine" \
   "dependent_exact_static_affine" \
-  "canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible,canonicalize,cse,dce" \
+  "canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible,canonicalize,cse,dce" \
   "positive_static_bridge" \
   "K0*const3" \
   "nat_const_positive" \
@@ -297,7 +297,7 @@ run_case "dependent_static_affine" \
 
 run_case "runtime_checked_dynamic" \
   "dependent_exact_runtime_checked" \
-  "refine-positive-nats-from-asserts,canonicalize-dtensor-nat-products,dependent-exact-tile,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,lower-refined-control-flow-to-llvm,lower-cf-assert-to-llvm,erase-dtensor-nat-proofs-to-index,canonicalize,cse,dce" \
+  "refine-positive-nats-from-asserts,canonicalize-d-tensor-nat-products,dependent-exact-tile,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,lower-refined-control-flow-to-llvm,lower-cf-assert-to-llvm,erase-d-tensor-nat-proofs-to-index,canonicalize,cse,dce" \
   "positive_runtime_checked" \
   "K0*K1" \
   "cf_assert_refinement" \
@@ -306,7 +306,7 @@ run_case "runtime_checked_dynamic" \
 
 run_case "zero_negative" \
   "zero_negative_control" \
-  "canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile" \
+  "canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile" \
   "negative_control" \
   "const4*const0" \
   "explicit_zero_rejected" \
@@ -315,7 +315,7 @@ run_case "zero_negative" \
 
 run_case "nested_commuted_product" \
   "dependent_exact_dynamic" \
-  "canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile" \
+  "canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile" \
   "positive_exact" \
   "(K1*K0)*K2" \
   "nat_const_positive" \

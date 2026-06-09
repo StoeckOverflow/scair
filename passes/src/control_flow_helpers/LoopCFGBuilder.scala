@@ -38,7 +38,7 @@ def identityOrConstBound(
         else Some(Right(operands(idx)))
       case _ => None
 
-def explainUnsupportedAffineExpr(expr: AffineExpr): Option[String] =
+def explainUnsupporteDAffineExpr(expr: AffineExpr): Option[String] =
   expr match
     case _: AffineConstantExpr | _: AffineDimExpr | _: AffineSymExpr => None
     case AffineBinaryOpExpr(
@@ -46,12 +46,12 @@ def explainUnsupportedAffineExpr(expr: AffineExpr): Option[String] =
           lhs,
           rhs,
         ) =>
-      explainUnsupportedAffineExpr(lhs)
-        .orElse(explainUnsupportedAffineExpr(rhs))
+      explainUnsupporteDAffineExpr(lhs)
+        .orElse(explainUnsupporteDAffineExpr(rhs))
     case AffineBinaryOpExpr(AffineBinaryOp.Multiply, lhs, rhs) =>
       (lhs, rhs) match
-        case (_: AffineConstantExpr, _) => explainUnsupportedAffineExpr(rhs)
-        case (_, _: AffineConstantExpr) => explainUnsupportedAffineExpr(lhs)
+        case (_: AffineConstantExpr, _) => explainUnsupporteDAffineExpr(rhs)
+        case (_, _: AffineConstantExpr) => explainUnsupporteDAffineExpr(lhs)
         case _                          =>
           Some(
             "multiplication is only supported when one operand is a constant"
@@ -65,12 +65,12 @@ def explainUnsupportedAffineExpr(expr: AffineExpr): Option[String] =
         "ceildiv, floordiv, and mod affine expressions are not supported by refined CFG lowering"
       )
 
-def explainUnsupportedAffineMap(map: AffineMapAttr): Option[String] =
+def explainUnsupporteDAffineMap(map: AffineMapAttr): Option[String] =
   if map.affineMap.affineExprs.size != 1 then
     Some(
       s"expected single-result affine map, got ${map.affineMap.affineExprs.size} results"
     )
-  else explainUnsupportedAffineExpr(map.affineMap.affineExprs.head)
+  else explainUnsupporteDAffineExpr(map.affineMap.affineExprs.head)
 
 final class LoopCFGBuilder(val blocks: mutable.ArrayBuffer[Block]):
 

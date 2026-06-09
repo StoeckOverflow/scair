@@ -3,7 +3,7 @@ package scair.passes.dependent_dim_query_elim
 import scair.MLContext
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.ir.*
 import scair.transformations.{
   GreedyRewritePatternApplier,
@@ -14,20 +14,20 @@ import scair.transformations.{
 }
 import scair.utils.*
 
-private val EliminateDTensorDim = pattern { case op: dTensor.Dim =>
+private val EliminateDTensorDim = pattern { case op: DTensor.Dim =>
   op.selectedDimValue match
     case OK(selected) =>
-      dTensor.dTensorTypeUtil.resolveNatValue(selected) match
+      DTensor.DTensorTypeUtil.resolveNatValue(selected) match
         case OK(baseNat) => (Seq.empty[Operation], baseNat)
         case _           => PatternAction.Abort
     case _ => PatternAction.Abort
 }
 
-private val ShapeToIndexNatConst = pattern { case op: dTensor.ShapeToIndex =>
-  dTensor.dTensorTypeUtil.resolveNatValue(op.nat) match
+private val ShapeToIndexNatConst = pattern { case op: DTensor.ShapeToIndex =>
+  DTensor.DTensorTypeUtil.resolveNatValue(op.nat) match
     case OK(nat) =>
       nat.owner match
-        case Some(dTensor.NatConst(value, _)) =>
+        case Some(DTensor.NatConst(value, _)) =>
           arith.Constant(
             IntegerAttr(IntData(value.value.value), IndexType()),
             Result(IndexType()),

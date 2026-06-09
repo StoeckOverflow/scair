@@ -6,12 +6,12 @@ builtin.module {
   func.func @hoist(%stride0 : index, %stride1 : index) -> f32 {
     %c256 = "arith.constant"() <{value = 256 : index}> : () -> index
     %total = "arith.muli"(%c256, %stride0) : (index, index) -> index
-    %flat_nat = "dtensor.index_to_nat"(%total) : (index) -> !dtensor.nat
+    %flat_nat = "d_tensor.index_to_nat"(%total) : (index) -> !d_tensor.nat
     %flat = d_memref.alloc : () -> !d_memref.memref<[%flat_nat], f32>
     %c1024 = "arith.constant"() <{value = 1024 : index}> : () -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
-    %d0 = "dtensor.nat.const"() <{value = 256 : i32}> : () -> !dtensor.nat
-    %d1 = "dtensor.nat.const"() <{value = 1024 : i32}> : () -> !dtensor.nat
+    %d0 = "d_tensor.nat.const"() <{value = 256 : i32}> : () -> !d_tensor.nat
+    %d1 = "d_tensor.nat.const"() <{value = 1024 : i32}> : () -> !d_tensor.nat
     %buf = d_memref.reinterpret_cast %flat
     : !d_memref.memref<[%flat_nat], f32> to !d_memref.memref<[%d0, %d1], f32, offset: %c0, strides: [%stride0, %stride1]>
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
@@ -30,12 +30,12 @@ builtin.module {
 // CHECK-LABEL: func.func @hoist(%0: index, %1: index) -> f32 {
 // CHECK-NEXT:    %2 = "arith.constant"() <{value = 256 : index}> : () -> index
 // CHECK-NEXT:    %3 = "arith.muli"(%2, %0) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
-// CHECK-NEXT:    %4 = "dtensor.index_to_nat"(%3) : (index) -> !dtensor.nat
+// CHECK-NEXT:    %4 = "d_tensor.index_to_nat"(%3) : (index) -> !d_tensor.nat
 // CHECK-NEXT:    %5 = d_memref.alloc : () -> !d_memref.memref<[%4], f32>
 // CHECK-NEXT:    %6 = "arith.constant"() <{value = 1024 : index}> : () -> index
 // CHECK-NEXT:    %7 = "arith.constant"() <{value = 0 : index}> : () -> index
-// CHECK-NEXT:    %8 = "dtensor.nat.const"() <{value = 256 : i32}> : () -> !dtensor.nat
-// CHECK-NEXT:    %9 = "dtensor.nat.const"() <{value = 1024 : i32}> : () -> !dtensor.nat
+// CHECK-NEXT:    %8 = "d_tensor.nat.const"() <{value = 256 : i32}> : () -> !d_tensor.nat
+// CHECK-NEXT:    %9 = "d_tensor.nat.const"() <{value = 1024 : i32}> : () -> !d_tensor.nat
 // CHECK-NEXT:    %10 = d_memref.reinterpret_cast %5
 // CHECK-NEXT:    : !d_memref.memref<[%4], f32> to !d_memref.memref<[%8, %9], f32, offset: %7, strides: [%0, %1]>
 // CHECK-NEXT:    %11 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32

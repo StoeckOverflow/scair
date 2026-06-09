@@ -1,14 +1,14 @@
-package scair.passes.dtensor_shape_canonicalize
+package scair.passes.d_tensor_shape_canonicalize
 
 import scair.MLContext
 import scair.dialects.builtin.*
-import scair.dialects.dTensor.*
+import scair.dialects.d_tensor.*
 import scair.ir.*
 import scair.utils.OK
 import scair.transformations.{GreedyRewritePatternApplier, PatternRewriteWalker, WalkerPass, PatternAction, pattern}
 
 private def constValue(
-    v: Value[dTensorNatLikeType]
+    v: Value[DTensorNatLikeType]
 ): Option[(BigInt, IntegerType | IndexType)] =
   v.owner match
     case Some(NatConst(IntegerAttr(IntData(k), typ), _)) => Some((k, typ))
@@ -17,7 +17,7 @@ private def constValue(
 private def mkNatConst(
     k: BigInt,
     typ: IntegerType | IndexType,
-    resType: dTensorNatLikeType,
+    resType: DTensorNatLikeType,
 ): NatConst =
   NatConst(IntegerAttr(IntData(k), typ), Result(resType))
 
@@ -39,10 +39,10 @@ private def parseReassociationGroups(
 private def productType(
     lhs: Value[Attribute],
     rhs: Value[Attribute],
-): dTensorNatLikeType =
+): DTensorNatLikeType =
   (lhs.typ, rhs.typ) match
-    case (_: dTensorPosNatType, _: dTensorPosNatType) => dTensorPosNatType()
-    case _                                            => dTensorNatType()
+    case (_: DTensorPosNatType, _: DTensorPosNatType) => DTensorPosNatType()
+    case _                                            => DTensorNatType()
 
 private def buildOrderedProduct(
     dims: Seq[Value[Attribute]]
@@ -55,8 +55,8 @@ private def buildOrderedProduct(
         rest.foldLeft((Seq.empty[Operation], first)) {
           case ((ops, acc), dim) =>
             val mul = NatMul(
-              acc.asInstanceOf[Operand[dTensorNatLikeType]],
-              dim.asInstanceOf[Operand[dTensorNatLikeType]],
+              acc.asInstanceOf[Operand[DTensorNatLikeType]],
+              dim.asInstanceOf[Operand[DTensorNatLikeType]],
               Result(productType(acc, dim)),
             )
             (ops :+ mul, mul.res)
@@ -66,20 +66,20 @@ private def buildOrderedProduct(
 private def tensorTypeWithDims(
     dims: Seq[Value[Attribute]],
     elem: TypeAttribute,
-): dTensorTensorType =
-  dTensorTensorType(dims.map(ValueAttribute(_)), elem)
+): DTensorTensorType =
+  DTensorTensorType(dims.map(ValueAttribute(_)), elem)
 
 private def sameValueDims(
     lhs: Seq[Value[Attribute]],
     rhs: Seq[ValueAttribute],
 ): Boolean =
-  dTensorTypeUtil.sameDims(lhs.map(ValueAttribute(_)), rhs)
+  DTensorTypeUtil.sameDims(lhs.map(ValueAttribute(_)), rhs)
 
 private def productMatches(
     product: Value[Attribute],
     factors: Seq[Value[Attribute]],
 ): Boolean =
-  dTensorTypeUtil.sameOrderedNatProduct(product, factors) match
+  DTensorTypeUtil.sameOrderedNatProduct(product, factors) match
     case OK(true) => true
     case _        => false
 

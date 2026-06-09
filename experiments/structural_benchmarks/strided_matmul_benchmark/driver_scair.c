@@ -8,7 +8,7 @@
 #endif
 
 #ifndef VARIANT_LABEL
-#define VARIANT_LABEL "scair_dmemref"
+#define VARIANT_LABEL "scair_d_memref"
 #endif
 
 extern void matmul_strided(

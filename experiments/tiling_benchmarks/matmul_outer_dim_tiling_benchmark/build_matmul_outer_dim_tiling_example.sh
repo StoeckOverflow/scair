@@ -341,17 +341,17 @@ for dims in "${sizes[@]}"; do
   if route_enabled "dependent_mn_guarded_tail_simplified"; then
     echo "==> Building dependent guarded-then-simplified M/N tile for $size"
     guarded="$OUT_DIR/${tag}_dependent_mn_guarded_tail_simplified.guarded.mlir"
-    run_scair_opt -s "$DEPENDENT_SRC" --passes "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-factor-tile-with-tail,validate-d-affine-dynamic-steps,canonicalize,cse,dce" > "$guarded"
+    run_scair_opt -s "$DEPENDENT_SRC" --passes "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-context-band-factor-tile-with-tail,validate-d-affine-dynamic-steps,canonicalize,cse,dce" > "$guarded"
     require_pattern "$guarded" 'arith\.minsi' "dependent guarded artifact must contain dynamic tail min"
     build_scair_route \
       "dependent_mn_guarded_tail_simplified" \
       "$DEPENDENT_SRC" \
       "$DEPENDENT_DRIVER" \
-      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-factor-tile-with-tail,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
-      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-factor-tile-with-tail,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-dmemref-to-llvm" \
+      "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-context-band-factor-tile-with-tail,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
+      "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-context-band-factor-tile-with-tail,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-d-memref-to-llvm" \
       "$tag" "$m0" "$m1" "$n0" "$n1" "$k"
     require_no_tail "$OUT_DIR/${tag}_dependent_mn_guarded_tail_simplified.tiled.mlir" "dependent guarded simplified route must remove tail guards"
-    append_case "dependent_mn_guarded_tail_simplified" "$tag" "$size" "dtensor.nat.mul" "no" "guarded_artifact=$(basename "$guarded");proof_removes_i_j_tail"
+    append_case "dependent_mn_guarded_tail_simplified" "$tag" "$size" "d_tensor.nat.mul" "no" "guarded_artifact=$(basename "$guarded");proof_removes_i_j_tail"
   fi
 
   if route_enabled "dependent_mn_separable_tile"; then
@@ -360,12 +360,12 @@ for dims in "${sizes[@]}"; do
       "dependent_mn_separable_tile" \
       "$DEPENDENT_SRC" \
       "$DEPENDENT_DRIVER" \
-      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-separable-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
-      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-separable-tile,d-affine-to-affine-compatible,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-dmemref-to-llvm" \
+      "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-context-band-separable-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
+      "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-context-band-separable-tile,d-affine-to-affine-compatible,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-d-memref-to-llvm" \
       "$tag" "$m0" "$m1" "$n0" "$n1" "$k"
     require_pattern "$OUT_DIR/${tag}_dependent_mn_separable_tile.tiled.mlir" 'd_affine\.if' "dependent separable route must emit full/partial tile branches"
     require_pattern "$OUT_DIR/${tag}_dependent_mn_separable_tile.tiled.mlir" 'arith\.minsi' "dependent separable route must retain partial-branch tail protection"
-    append_case "dependent_mn_separable_tile" "$tag" "$size" "dtensor.nat.mul" "no" "tiling_decision=separable;proof_source=natmul+affine_set;full_tile_branch_exact;partial_branch_guarded"
+    append_case "dependent_mn_separable_tile" "$tag" "$size" "d_tensor.nat.mul" "no" "tiling_decision=separable;proof_source=natmul+affine_set;full_tile_branch_exact;partial_branch_guarded"
   fi
 
   if route_enabled "dependent_mn_exact_tile"; then
@@ -374,11 +374,11 @@ for dims in "${sizes[@]}"; do
       "dependent_mn_exact_tile" \
       "$DEPENDENT_SRC" \
       "$DEPENDENT_DRIVER" \
-      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
-      "canonicalize,cse,dce,canonicalize-dtensor-nat-products,dependent-context-band-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-dmemref-to-llvm" \
+      "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-context-band-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
+      "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-context-band-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-d-memref-to-llvm" \
       "$tag" "$m0" "$m1" "$n0" "$n1" "$k"
     require_no_tail "$OUT_DIR/${tag}_dependent_mn_exact_tile.tiled.mlir" "dependent exact route must be tail-free"
-    append_case "dependent_mn_exact_tile" "$tag" "$size" "dtensor.nat.mul" "no" "diagnostic_direct_exact_i_j_tiling"
+    append_case "dependent_mn_exact_tile" "$tag" "$size" "d_tensor.nat.mul" "no" "diagnostic_direct_exact_i_j_tiling"
   fi
 done
 
@@ -401,7 +401,7 @@ This benchmark is the thesis-facing apples-to-apples matmul tiling comparison.
 All routes tile the same output-space loop dimensions, \`i\` and \`j\`, while the
 reduction loop \`p\` remains the same target computation across routes. The MLIR
 baseline is included directly as an upstream reference. The dependent routes use
-\`dtensor.nat.mul\` facts for \`M=M0*M1\` and \`N=N0*N1\` to derive exact dynamic
+\`d_tensor.nat.mul\` facts for \`M=M0*M1\` and \`N=N0*N1\` to derive exact dynamic
 tile steps and eliminate the tail guards that ordinary dynamic index arithmetic
 keeps.
 

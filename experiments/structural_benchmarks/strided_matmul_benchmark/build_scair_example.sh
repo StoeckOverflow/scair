@@ -19,7 +19,7 @@ COMPILE_TIME_BENCH="$SCAIR_ROOT/experiments/compile_time_benchmark.sh"
 
 MLIR_SRC="${MLIR_SRC:-$EXAMPLE_DIR/matmul_kernel_mlir_baseline.mlir}"
 SCAIR_BASELINE_SRC="${SCAIR_BASELINE_SRC:-$EXAMPLE_DIR/matmul_kernel_scair_baseline.mlir}"
-SCAIR_VALUE_DEP_SRC="${SCAIR_VALUE_DEP_SRC:-$EXAMPLE_DIR/matmul_kernel_scair_dmemref.mlir}"
+SCAIR_VALUE_DEP_SRC="${SCAIR_VALUE_DEP_SRC:-$EXAMPLE_DIR/matmul_kernel_scair_d_memref.mlir}"
 MLIR_DRIVER_SRC="${MLIR_DRIVER_SRC:-$EXAMPLE_DIR/driver_mlir.c}"
 SCAIR_BASELINE_DRIVER_SRC="${SCAIR_BASELINE_DRIVER_SRC:-$EXAMPLE_DIR/driver_baseline.c}"
 SCAIR_VALUE_DEP_DRIVER_SRC="${SCAIR_VALUE_DEP_DRIVER_SRC:-$EXAMPLE_DIR/driver_scair.c}"
@@ -27,7 +27,7 @@ OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
 
 MLIR_PIPELINE="--lower-affine --convert-scf-to-cf --expand-strided-metadata --finalize-memref-to-llvm --convert-arith-to-llvm --convert-index-to-llvm --convert-cf-to-llvm --convert-func-to-llvm --reconcile-unrealized-casts"
 SCAIR_BASELINE_PIPELINE="lower-dynamic-memref-to-llvm-baseline,convert-func-to-llvm,convert-llvm-export-abi"
-SCAIR_VALUE_DEP_PIPELINE="lower-dmemref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi"
+SCAIR_VALUE_DEP_PIPELINE="lower-d-memref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi"
 
 mkdir -p "$OUT_DIR"
 ENV_PATH="$(ensure_env_snapshot "$OUT_DIR")"
@@ -161,8 +161,8 @@ append_row() {
     "$(count_source_extract_strided_metadata_ops "$src")" \
     "$(count_source_memref_load_ops "$src")" \
     "$(count_source_memref_store_ops "$src")" \
-    "$(count_source_dmemref_load_ops "$src")" \
-    "$(count_source_dmemref_store_ops "$src")" \
+    "$(count_source_d_memref_load_ops "$src")" \
+    "$(count_source_d_memref_store_ops "$src")" \
     "$(count_func_defs "$lowered_mlir")" \
     "$(count_ops "$lowered_mlir")" \
     "$(count_ops_structural "$lowered_mlir")" \
@@ -245,16 +245,16 @@ baseline_end=$(now_ns)
 SCAIR_BASELINE_COMPILE_MS="$(format_ms "$baseline_start" "$baseline_end")"
 
 echo "==> Building ScaIR dependent GEMM route"
-SCAIR_VALUE_DEP_TIMING_JSON="$OUT_DIR/matmul_scair_dmemref.compile_timing.json"
+SCAIR_VALUE_DEP_TIMING_JSON="$OUT_DIR/matmul_scair_d_memref.compile_timing.json"
 measure_compile_timing "$SCAIR_OPT" "$SCAIR_VALUE_DEP_SRC" "$SCAIR_VALUE_DEP_PIPELINE" "$SCAIR_VALUE_DEP_TIMING_JSON"
 value_start=$(now_ns)
-build_scair_route "$SCAIR_VALUE_DEP_SRC" "$SCAIR_VALUE_DEP_PIPELINE" "$OUT_DIR/matmul_scair_dmemref.o" "$OUT_DIR/matmul_scair_dmemref.llvm.mlir" "$OUT_DIR/matmul_scair_dmemref.ll"
+build_scair_route "$SCAIR_VALUE_DEP_SRC" "$SCAIR_VALUE_DEP_PIPELINE" "$OUT_DIR/matmul_scair_d_memref.o" "$OUT_DIR/matmul_scair_d_memref.llvm.mlir" "$OUT_DIR/matmul_scair_d_memref.ll"
 "$CC" -O2 \
   -DBENCH_LABEL="\"strided_matmul\"" \
-  -DVARIANT_LABEL="\"scair_dmemref\"" \
+  -DVARIANT_LABEL="\"scair_d_memref\"" \
   "$SCAIR_VALUE_DEP_DRIVER_SRC" \
-  "$OUT_DIR/matmul_scair_dmemref.o" \
-  -o "$OUT_DIR/matmul_scair_dmemref_exec"
+  "$OUT_DIR/matmul_scair_d_memref.o" \
+  -o "$OUT_DIR/matmul_scair_d_memref_exec"
 value_end=$(now_ns)
 SCAIR_VALUE_DEP_COMPILE_MS="$(format_ms "$value_start" "$value_end")"
 
@@ -295,14 +295,14 @@ for dims in "${GEMM_SIZES[@]}"; do
     "$size_descriptor" \
     "ScaIR dynamic baseline lowered through lower-dynamic-memref-to-llvm-baseline; timed region includes output reset plus kernel execution"
 
-  run_variant_for_size "$OUT_DIR/matmul_scair_dmemref_exec" "$OUT_DIR/matmul_scair_dmemref_${tag}_output.txt" "$n" "$m" "$k"
+  run_variant_for_size "$OUT_DIR/matmul_scair_d_memref_exec" "$OUT_DIR/matmul_scair_d_memref_${tag}_output.txt" "$n" "$m" "$k"
   append_row \
     "$SUMMARY_CSV" "$SUMMARY_MD" \
-    "scair_dmemref" "value_dependent" \
+    "scair_d_memref" "value_dependent" \
     "$SCAIR_VALUE_DEP_SRC" \
-    "$OUT_DIR/matmul_scair_dmemref.llvm.mlir" \
-    "$OUT_DIR/matmul_scair_dmemref.ll" \
-    "$OUT_DIR/matmul_scair_dmemref_${tag}_output.txt" \
+    "$OUT_DIR/matmul_scair_d_memref.llvm.mlir" \
+    "$OUT_DIR/matmul_scair_d_memref.ll" \
+    "$OUT_DIR/matmul_scair_d_memref_${tag}_output.txt" \
     "$SCAIR_VALUE_DEP_COMPILE_MS" \
     "$SCAIR_VALUE_DEP_TIMING_JSON" \
     "$size_descriptor" \
@@ -314,6 +314,6 @@ echo "Strided matmul build complete."
 echo "Produced:"
 echo "  $OUT_DIR/matmul_mlir_baseline_exec"
 echo "  $OUT_DIR/matmul_scair_baseline_exec"
-echo "  $OUT_DIR/matmul_scair_dmemref_exec"
+echo "  $OUT_DIR/matmul_scair_d_memref_exec"
 echo "  $OUT_DIR/summary.md"
 echo "  $OUT_DIR/metrics.csv"

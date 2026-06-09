@@ -1,6 +1,6 @@
 // RUN: scair-opt %s -p lower-dynamic-memref-to-llvm-baseline | filecheck %s --check-prefix=P1
 // RUN: scair-opt %s -p lower-dynamic-memref-to-llvm | filecheck %s --check-prefix=P2
-// RUN: scair-opt %S/lower_refined_dmemref_gemm_to_llvm.mlir -p lower-dmemref-to-llvm | filecheck %s --check-prefix=P3
+// RUN: scair-opt %S/lower_refined_d_memref_gemm_to_llvm.mlir -p lower-d-memref-to-llvm | filecheck %s --check-prefix=P3
 
 builtin.module {
   func.func @matmul_dynamic(

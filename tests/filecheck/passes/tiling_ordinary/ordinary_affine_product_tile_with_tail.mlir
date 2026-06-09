@@ -17,7 +17,7 @@ builtin.module {
 // CHECK: %[[K0:[0-9]+]] = "test.arg"() : () -> index
 // CHECK: %[[K1:[0-9]+]] = "test.arg"() : () -> index
 // CHECK: %[[K:[0-9]+]] = "arith.muli"(%[[K0]], %[[K1]])
-// CHECK-NOT: dtensor
+// CHECK-NOT: d_tensor
 // CHECK-NOT: d_affine
 // CHECK-NOT: d_memref
 // CHECK: affine.for %[[TILE:[0-9]+]] = #map(%{{.*}}) to #map{{[0-9]*}}()[%[[K]]] step 4 iter_args

@@ -1,13 +1,13 @@
 builtin.module {
-  %k0 = "dtensor.nat.param"() : () -> !dtensor.posnat
-  %k1 = "dtensor.nat.param"() : () -> !dtensor.posnat
-  %k2 = "dtensor.nat.param"() : () -> !dtensor.posnat
-  %tile_nat = "dtensor.nat.mul"(%k1, %k0) : (!dtensor.posnat, !dtensor.posnat) -> !dtensor.posnat
-  %full_nat = "dtensor.nat.mul"(%tile_nat, %k2) : (!dtensor.posnat, !dtensor.posnat) -> !dtensor.posnat
+  %k0 = "d_tensor.nat.param"() : () -> !d_tensor.posnat
+  %k1 = "d_tensor.nat.param"() : () -> !d_tensor.posnat
+  %k2 = "d_tensor.nat.param"() : () -> !d_tensor.posnat
+  %tile_nat = "d_tensor.nat.mul"(%k1, %k0) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
+  %full_nat = "d_tensor.nat.mul"(%tile_nat, %k2) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
   %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
-  %full = "dtensor.shape.to_index"(%full_nat) : (!dtensor.posnat) -> index
-  %step = "dtensor.shape.to_index"(%tile_nat) : (!dtensor.posnat) -> index
-  %tile_size = "dtensor.shape.to_index"(%tile_nat) : (!dtensor.posnat) -> index
+  %full = "d_tensor.shape.to_index"(%full_nat) : (!d_tensor.posnat) -> index
+  %step = "d_tensor.shape.to_index"(%tile_nat) : (!d_tensor.posnat) -> index
+  %tile_size = "d_tensor.shape.to_index"(%tile_nat) : (!d_tensor.posnat) -> index
   %init = "arith.constant"() <{value = 0 : index}> : () -> index
 
   %sum = d_affine.for %tile = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%full) step %step : index iter_args(%acc0 = %init : index) {

@@ -1,11 +1,11 @@
 builtin.module {
   func.func @affine_value_dependent_product(
-    %k0_nat: !dtensor.nat,
-    %k1_nat: !dtensor.posnat,
+    %k0_nat: !d_tensor.nat,
+    %k1_nat: !d_tensor.posnat,
     %out: memref<?xf32>
   ) {
-    %k_nat = "dtensor.nat.mul"(%k0_nat, %k1_nat) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
-    %k = "dtensor.shape.to_index"(%k_nat) : (!dtensor.nat) -> index
+    %k_nat = "d_tensor.nat.mul"(%k0_nat, %k1_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
+    %k = "d_tensor.shape.to_index"(%k_nat) : (!d_tensor.nat) -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 

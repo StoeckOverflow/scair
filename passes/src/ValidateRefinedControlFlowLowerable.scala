@@ -6,7 +6,7 @@ import scair.dialects.func
 import scair.dialects.scf
 import scair.ir.*
 import scair.passes.NatProvenance
-import scair.passes.control_flow_helpers.explainUnsupportedAffineMap
+import scair.passes.control_flow_helpers.explainUnsupporteDAffineMap
 import scair.transformations.ModulePass
 
 final class ValidateRefinedControlFlowLowerable(ctx: MLContext) extends ModulePass(ctx):
@@ -20,7 +20,7 @@ final class ValidateRefinedControlFlowLowerable(ctx: MLContext) extends ModulePa
     )
 
   private def validateAffineMap(kind: String, map: scair.dialects.builtin.AffineMapAttr): Unit =
-    explainUnsupportedAffineMap(map).foreach(reason => fail(s"$kind has unsupported affine map: $reason"))
+    explainUnsupporteDAffineMap(map).foreach(reason => fail(s"$kind has unsupported affine map: $reason"))
 
   private def validateLoop(loop: d_affine.For): Unit =
     if loop.body.blocks.size != 1 then fail("d_affine.for body must be single-block")

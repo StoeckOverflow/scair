@@ -3,46 +3,46 @@ package scair
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import scair.dialects.builtin.*
-import scair.dialects.dTensor.*
+import scair.dialects.d_tensor.*
 import scair.ir.*
 import scair.utils.OK
 
 final class TensorTypesSpec extends AnyFlatSpec:
 
   "TensorTypeUtil.asTensor" should "convert vector to rank-1 tensor" in {
-    val d0 = Value[Attribute](dTensorNatType())
-    val v = dTensorVectorType(ValueAttribute(d0), Float32Type())
-    val t = dTensorTypeUtil.asdTensor(v)
-    t shouldBe dTensorTensorType(Seq(ValueAttribute(d0)), Float32Type())
+    val d0 = Value[Attribute](DTensorNatType())
+    val v = DTensorVectorType(ValueAttribute(d0), Float32Type())
+    val t = DTensorTypeUtil.asDTensor(v)
+    t shouldBe DTensorTensorType(Seq(ValueAttribute(d0)), Float32Type())
   }
 
   it should "convert matrix to rank-2 tensor" in {
-    val d0 = Value[Attribute](dTensorNatType())
-    val d1 = Value[Attribute](dTensorNatType())
-    val m = dTensorMatrixType(
+    val d0 = Value[Attribute](DTensorNatType())
+    val d1 = Value[Attribute](DTensorNatType())
+    val m = DTensorMatrixType(
       ValueAttribute(d0),
       ValueAttribute(d1),
       Float32Type(),
     )
-    val t = dTensorTypeUtil.asdTensor(m)
-    t shouldBe dTensorTensorType(
+    val t = DTensorTypeUtil.asDTensor(m)
+    t shouldBe DTensorTensorType(
       Seq(ValueAttribute(d0), ValueAttribute(d1)),
       Float32Type(),
     )
   }
 
   it should "return tensor unchanged" in {
-    val n = Value[Attribute](dTensorNatType())
-    val tt = dTensorTensorType(Seq(ValueAttribute(n)), Float32Type())
-    dTensorTypeUtil.asdTensor(tt) shouldBe tt
+    val n = Value[Attribute](DTensorNatType())
+    val tt = DTensorTensorType(Seq(ValueAttribute(n)), Float32Type())
+    DTensorTypeUtil.asDTensor(tt) shouldBe tt
   }
 
   "tensor.dim" should
     "return the embedded dim SSA value for the selected axis" in {
-      val d0 = Value[Attribute](dTensorNatType())
-      val d1 = Value[Attribute](dTensorNatType())
-      val tensor = Value[dTensorTensorType](
-        dTensorTensorType(
+      val d0 = Value[Attribute](DTensorNatType())
+      val d1 = Value[Attribute](DTensorNatType())
+      val tensor = Value[DTensorTensorType](
+        DTensorTensorType(
           Seq(ValueAttribute(d0), ValueAttribute(d1)),
           Float32Type(),
         )

@@ -1,10 +1,10 @@
 // RUN: scair-opt %s --allow-unregistered-dialect -p dependent-product-loop-exact-tile,d-affine-to-affine-compatible | filecheck %s
 
 builtin.module {
-  func.func @static_exact_tile_bridge(%k0_nat: !dtensor.nat, %out: memref<?xf32>) {
-    %k1_nat = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-    %k_nat = "dtensor.nat.mul"(%k0_nat, %k1_nat) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-    %ub = "dtensor.shape.to_index"(%k_nat) : (!dtensor.nat) -> index
+  func.func @static_exact_tile_bridge(%k0_nat: !d_tensor.nat, %out: memref<?xf32>) {
+    %k1_nat = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+    %k_nat = "d_tensor.nat.mul"(%k0_nat, %k1_nat) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+    %ub = "d_tensor.shape.to_index"(%k_nat) : (!d_tensor.nat) -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 

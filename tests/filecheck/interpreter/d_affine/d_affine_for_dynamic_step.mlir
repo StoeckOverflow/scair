@@ -3,12 +3,12 @@
 
 builtin.module {
   func.func @main() -> index {
-    %lb_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-    %ub_nat = "dtensor.nat.const"() <{value = 7 : i32}> : () -> !dtensor.nat
-    %step_nat = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
-    %lb = "dtensor.shape.to_index"(%lb_nat) : (!dtensor.nat) -> index
-    %ub = "dtensor.shape.to_index"(%ub_nat) : (!dtensor.nat) -> index
-    %step = "dtensor.shape.to_index"(%step_nat) : (!dtensor.nat) -> index
+    %lb_nat = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+    %ub_nat = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
+    %step_nat = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
+    %lb = "d_tensor.shape.to_index"(%lb_nat) : (!d_tensor.nat) -> index
+    %ub = "d_tensor.shape.to_index"(%ub_nat) : (!d_tensor.nat) -> index
+    %step = "d_tensor.shape.to_index"(%step_nat) : (!d_tensor.nat) -> index
     %init = "arith.constant"() <{value = 0 : index}> : () -> index
 
     %sum = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step %step : index iter_args(%acc = %init : index) {

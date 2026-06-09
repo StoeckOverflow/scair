@@ -6,8 +6,8 @@ import scair.dialects.builtin.BuiltinDialect
 import scair.dialects.cf.CFDialect
 import scair.dialects.cmath.cmath
 import scair.dialects.complex.Complex
-import scair.dialects.d_affine.dAffineDialect
-import scair.dialects.d_memref.dMemrefDialect
+import scair.dialects.d_affine.DAffineDialect
+import scair.dialects.d_memref.DMemrefDialect
 import scair.dialects.func.FuncDialect
 import scair.dialects.irdl.IRDL
 import scair.dialects.lingodb.*
@@ -15,7 +15,7 @@ import scair.dialects.llvm.LLVMDialect
 import scair.dialects.math.MathDialect
 import scair.dialects.memref.MemrefDialect
 import scair.dialects.scf.SCFDialect
-import scair.dialects.dTensor.dTensorDialect
+import scair.dialects.d_tensor.DTensorDialect
 import scair.dialects.test.Test
 import scair.dialects.tlam_de_bruijn.TlamDeBruijnDialect
 import scair.ir.Dialect
@@ -41,7 +41,7 @@ val allDialects: Seq[Dialect] =
   Seq(
     BuiltinDialect,
     Complex,
-    dTensorDialect,
+    DTensorDialect,
     MathDialect,
     TlamDeBruijnDialect,
     Test,
@@ -49,10 +49,10 @@ val allDialects: Seq[Dialect] =
     ArithDialect,
     CFDialect,
     MemrefDialect,
-    dMemrefDialect,
+    DMemrefDialect,
     cmath,
     AffineDialect,
-    dAffineDialect,
+    DAffineDialect,
     FuncDialect,
     LLVMDialect,
     SCFDialect,

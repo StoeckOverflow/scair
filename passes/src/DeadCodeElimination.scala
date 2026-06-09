@@ -1,7 +1,7 @@
 package scair.passes.dce
 
 import scair.MLContext
-import scair.dialects.dTensor.NatParam
+import scair.dialects.d_tensor.NatParam
 import scair.dialects.tlam.{TLambda as SsaTLambda, VLambda as SsaVLambda}
 import scair.dialects.tlam_de_bruijn.{
   TLambda as DbiTLambda,

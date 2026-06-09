@@ -1,40 +1,40 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-dtensor-nat-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce | filecheck %s --check-prefix=EXACT --implicit-check-not=arith.minsi --implicit-check-not=affine.min --implicit-check-not=d_affine.min
-// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps,canonicalize,cse,dce | filecheck %s --check-prefix=TAIL
-// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-dtensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce | filecheck %s --check-prefix=SIMPLIFIED --implicit-check-not=arith.minsi --implicit-check-not=affine.min --implicit-check-not=d_affine.min
+// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce | filecheck %s --check-prefix=EXACT --implicit-check-not=arith.minsi --implicit-check-not=affine.min --implicit-check-not=d_affine.min
+// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-d-tensor-nat-products,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps,canonicalize,cse,dce | filecheck %s --check-prefix=TAIL
+// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-d-tensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce | filecheck %s --check-prefix=SIMPLIFIED --implicit-check-not=arith.minsi --implicit-check-not=affine.min --implicit-check-not=d_affine.min
 
 builtin.module {
   func.func @conv2d_tiling_dynamic(
-    %n_nat : !dtensor.nat,
-    %cin_nat : !dtensor.nat,
-    %h_nat : !dtensor.nat,
-    %w_nat : !dtensor.nat,
-    %cout_nat : !dtensor.nat,
-    %kh_nat : !dtensor.posnat,
-    %kw_nat : !dtensor.posnat,
-    %oh_nat : !dtensor.nat,
-    %ow_nat : !dtensor.nat,
+    %n_nat : !d_tensor.nat,
+    %cin_nat : !d_tensor.nat,
+    %h_nat : !d_tensor.nat,
+    %w_nat : !d_tensor.nat,
+    %cout_nat : !d_tensor.nat,
+    %kh_nat : !d_tensor.posnat,
+    %kw_nat : !d_tensor.posnat,
+    %oh_nat : !d_tensor.nat,
+    %ow_nat : !d_tensor.nat,
     %Xflat : !d_memref.memref<[], f32>,
     %Kflat : !d_memref.memref<[], f32>,
     %Yflat : !d_memref.memref<[], f32>
   ) {
-    %khkw_nat = "dtensor.nat.mul"(%kh_nat, %kw_nat) : (!dtensor.posnat, !dtensor.posnat) -> !dtensor.posnat
-    %cin_khkw_nat = "dtensor.nat.mul"(%cin_nat, %khkw_nat) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
+    %khkw_nat = "d_tensor.nat.mul"(%kh_nat, %kw_nat) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
+    %cin_khkw_nat = "d_tensor.nat.mul"(%cin_nat, %khkw_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
 
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 
-    %n = "dtensor.shape.to_index"(%n_nat) : (!dtensor.nat) -> index
-    %cin = "dtensor.shape.to_index"(%cin_nat) : (!dtensor.nat) -> index
-    %h = "dtensor.shape.to_index"(%h_nat) : (!dtensor.nat) -> index
-    %w = "dtensor.shape.to_index"(%w_nat) : (!dtensor.nat) -> index
-    %cout = "dtensor.shape.to_index"(%cout_nat) : (!dtensor.nat) -> index
-    %kh = "dtensor.shape.to_index"(%kh_nat) : (!dtensor.posnat) -> index
-    %kw = "dtensor.shape.to_index"(%kw_nat) : (!dtensor.posnat) -> index
-    %oh = "dtensor.shape.to_index"(%oh_nat) : (!dtensor.nat) -> index
-    %ow = "dtensor.shape.to_index"(%ow_nat) : (!dtensor.nat) -> index
-    %khkw = "dtensor.shape.to_index"(%khkw_nat) : (!dtensor.posnat) -> index
-    %cin_khkw = "dtensor.shape.to_index"(%cin_khkw_nat) : (!dtensor.nat) -> index
+    %n = "d_tensor.shape.to_index"(%n_nat) : (!d_tensor.nat) -> index
+    %cin = "d_tensor.shape.to_index"(%cin_nat) : (!d_tensor.nat) -> index
+    %h = "d_tensor.shape.to_index"(%h_nat) : (!d_tensor.nat) -> index
+    %w = "d_tensor.shape.to_index"(%w_nat) : (!d_tensor.nat) -> index
+    %cout = "d_tensor.shape.to_index"(%cout_nat) : (!d_tensor.nat) -> index
+    %kh = "d_tensor.shape.to_index"(%kh_nat) : (!d_tensor.posnat) -> index
+    %kw = "d_tensor.shape.to_index"(%kw_nat) : (!d_tensor.posnat) -> index
+    %oh = "d_tensor.shape.to_index"(%oh_nat) : (!d_tensor.nat) -> index
+    %ow = "d_tensor.shape.to_index"(%ow_nat) : (!d_tensor.nat) -> index
+    %khkw = "d_tensor.shape.to_index"(%khkw_nat) : (!d_tensor.posnat) -> index
+    %cin_khkw = "d_tensor.shape.to_index"(%cin_khkw_nat) : (!d_tensor.nat) -> index
     %hw = "arith.muli"(%h, %w) : (index, index) -> index
     %chw = "arith.muli"(%cin, %hw) : (index, index) -> index
     %ohow = "arith.muli"(%oh, %ow) : (index, index) -> index
@@ -86,33 +86,33 @@ builtin.module {
 
 // EXACT: #map = affine_map<(d0)[] -> (d0)>
 // EXACT-LABEL: func.func @conv2d_tiling_dynamic
-// EXACT-SAME: %[[N_NAT:[0-9]+]]: !dtensor.nat
-// EXACT-SAME: %[[CIN_NAT:[0-9]+]]: !dtensor.nat
-// EXACT-SAME: %[[H_NAT:[0-9]+]]: !dtensor.nat
-// EXACT-SAME: %[[W_NAT:[0-9]+]]: !dtensor.nat
-// EXACT-SAME: %[[COUT_NAT:[0-9]+]]: !dtensor.nat
-// EXACT-SAME: %[[KH_NAT:[0-9]+]]: !dtensor.posnat
-// EXACT-SAME: %[[KW_NAT:[0-9]+]]: !dtensor.posnat
-// EXACT-SAME: %[[OH_NAT:[0-9]+]]: !dtensor.nat
-// EXACT-SAME: %[[OW_NAT:[0-9]+]]: !dtensor.nat
+// EXACT-SAME: %[[N_NAT:[0-9]+]]: !d_tensor.nat
+// EXACT-SAME: %[[CIN_NAT:[0-9]+]]: !d_tensor.nat
+// EXACT-SAME: %[[H_NAT:[0-9]+]]: !d_tensor.nat
+// EXACT-SAME: %[[W_NAT:[0-9]+]]: !d_tensor.nat
+// EXACT-SAME: %[[COUT_NAT:[0-9]+]]: !d_tensor.nat
+// EXACT-SAME: %[[KH_NAT:[0-9]+]]: !d_tensor.posnat
+// EXACT-SAME: %[[KW_NAT:[0-9]+]]: !d_tensor.posnat
+// EXACT-SAME: %[[OH_NAT:[0-9]+]]: !d_tensor.nat
+// EXACT-SAME: %[[OW_NAT:[0-9]+]]: !d_tensor.nat
 // EXACT-SAME: %[[XFLAT:[0-9]+]]: !d_memref.memref<[], f32>
 // EXACT-SAME: %[[KFLAT:[0-9]+]]: !d_memref.memref<[], f32>
 // EXACT-SAME: %[[YFLAT:[0-9]+]]: !d_memref.memref<[], f32>
-// EXACT: %[[KHKW_NAT:[0-9]+]] = "dtensor.nat.mul"(%[[KH_NAT]], %[[KW_NAT]]) : (!dtensor.posnat, !dtensor.posnat) -> !dtensor.posnat
-// EXACT: %[[FULL_NAT:[0-9]+]] = "dtensor.nat.mul"(%[[CIN_NAT]], %[[KHKW_NAT]]) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
+// EXACT: %[[KHKW_NAT:[0-9]+]] = "d_tensor.nat.mul"(%[[KH_NAT]], %[[KW_NAT]]) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
+// EXACT: %[[FULL_NAT:[0-9]+]] = "d_tensor.nat.mul"(%[[CIN_NAT]], %[[KHKW_NAT]]) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
 // EXACT: %[[C0:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
 // EXACT: %[[C1:[0-9]+]] = "arith.constant"() <{value = 1 : index}> : () -> index
 // EXACT: %[[F0:[0-9]+]] = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-// EXACT: %[[N:[0-9]+]] = "dtensor.shape.to_index"(%[[N_NAT]]) : (!dtensor.nat) -> index
-// EXACT: %[[CIN:[0-9]+]] = "dtensor.shape.to_index"(%[[CIN_NAT]]) : (!dtensor.nat) -> index
-// EXACT: %[[H:[0-9]+]] = "dtensor.shape.to_index"(%[[H_NAT]]) : (!dtensor.nat) -> index
-// EXACT: %[[W:[0-9]+]] = "dtensor.shape.to_index"(%[[W_NAT]]) : (!dtensor.nat) -> index
-// EXACT: %[[COUT:[0-9]+]] = "dtensor.shape.to_index"(%[[COUT_NAT]]) : (!dtensor.nat) -> index
-// EXACT: %[[KW:[0-9]+]] = "dtensor.shape.to_index"(%[[KW_NAT]]) : (!dtensor.posnat) -> index
-// EXACT: %[[OH:[0-9]+]] = "dtensor.shape.to_index"(%[[OH_NAT]]) : (!dtensor.nat) -> index
-// EXACT: %[[OW:[0-9]+]] = "dtensor.shape.to_index"(%[[OW_NAT]]) : (!dtensor.nat) -> index
-// EXACT: %[[KHKW:[0-9]+]] = "dtensor.shape.to_index"(%[[KHKW_NAT]]) : (!dtensor.posnat) -> index
-// EXACT: %[[FULL:[0-9]+]] = "dtensor.shape.to_index"(%[[FULL_NAT]]) : (!dtensor.nat) -> index
+// EXACT: %[[N:[0-9]+]] = "d_tensor.shape.to_index"(%[[N_NAT]]) : (!d_tensor.nat) -> index
+// EXACT: %[[CIN:[0-9]+]] = "d_tensor.shape.to_index"(%[[CIN_NAT]]) : (!d_tensor.nat) -> index
+// EXACT: %[[H:[0-9]+]] = "d_tensor.shape.to_index"(%[[H_NAT]]) : (!d_tensor.nat) -> index
+// EXACT: %[[W:[0-9]+]] = "d_tensor.shape.to_index"(%[[W_NAT]]) : (!d_tensor.nat) -> index
+// EXACT: %[[COUT:[0-9]+]] = "d_tensor.shape.to_index"(%[[COUT_NAT]]) : (!d_tensor.nat) -> index
+// EXACT: %[[KW:[0-9]+]] = "d_tensor.shape.to_index"(%[[KW_NAT]]) : (!d_tensor.posnat) -> index
+// EXACT: %[[OH:[0-9]+]] = "d_tensor.shape.to_index"(%[[OH_NAT]]) : (!d_tensor.nat) -> index
+// EXACT: %[[OW:[0-9]+]] = "d_tensor.shape.to_index"(%[[OW_NAT]]) : (!d_tensor.nat) -> index
+// EXACT: %[[KHKW:[0-9]+]] = "d_tensor.shape.to_index"(%[[KHKW_NAT]]) : (!d_tensor.posnat) -> index
+// EXACT: %[[FULL:[0-9]+]] = "d_tensor.shape.to_index"(%[[FULL_NAT]]) : (!d_tensor.nat) -> index
 // EXACT: %[[HW:[0-9]+]] = "arith.muli"(%[[H]], %[[W]]) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // EXACT: %[[CHW:[0-9]+]] = "arith.muli"(%[[CIN]], %[[HW]]) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // EXACT: %[[OHOW:[0-9]+]] = "arith.muli"(%[[OH]], %[[OW]]) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
@@ -140,22 +140,22 @@ builtin.module {
 
 // TAIL: #map = affine_map<(d0)[] -> (d0)>
 // TAIL-LABEL: func.func @conv2d_tiling_dynamic
-// TAIL-SAME: %[[N_NAT:[0-9]+]]: !dtensor.nat
-// TAIL-SAME: %[[CIN_NAT:[0-9]+]]: !dtensor.nat
-// TAIL-SAME: %[[H_NAT:[0-9]+]]: !dtensor.nat
-// TAIL-SAME: %[[W_NAT:[0-9]+]]: !dtensor.nat
-// TAIL-SAME: %[[COUT_NAT:[0-9]+]]: !dtensor.nat
-// TAIL-SAME: %[[KH_NAT:[0-9]+]]: !dtensor.posnat
-// TAIL-SAME: %[[KW_NAT:[0-9]+]]: !dtensor.posnat
-// TAIL-SAME: %[[OH_NAT:[0-9]+]]: !dtensor.nat
-// TAIL-SAME: %[[OW_NAT:[0-9]+]]: !dtensor.nat
-// TAIL: %[[KHKW_NAT:[0-9]+]] = "dtensor.nat.mul"(%[[KH_NAT]], %[[KW_NAT]]) : (!dtensor.posnat, !dtensor.posnat) -> !dtensor.posnat
-// TAIL: %[[FULL_NAT:[0-9]+]] = "dtensor.nat.mul"(%[[CIN_NAT]], %[[KHKW_NAT]]) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
+// TAIL-SAME: %[[N_NAT:[0-9]+]]: !d_tensor.nat
+// TAIL-SAME: %[[CIN_NAT:[0-9]+]]: !d_tensor.nat
+// TAIL-SAME: %[[H_NAT:[0-9]+]]: !d_tensor.nat
+// TAIL-SAME: %[[W_NAT:[0-9]+]]: !d_tensor.nat
+// TAIL-SAME: %[[COUT_NAT:[0-9]+]]: !d_tensor.nat
+// TAIL-SAME: %[[KH_NAT:[0-9]+]]: !d_tensor.posnat
+// TAIL-SAME: %[[KW_NAT:[0-9]+]]: !d_tensor.posnat
+// TAIL-SAME: %[[OH_NAT:[0-9]+]]: !d_tensor.nat
+// TAIL-SAME: %[[OW_NAT:[0-9]+]]: !d_tensor.nat
+// TAIL: %[[KHKW_NAT:[0-9]+]] = "d_tensor.nat.mul"(%[[KH_NAT]], %[[KW_NAT]]) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
+// TAIL: %[[FULL_NAT:[0-9]+]] = "d_tensor.nat.mul"(%[[CIN_NAT]], %[[KHKW_NAT]]) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
 // TAIL: %[[C0:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
 // TAIL: %[[F0:[0-9]+]] = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-// TAIL: %[[KW:[0-9]+]] = "dtensor.shape.to_index"(%[[KW_NAT]]) : (!dtensor.posnat) -> index
-// TAIL: %[[KHKW:[0-9]+]] = "dtensor.shape.to_index"(%[[KHKW_NAT]]) : (!dtensor.posnat) -> index
-// TAIL: %[[FULL:[0-9]+]] = "dtensor.shape.to_index"(%[[FULL_NAT]]) : (!dtensor.nat) -> index
+// TAIL: %[[KW:[0-9]+]] = "d_tensor.shape.to_index"(%[[KW_NAT]]) : (!d_tensor.posnat) -> index
+// TAIL: %[[KHKW:[0-9]+]] = "d_tensor.shape.to_index"(%[[KHKW_NAT]]) : (!d_tensor.posnat) -> index
+// TAIL: %[[FULL:[0-9]+]] = "d_tensor.shape.to_index"(%[[FULL_NAT]]) : (!d_tensor.nat) -> index
 // TAIL: %[[SUM:[0-9]+]] = d_affine.for %[[TILE:[0-9]+]] = #map(%[[C0]]) to #map(%[[FULL]]) step %[[KW]] : index iter_args(%[[ACC:[0-9]+]] = %[[F0]] : f32) {
 // TAIL: %[[TILE_END:[0-9]+]] = "arith.addi"(%[[TILE]], %[[KW]]) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // TAIL: %[[CLAMPED:[0-9]+]] = "arith.minsi"(%[[TILE_END]], %[[FULL]]) : (index, index) -> index
@@ -164,22 +164,22 @@ builtin.module {
 
 // SIMPLIFIED: #map = affine_map<(d0)[] -> (d0)>
 // SIMPLIFIED-LABEL: func.func @conv2d_tiling_dynamic
-// SIMPLIFIED-SAME: %[[N_NAT:[0-9]+]]: !dtensor.nat
-// SIMPLIFIED-SAME: %[[CIN_NAT:[0-9]+]]: !dtensor.nat
-// SIMPLIFIED-SAME: %[[H_NAT:[0-9]+]]: !dtensor.nat
-// SIMPLIFIED-SAME: %[[W_NAT:[0-9]+]]: !dtensor.nat
-// SIMPLIFIED-SAME: %[[COUT_NAT:[0-9]+]]: !dtensor.nat
-// SIMPLIFIED-SAME: %[[KH_NAT:[0-9]+]]: !dtensor.posnat
-// SIMPLIFIED-SAME: %[[KW_NAT:[0-9]+]]: !dtensor.posnat
-// SIMPLIFIED-SAME: %[[OH_NAT:[0-9]+]]: !dtensor.nat
-// SIMPLIFIED-SAME: %[[OW_NAT:[0-9]+]]: !dtensor.nat
-// SIMPLIFIED: %[[KHKW_NAT:[0-9]+]] = "dtensor.nat.mul"(%[[KH_NAT]], %[[KW_NAT]]) : (!dtensor.posnat, !dtensor.posnat) -> !dtensor.posnat
-// SIMPLIFIED: %[[FULL_NAT:[0-9]+]] = "dtensor.nat.mul"(%[[CIN_NAT]], %[[KHKW_NAT]]) : (!dtensor.nat, !dtensor.posnat) -> !dtensor.nat
+// SIMPLIFIED-SAME: %[[N_NAT:[0-9]+]]: !d_tensor.nat
+// SIMPLIFIED-SAME: %[[CIN_NAT:[0-9]+]]: !d_tensor.nat
+// SIMPLIFIED-SAME: %[[H_NAT:[0-9]+]]: !d_tensor.nat
+// SIMPLIFIED-SAME: %[[W_NAT:[0-9]+]]: !d_tensor.nat
+// SIMPLIFIED-SAME: %[[COUT_NAT:[0-9]+]]: !d_tensor.nat
+// SIMPLIFIED-SAME: %[[KH_NAT:[0-9]+]]: !d_tensor.posnat
+// SIMPLIFIED-SAME: %[[KW_NAT:[0-9]+]]: !d_tensor.posnat
+// SIMPLIFIED-SAME: %[[OH_NAT:[0-9]+]]: !d_tensor.nat
+// SIMPLIFIED-SAME: %[[OW_NAT:[0-9]+]]: !d_tensor.nat
+// SIMPLIFIED: %[[KHKW_NAT:[0-9]+]] = "d_tensor.nat.mul"(%[[KH_NAT]], %[[KW_NAT]]) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
+// SIMPLIFIED: %[[FULL_NAT:[0-9]+]] = "d_tensor.nat.mul"(%[[CIN_NAT]], %[[KHKW_NAT]]) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
 // SIMPLIFIED: %[[C0:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
 // SIMPLIFIED: %[[F0:[0-9]+]] = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-// SIMPLIFIED: %[[KW:[0-9]+]] = "dtensor.shape.to_index"(%[[KW_NAT]]) : (!dtensor.posnat) -> index
-// SIMPLIFIED: %[[KHKW:[0-9]+]] = "dtensor.shape.to_index"(%[[KHKW_NAT]]) : (!dtensor.posnat) -> index
-// SIMPLIFIED: %[[FULL:[0-9]+]] = "dtensor.shape.to_index"(%[[FULL_NAT]]) : (!dtensor.nat) -> index
+// SIMPLIFIED: %[[KW:[0-9]+]] = "d_tensor.shape.to_index"(%[[KW_NAT]]) : (!d_tensor.posnat) -> index
+// SIMPLIFIED: %[[KHKW:[0-9]+]] = "d_tensor.shape.to_index"(%[[KHKW_NAT]]) : (!d_tensor.posnat) -> index
+// SIMPLIFIED: %[[FULL:[0-9]+]] = "d_tensor.shape.to_index"(%[[FULL_NAT]]) : (!d_tensor.nat) -> index
 // SIMPLIFIED: %[[SUM:[0-9]+]] = d_affine.for %[[TILE:[0-9]+]] = #map(%[[C0]]) to #map(%[[FULL]]) step %[[KW]] : index iter_args(%[[ACC:[0-9]+]] = %[[F0]] : f32) {
 // SIMPLIFIED: %[[TILE_END:[0-9]+]] = "arith.addi"(%[[TILE]], %[[KW]]) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
 // SIMPLIFIED: d_affine.for %[[P:[0-9]+]] = #map(%[[TILE]]) to #map(%[[TILE_END]]) step 1 : i32

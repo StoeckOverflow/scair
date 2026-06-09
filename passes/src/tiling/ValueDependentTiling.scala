@@ -3,7 +3,7 @@ package scair.passes.tiling
 import scair.dialects.affine
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_affine
 import scair.ir.*
 import scair.passes.NatProvenance
@@ -220,9 +220,9 @@ object ValueDependentTiling:
   private def idxConst(v: BigInt): arith.Constant =
     arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
 
-  private def toIndex(nat: Value[Attribute]): dTensor.ShapeToIndex =
-    dTensor.ShapeToIndex(
-      nat.asInstanceOf[Operand[dTensor.dTensorNatLikeType]],
+  private def toIndex(nat: Value[Attribute]): DTensor.ShapeToIndex =
+    DTensor.ShapeToIndex(
+      nat.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
       Result(IndexType()),
     )
 
@@ -561,7 +561,7 @@ object ValueDependentTiling:
       body = body,
     )
 
-  private def buildAffineLoop(
+  private def builDAffineLoop(
       lowerBound: Value[Attribute],
       upperBounds: Seq[Value[Attribute]],
       step: BigInt,
@@ -780,7 +780,7 @@ object ValueDependentTiling:
           val oldIterArgs = oldBlock.arguments.tail.toSeq
           val zero = idxConst(0)
 
-          val outerLoop = buildAffineLoop(
+          val outerLoop = builDAffineLoop(
             zero.result,
             Seq(fullUpperBound),
             tileSize,
@@ -790,7 +790,7 @@ object ValueDependentTiling:
           ) { outerArgs =>
             val tileIv = outerArgs.head
             val outerIterArgs = outerArgs.tail
-            val innerLoop = buildAffineLoop(
+            val innerLoop = builDAffineLoop(
               tileIv,
               Seq(tileIv, fullUpperBound),
               1,
@@ -815,7 +815,7 @@ object ValueDependentTiling:
     else
       val oldBlock = loop.body.blocks.head
       val oldIv = oldBlock.arguments.head
-      val outerLoop = buildAffineLoop(
+      val outerLoop = builDAffineLoop(
         loop.lowerBoundOperands.head,
         loop.upperBoundOperands.map(_.asInstanceOf[Value[Attribute]]),
         tileSize,
@@ -825,7 +825,7 @@ object ValueDependentTiling:
         upperBoundMap = loop.upperBoundMap,
       ) { outerArgs =>
         val tileIv = outerArgs.head
-        val innerLoop = buildAffineLoop(
+        val innerLoop = builDAffineLoop(
           tileIv,
           Seq(tileIv, loop.upperBoundOperands.head),
           1,

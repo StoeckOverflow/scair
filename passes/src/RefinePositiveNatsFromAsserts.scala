@@ -4,7 +4,7 @@ import scair.MLContext
 import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.cf
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.ir.*
 import scair.passes.NatProvenance
 import scair.transformations.{ModulePass, RewriteMethods}
@@ -12,8 +12,8 @@ import scair.utils.OK
 
 private val refinedMarker = "scair.refine_positive_nats_from_asserts.done"
 
-private def asNatLike(v: Value[Attribute]): Operand[dTensor.dTensorNatLikeType] =
-  v.asInstanceOf[Operand[dTensor.dTensorNatLikeType]]
+private def asNatLike(v: Value[Attribute]): Operand[DTensor.DTensorNatLikeType] =
+  v.asInstanceOf[Operand[DTensor.DTensorNatLikeType]]
 
 private def asI1(v: Value[Attribute]): Operand[IntegerType] =
   v.asInstanceOf[Operand[IntegerType]]
@@ -21,10 +21,10 @@ private def asI1(v: Value[Attribute]): Operand[IntegerType] =
 private def strictPositiveNatFromProof(proof: Value[Attribute]): Option[Value[Attribute]] =
   proof.owner match
     case Some(arith.CmpI(lhs, rhs, _, predicate)) =>
-      val leftNat = dTensor.dTensorTypeUtil.resolveNatFromIndexValue(lhs) match
+      val leftNat = DTensor.DTensorTypeUtil.resolveNatFromIndexValue(lhs) match
         case OK(nat) => Some(nat)
         case _       => None
-      val rightNat = dTensor.dTensorTypeUtil.resolveNatFromIndexValue(rhs) match
+      val rightNat = DTensor.DTensorTypeUtil.resolveNatFromIndexValue(rhs) match
         case OK(nat) => Some(nat)
         case _       => None
       val leftConst = NatProvenance.exactConst(lhs)
@@ -78,10 +78,10 @@ private def refineAfterAssert(assertOp: cf.Assert): Boolean =
   else
     strictPositiveNatFromProof(assertOp.arg) match
       case Some(nat) if !NatProvenance.isPositive(nat) =>
-        val refine = dTensor.NatRefinePositive(
+        val refine = DTensor.NatRefinePositive(
           asNatLike(nat),
           asI1(assertOp.arg),
-          Result(dTensor.dTensorPosNatType()),
+          Result(DTensor.DTensorPosNatType()),
         )
         assertOp.containerBlock.foreach { block =>
           block.insertOpAfter(assertOp, refine)

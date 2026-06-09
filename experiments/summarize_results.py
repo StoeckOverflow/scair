@@ -32,7 +32,7 @@ def main() -> int:
         "mlir_baseline": 0,
         "scair_baseline": 1,
         "debruijn": 1,
-        "scair_dmemref": 2,
+        "scair_d_memref": 2,
         "value_dependent": 2,
     }
 

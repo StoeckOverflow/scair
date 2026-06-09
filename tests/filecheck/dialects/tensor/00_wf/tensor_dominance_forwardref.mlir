@@ -8,22 +8,22 @@ builtin.module {
     %c = "arith.constant"() <{value = true}> : () -> i1
     "test.cond_br"(%c) [^bb1, ^bb2] : (i1) -> ()
   ^bb1:
-    %n = "dtensor.nat.param"() : () -> !dtensor.nat
+    %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
     "test.br"() [^bb2] : () -> ()
   ^bb2:
-    %t = "test.bad"() : () -> !dtensor.tensor<[%n], f32>
+    %t = "test.bad"() : () -> !d_tensor.tensor<[%n], f32>
     "test.ret"() : () -> ()
   }) : () -> ()
 }
 
-// VERIFY: ssa-dominance: value Value(!dtensor.nat) does not dominate its use in op `test.bad`
+// VERIFY: ssa-dominance: value Value(!d_tensor.nat) does not dominate its use in op `test.bad`
 
 // -----
 
 // Forward-reference parsing negative: %n used in tensor type before definition.
 builtin.module {
-  %t = "test.bad"() : () -> !dtensor.vector<%n, f32>
-  %n = "dtensor.nat.param"() : () -> !dtensor.nat
+  %t = "test.bad"() : () -> !d_tensor.vector<%n, f32>
+  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
 }
 
-// PARSE: ssa-dominance: value Value(!dtensor.nat) does not dominate its use in op `test.bad`
+// PARSE: ssa-dominance: value Value(!d_tensor.nat) does not dominate its use in op `test.bad`

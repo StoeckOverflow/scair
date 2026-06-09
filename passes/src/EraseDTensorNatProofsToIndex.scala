@@ -1,9 +1,9 @@
-package scair.passes.erase_dtensor_nat_proofs_to_index
+package scair.passes.erase_d_tensor_nat_proofs_to_index
 
 import scair.MLContext
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.dTensor
+import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_affine
 import scair.ir.*
 import scair.transformations.{
@@ -16,22 +16,22 @@ import scair.transformations.{
 private def asIndex(v: Value[Attribute]): Operand[arith.AnyIntegerType] =
   v.asInstanceOf[Operand[arith.AnyIntegerType]]
 
-private val IndexToNatErase = pattern { case op: dTensor.IndexToNat =>
+private val IndexToNatErase = pattern { case op: DTensor.IndexToNat =>
   (Seq.empty[Operation], op.index)
 }
 
-private val NatRefinePositiveErase = pattern { case op: dTensor.NatRefinePositive =>
+private val NatRefinePositiveErase = pattern { case op: DTensor.NatRefinePositive =>
   (Seq.empty[Operation], op.nat)
 }
 
-private val NatConstToIndex = pattern { case op: dTensor.NatConst =>
+private val NatConstToIndex = pattern { case op: DTensor.NatConst =>
   arith.Constant(
     IntegerAttr(IntData(op.value.value.value), IndexType()),
     Result(IndexType()),
   )
 }
 
-private val NatMulToIndex = pattern { case op: dTensor.NatMul =>
+private val NatMulToIndex = pattern { case op: DTensor.NatMul =>
   arith.MulI(
     asIndex(op.lhs),
     asIndex(op.rhs),
@@ -39,7 +39,7 @@ private val NatMulToIndex = pattern { case op: dTensor.NatMul =>
   )
 }
 
-private val NatAddToIndex = pattern { case op: dTensor.NatAdd =>
+private val NatAddToIndex = pattern { case op: DTensor.NatAdd =>
   arith.AddI(
     asIndex(op.lhs),
     asIndex(op.rhs),
@@ -47,7 +47,7 @@ private val NatAddToIndex = pattern { case op: dTensor.NatAdd =>
   )
 }
 
-private val ShapeToIndexErase = pattern { case op: dTensor.ShapeToIndex =>
+private val ShapeToIndexErase = pattern { case op: DTensor.ShapeToIndex =>
   (Seq.empty[Operation], op.nat)
 }
 
@@ -66,7 +66,7 @@ private def proofConsumerLeft(op: Operation): Option[String] =
   found
 
 final class EraseDTensorNatProofsToIndex(ctx: MLContext) extends ModulePass(ctx):
-  override val name: String = "erase-dtensor-nat-proofs-to-index"
+  override val name: String = "erase-d-tensor-nat-proofs-to-index"
 
   private val walker: PatternRewriteWalker =
     PatternRewriteWalker(
@@ -85,7 +85,7 @@ final class EraseDTensorNatProofsToIndex(ctx: MLContext) extends ModulePass(ctx)
   override def transform(op: Operation): Operation =
     proofConsumerLeft(op).foreach { consumer =>
       throw new Exception(
-        s"erase-dtensor-nat-proofs-to-index cannot run while $consumer remains. " +
+        s"erase-d-tensor-nat-proofs-to-index cannot run while $consumer remains. " +
           "Run proof-consuming passes first, then d-affine-to-affine-compatible or lower-refined-control-flow-to-llvm before erasing nat proofs."
       )
     }

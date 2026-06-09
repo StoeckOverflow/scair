@@ -26,7 +26,7 @@
 #   blocks=...
 #   block_args=...
 #   op.memref.alloc=...
-COMMON_METRICS_HEADER="experiment_family,benchmark,variant,representation_group,build_status,run_status,source_bytes,source_loc,source_ops,source_ops_structural,source_func_defs,source_block_args,source_alloc_ops,source_reinterpret_cast_ops,source_subview_ops,source_extract_strided_metadata_ops,source_memref_load_ops,source_memref_store_ops,source_dmemref_load_ops,source_dmemref_store_ops,lowered_func_defs,lowered_ops,lowered_ops_structural,lowered_mlir_lines,llvm_ir_lines,llvm_call_count,compile_ms,result,expected_result,runtime_ns_per_iter,notes,source_helper_defs,bvar_refs,value_ssa_refs,opt_llvm_lines,opt_llvm_call_count,kernel,size,route,parse_time_ms,verification_time_ms,lowering_time_ms,compile_total_ms,runtime_median_ns_per_iter,runtime_iqr_ns_per_iter,benchmark_repetitions,checksum,checksum_status,compiler_flags,git_commit,date,machine_id,env_path,raw_timings_path"
+COMMON_METRICS_HEADER="experiment_family,benchmark,variant,representation_group,build_status,run_status,source_bytes,source_loc,source_ops,source_ops_structural,source_func_defs,source_block_args,source_alloc_ops,source_reinterpret_cast_ops,source_subview_ops,source_extract_strided_metadata_ops,source_memref_load_ops,source_memref_store_ops,source_d_memref_load_ops,source_d_memref_store_ops,lowered_func_defs,lowered_ops,lowered_ops_structural,lowered_mlir_lines,llvm_ir_lines,llvm_call_count,compile_ms,result,expected_result,runtime_ns_per_iter,notes,source_helper_defs,bvar_refs,value_ssa_refs,opt_llvm_lines,opt_llvm_call_count,kernel,size,route,parse_time_ms,verification_time_ms,lowering_time_ms,compile_total_ms,runtime_median_ns_per_iter,runtime_iqr_ns_per_iter,benchmark_repetitions,checksum,checksum_status,compiler_flags,git_commit,date,machine_id,env_path,raw_timings_path"
 
 if [[ "${TILING_BENCHMARK_QUICK:-0}" == "1" ]]; then
   BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-1}"
@@ -69,7 +69,7 @@ limit_csv_entries() {
   awk -v limit="$limit" 'BEGIN { RS=","; ORS=""; count=0 } count < limit { if (count > 0) printf ","; printf "%s", $0; count++ }' <<<"$csv"
 }
 
-try_lower_dmemref_to_llvm_artifacts() {
+try_lower_d_memref_to_llvm_artifacts() {
   local input_mlir="$1"
   local llvm_mlir="$2"
   local llvm_ir="$3"
@@ -83,7 +83,7 @@ try_lower_dmemref_to_llvm_artifacts() {
     return 0
   fi
 
-  if "$scair_opt" -s "$input_mlir" --passes "canonicalize,cse,dce,lower-dmemref-to-llvm" > "$llvm_mlir" 2> "${status_path}.log"; then
+  if "$scair_opt" -s "$input_mlir" --passes "canonicalize,cse,dce,lower-d-memref-to-llvm" > "$llvm_mlir" 2> "${status_path}.log"; then
     if [[ -n "$mlir_translate" && -x "$mlir_translate" ]] &&
        "$mlir_translate" --mlir-to-llvmir "$llvm_mlir" > "$llvm_ir" 2>> "${status_path}.log"; then
       echo "status=ok" > "$status_path"
@@ -97,7 +97,7 @@ try_lower_dmemref_to_llvm_artifacts() {
   else
     rm -f "$llvm_mlir" "$llvm_ir"
     echo "status=unsupported" > "$status_path"
-    echo "reason=lower_dmemref_to_llvm_failed" >> "$status_path"
+    echo "reason=lower_d_memref_to_llvm_failed" >> "$status_path"
   fi
 }
 
@@ -415,11 +415,11 @@ count_source_memref_store_ops() {
   ir_metric_field "$1" "op.memref.store" "0"
 }
 
-count_source_dmemref_load_ops() {
+count_source_d_memref_load_ops() {
   ir_metric_field "$1" "op.d_memref.load" "0"
 }
 
-count_source_dmemref_store_ops() {
+count_source_d_memref_store_ops() {
   ir_metric_field "$1" "op.d_memref.store" "0"
 }
 
@@ -434,8 +434,8 @@ count_llvm_calls() {
   echo "${count:-0}"
 }
 
-count_dtensor_nat_ops() {
-  count_matches 'dtensor\.nat\.[A-Za-z_]+' "$1"
+count_d_tensor_nat_ops() {
+  count_matches 'd_tensor\.nat\.[A-Za-z_]+' "$1"
 }
 
 count_d_affine_for_ops() {

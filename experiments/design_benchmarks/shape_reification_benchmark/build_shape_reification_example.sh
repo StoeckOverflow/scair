@@ -55,7 +55,7 @@ arith_index_arithmetic_count() {
 }
 
 allocation_shape_op_count() {
-  count_pattern "$1" '(^|[^A-Za-z0-9_])"?(tensor\.empty|memref\.alloc|dtensor\.empty)"?'
+  count_pattern "$1" '(^|[^A-Za-z0-9_])"?(tensor\.empty|memref\.alloc|d_tensor\.empty)"?'
 }
 
 metric_row() {
@@ -70,8 +70,8 @@ metric_row() {
   ops="$(total_op_count "$path")"
   local tensor_dim
   local memref_dim
-  local dtensor_dim
-  local dmemref_dim
+  local d_tensor_dim
+  local d_memref_dim
   local shape_to_index
   local shape_ops
   local casts
@@ -79,14 +79,14 @@ metric_row() {
   local alloc_shape
   tensor_dim="$(count_pattern "$path" '(^|[^A-Za-z0-9_])tensor\.dim')"
   memref_dim="$(count_pattern "$path" '(^|[^A-Za-z0-9_])memref\.dim')"
-  dtensor_dim="$(count_pattern "$path" 'dtensor\.dim')"
-  dmemref_dim="$(count_pattern "$path" 'd_memref\.dim')"
-  shape_to_index="$(count_pattern "$path" 'dtensor\.shape\.to_index')"
+  d_tensor_dim="$(count_pattern "$path" 'd_tensor\.dim')"
+  d_memref_dim="$(count_pattern "$path" 'd_memref\.dim')"
+  shape_to_index="$(count_pattern "$path" 'd_tensor\.shape\.to_index')"
   shape_ops="$(count_pattern "$path" '(^|[^A-Za-z0-9_\.])shape\.[A-Za-z_]+')"
   casts="$(count_pattern "$path" 'builtin\.unrealized_conversion_cast')"
   arith_index="$(arith_index_arithmetic_count "$path")"
   alloc_shape="$(allocation_shape_op_count "$path")"
-  local shape_management_ops=$((tensor_dim + memref_dim + dtensor_dim + dmemref_dim + shape_to_index + shape_ops + casts + arith_index + alloc_shape))
+  local shape_management_ops=$((tensor_dim + memref_dim + d_tensor_dim + d_memref_dim + shape_to_index + shape_ops + casts + arith_index + alloc_shape))
   local delta="NA"
   if [[ "$input_ops" != "NA" ]]; then
     delta=$((input_ops - ops))
@@ -99,10 +99,10 @@ metric_row() {
     printf '%s,%s,%s,%s,%s,' "$variant" "$stage" "$toolchain" "$status" "$(basename "$path")"
     printf '%s,' "$tensor_dim"
     printf '%s,' "$memref_dim"
-    printf '%s,' "$dtensor_dim"
-    printf '%s,' "$dmemref_dim"
+    printf '%s,' "$d_tensor_dim"
+    printf '%s,' "$d_memref_dim"
     printf '%s,' "$shape_to_index"
-    printf '%s,' "$(count_pattern "$path" 'dtensor\.nat\.[A-Za-z_]+')"
+    printf '%s,' "$(count_pattern "$path" 'd_tensor\.nat\.[A-Za-z_]+')"
     printf '%s,' "$shape_ops"
     printf '%s,' "$casts"
     printf '%s,' "$(count_pattern "$path" 'arith\.constant.*index|arith\.constant_index')"
@@ -135,7 +135,7 @@ require_exe "$SCAIR_OPT"
 require_exe "$MLIR_OPT"
 
 cat > "$METRICS" <<'CSV'
-variant,stage,toolchain,status,artifact,tensor_dim_count,memref_dim_count,dtensor_dim_count,d_memref_dim_count,dtensor_shape_to_index_count,dtensor_nat_op_count,shape_op_count,unrealized_cast_count,arith_constant_index_count,arith_index_arithmetic_count,allocation_shape_op_count,shape_management_op_count,total_op_count,mlir_loc,removed_op_delta,total_op_ratio_vs_ordinary_same_shape_final,notes
+variant,stage,toolchain,status,artifact,tensor_dim_count,memref_dim_count,d_tensor_dim_count,d_memref_dim_count,d_tensor_shape_to_index_count,d_tensor_nat_op_count,shape_op_count,unrealized_cast_count,arith_constant_index_count,arith_index_arithmetic_count,allocation_shape_op_count,shape_management_op_count,total_op_count,mlir_loc,removed_op_delta,total_op_ratio_vs_ordinary_same_shape_final,notes
 CSV
 
 process_ordinary() {
@@ -192,16 +192,16 @@ process_dependent
   echo
   echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo
-  echo "| Variant | Stage | tensor.dim | dtensor.dim | shape.to_index | index arith | shape mgmt ops | total ops | LOC | Removed delta | Ratio | Notes |"
+  echo "| Variant | Stage | tensor.dim | d_tensor.dim | shape.to_index | index arith | shape mgmt ops | total ops | LOC | Removed delta | Ratio | Notes |"
   echo "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"
-  tail -n +2 "$METRICS" | while IFS=, read -r variant stage toolchain status artifact tensor_dim memref_dim dtensor_dim dmemref_dim shape_to_index nat_ops shape_ops casts arith_const arith_index alloc_shape shape_mgmt ops loc delta ratio notes; do
-    echo "| \`$variant\` | \`$stage\` | $tensor_dim | $dtensor_dim | $shape_to_index | $arith_index | $shape_mgmt | $ops | $loc | $delta | $ratio | $notes |"
+  tail -n +2 "$METRICS" | while IFS=, read -r variant stage toolchain status artifact tensor_dim memref_dim d_tensor_dim d_memref_dim shape_to_index nat_ops shape_ops casts arith_const arith_index alloc_shape shape_mgmt ops loc delta ratio notes; do
+    echo "| \`$variant\` | \`$stage\` | $tensor_dim | $d_tensor_dim | $shape_to_index | $arith_index | $shape_mgmt | $ops | $loc | $delta | $ratio | $notes |"
   done
   echo
   echo "Key comparison:"
   echo "- The ordinary identical-SSA case shows the fair baseline where upstream CSE can merge repeated syntactically identical \`tensor.dim\` queries."
   echo "- The ordinary same-shaped/different-SSA case keeps separate \`tensor.dim\` queries and repeated \`m*n\` size arithmetic because the equality contract is not represented in stock tensor types."
-  echo "- The dependent route carries \`%m/%n\` in the tensor type, so \`dependent-dim-query-elim\` rewrites all repeated \`dtensor.dim\` queries to shared nat provenance before ordinary cleanup runs."
+  echo "- The dependent route carries \`%m/%n\` in the tensor type, so \`dependent-dim-query-elim\` rewrites all repeated \`d_tensor.dim\` queries to shared nat provenance before ordinary cleanup runs."
   echo "- After cleanup, the dependent route should retain two \`shape.to_index\` materializations and one shared \`m*n\` computation for the fanout chain."
 } > "$SUMMARY"
 

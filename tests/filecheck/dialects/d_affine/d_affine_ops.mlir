@@ -1,10 +1,10 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=VERIFY
 
 builtin.module {
-  %lb_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %ub_nat = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %lb = "dtensor.shape.to_index"(%lb_nat) : (!dtensor.nat) -> index
-  %ub = "dtensor.shape.to_index"(%ub_nat) : (!dtensor.nat) -> index
+  %lb_nat = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %ub_nat = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %lb = "d_tensor.shape.to_index"(%lb_nat) : (!d_tensor.nat) -> index
+  %ub = "d_tensor.shape.to_index"(%ub_nat) : (!d_tensor.nat) -> index
   d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 {
     %m = d_affine.min affine_map<(d0)[s0] -> (d0 + s0)>(%iv)[%ub] : (index)[index] -> index
     "test.keep"(%m) : (index) -> ()
@@ -19,12 +19,12 @@ builtin.module {
 // -----
 
 builtin.module {
-  %lb_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %ub_nat = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %step_nat = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
-  %lb = "dtensor.shape.to_index"(%lb_nat) : (!dtensor.nat) -> index
-  %ub = "dtensor.shape.to_index"(%ub_nat) : (!dtensor.nat) -> index
-  %step = "dtensor.shape.to_index"(%step_nat) : (!dtensor.nat) -> index
+  %lb_nat = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %ub_nat = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %step_nat = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
+  %lb = "d_tensor.shape.to_index"(%lb_nat) : (!d_tensor.nat) -> index
+  %ub = "d_tensor.shape.to_index"(%ub_nat) : (!d_tensor.nat) -> index
+  %step = "d_tensor.shape.to_index"(%step_nat) : (!d_tensor.nat) -> index
   d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step %step : index {
     d_affine.yield
   }
@@ -55,10 +55,10 @@ builtin.module {
 // -----
 
 builtin.module {
-  %lb_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %ub_nat = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %lb = "dtensor.shape.to_index"(%lb_nat) : (!dtensor.nat) -> index
-  %ub = "dtensor.shape.to_index"(%ub_nat) : (!dtensor.nat) -> index
+  %lb_nat = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %ub_nat = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %lb = "d_tensor.shape.to_index"(%lb_nat) : (!d_tensor.nat) -> index
+  %ub = "d_tensor.shape.to_index"(%ub_nat) : (!d_tensor.nat) -> index
   d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 0 : i32 {
     d_affine.yield
   }
@@ -69,10 +69,10 @@ builtin.module {
 // -----
 
 builtin.module {
-  %lb_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %ub_nat = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %lb = "dtensor.shape.to_index"(%lb_nat) : (!dtensor.nat) -> index
-  %ub = "dtensor.shape.to_index"(%ub_nat) : (!dtensor.nat) -> index
+  %lb_nat = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %ub_nat = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %lb = "d_tensor.shape.to_index"(%lb_nat) : (!d_tensor.nat) -> index
+  %ub = "d_tensor.shape.to_index"(%ub_nat) : (!d_tensor.nat) -> index
   d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 {
     "test.no_terminator"() : () -> ()
   }
@@ -113,10 +113,10 @@ builtin.module {
 // -----
 
 builtin.module {
-  %lb_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %ub_nat = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %lb = "dtensor.shape.to_index"(%lb_nat) : (!dtensor.nat) -> index
-  %ub = "dtensor.shape.to_index"(%ub_nat) : (!dtensor.nat) -> index
+  %lb_nat = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %ub_nat = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %lb = "d_tensor.shape.to_index"(%lb_nat) : (!d_tensor.nat) -> index
+  %ub = "d_tensor.shape.to_index"(%ub_nat) : (!d_tensor.nat) -> index
   %init = "arith.constant"() <{value = 0 : index}> : () -> index
   %r = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 iter_args(%acc = %init : index) {
     d_affine.yield %iv : (index)
@@ -130,10 +130,10 @@ builtin.module {
 // -----
 
 builtin.module {
-  %lb_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %ub_nat = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %lb = "dtensor.shape.to_index"(%lb_nat) : (!dtensor.nat) -> index
-  %ub = "dtensor.shape.to_index"(%ub_nat) : (!dtensor.nat) -> index
+  %lb_nat = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %ub_nat = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %lb = "d_tensor.shape.to_index"(%lb_nat) : (!d_tensor.nat) -> index
+  %ub = "d_tensor.shape.to_index"(%ub_nat) : (!d_tensor.nat) -> index
   %init = "arith.constant"() <{value = 0 : index}> : () -> index
   %r = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 iter_args(%acc = %init : index) {
     d_affine.yield
@@ -146,10 +146,10 @@ builtin.module {
 // -----
 
 builtin.module {
-  %lb_nat = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %ub_nat = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %lb = "dtensor.shape.to_index"(%lb_nat) : (!dtensor.nat) -> index
-  %ub = "dtensor.shape.to_index"(%ub_nat) : (!dtensor.nat) -> index
+  %lb_nat = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %ub_nat = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %lb = "d_tensor.shape.to_index"(%lb_nat) : (!d_tensor.nat) -> index
+  %ub = "d_tensor.shape.to_index"(%ub_nat) : (!d_tensor.nat) -> index
   %init = "arith.constant"() <{value = 0 : index}> : () -> index
   %v = "arith.constant"() <{value = 7 : i32}> : () -> i32
   %r = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 iter_args(%acc = %init : index) {
@@ -163,8 +163,8 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %n = "dtensor.nat.const"() <{value = 5 : i32}> : () -> !dtensor.nat
+  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %n = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
   %i = "arith.constant"() <{value = 1 : index}> : () -> index
   %j = "arith.constant"() <{value = 2 : index}> : () -> index
   %v = "arith.constant"() <{value = 7 : i32}> : () -> i32
@@ -182,8 +182,8 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %n = "dtensor.nat.const"() <{value = 5 : i32}> : () -> !dtensor.nat
+  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %n = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
   %i = "arith.constant"() <{value = 1 : index}> : () -> index
   %j = "arith.constant"() <{value = 2 : index}> : () -> index
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], i32>

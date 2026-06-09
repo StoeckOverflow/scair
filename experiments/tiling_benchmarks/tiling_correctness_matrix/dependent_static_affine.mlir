@@ -1,8 +1,8 @@
 builtin.module {
-  func.func @dependent_static_affine(%k0: !dtensor.nat, %out: memref<?xf32>) {
-    %k1 = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-    %k = "dtensor.nat.mul"(%k0, %k1) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-    %ub = "dtensor.shape.to_index"(%k) : (!dtensor.nat) -> index
+  func.func @dependent_static_affine(%k0: !d_tensor.nat, %out: memref<?xf32>) {
+    %k1 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+    %k = "d_tensor.nat.mul"(%k0, %k1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+    %ub = "d_tensor.shape.to_index"(%k) : (!d_tensor.nat) -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 

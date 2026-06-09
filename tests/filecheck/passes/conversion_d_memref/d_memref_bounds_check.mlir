@@ -1,13 +1,13 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p d-memref-bounds-check | filecheck %s -DFILE=%s
 
 builtin.module {
-  %len = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %three = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-  %two = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
-  %dyn = "dtensor.nat.param"() : () -> !dtensor.nat
-  %three_idx = "dtensor.shape.to_index"(%three) : (!dtensor.nat) -> index
-  %two_idx = "dtensor.shape.to_index"(%two) : (!dtensor.nat) -> index
-  %dyn_idx = "dtensor.shape.to_index"(%dyn) : (!dtensor.nat) -> index
+  %len = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %three = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+  %two = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
+  %dyn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %three_idx = "d_tensor.shape.to_index"(%three) : (!d_tensor.nat) -> index
+  %two_idx = "d_tensor.shape.to_index"(%two) : (!d_tensor.nat) -> index
+  %dyn_idx = "d_tensor.shape.to_index"(%dyn) : (!d_tensor.nat) -> index
   %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
   %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
   %m = d_memref.alloc : () -> !d_memref.memref<[%len], i32>
@@ -28,13 +28,13 @@ builtin.module {
 
 // CHECK: #[[ID_MAP:.*]] = affine_map<(d0)[] -> (d0)>
 // CHECK-LABEL: builtin.module
-// CHECK: %[[LEN:[0-9]+]] = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-// CHECK: %[[THREE:[0-9]+]] = "dtensor.nat.const"() <{value = 3 : i32}> : () -> !dtensor.nat
-// CHECK: %[[TWO:[0-9]+]] = "dtensor.nat.const"() <{value = 2 : i32}> : () -> !dtensor.nat
-// CHECK: %[[DYN:[0-9]+]] = "dtensor.nat.param"() : () -> !dtensor.nat
-// CHECK: %[[THREE_IDX:[0-9]+]] = "dtensor.shape.to_index"(%[[THREE]]) : (!dtensor.nat) -> index
-// CHECK: %[[TWO_IDX:[0-9]+]] = "dtensor.shape.to_index"(%[[TWO]]) : (!dtensor.nat) -> index
-// CHECK: %[[DYN_IDX:[0-9]+]] = "dtensor.shape.to_index"(%[[DYN]]) : (!dtensor.nat) -> index
+// CHECK: %[[LEN:[0-9]+]] = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+// CHECK: %[[THREE:[0-9]+]] = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+// CHECK: %[[TWO:[0-9]+]] = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
+// CHECK: %[[DYN:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CHECK: %[[THREE_IDX:[0-9]+]] = "d_tensor.shape.to_index"(%[[THREE]]) : (!d_tensor.nat) -> index
+// CHECK: %[[TWO_IDX:[0-9]+]] = "d_tensor.shape.to_index"(%[[TWO]]) : (!d_tensor.nat) -> index
+// CHECK: %[[DYN_IDX:[0-9]+]] = "d_tensor.shape.to_index"(%[[DYN]]) : (!d_tensor.nat) -> index
 // CHECK: %[[C0:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
 // CHECK: %[[C1:[0-9]+]] = "arith.constant"() <{value = 1 : index}> : () -> index
 // CHECK: %[[M:[0-9]+]] = d_memref.alloc : () -> !d_memref.memref<[%[[LEN]]], i32>

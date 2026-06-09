@@ -42,7 +42,7 @@ tiling emitter itself is not route-specific.
 - `passes/src/DependentTailMinSimplify.scala`
   - removes provably unnecessary tail clamps after guarded tiling.
 - `passes/src/analysis/NatProductFacts.scala`
-  - product/factor reasoning for `dtensor.nat.mul` provenance.
+  - product/factor reasoning for `d_tensor.nat.mul` provenance.
 - `passes/src/analysis/TailBoundFacts.scala`
   - recognizes `min(tile + tileSize, fullBound)` and proves when it can be
     removed.
@@ -50,7 +50,7 @@ tiling emitter itself is not route-specific.
   - resolves nat provenance, constants, positivity, and simple affine
     projections.
 - `passes/src/RefinePositiveNatsFromAsserts.scala`
-  - turns dominating positive `cf.assert` facts into `!dtensor.posnat`
+  - turns dominating positive `cf.assert` facts into `!d_tensor.posnat`
     refinements consumed by tiling facts.
 - `passes/src/DAffineToAffineCompatible.scala`
   - bridges eligible `d_affine.for` and `d_affine.if` forms to stock affine.
@@ -135,7 +135,7 @@ Tile selection and proof discovery are fact-provider responsibilities.
 Current providers:
 
 - `NatMulFactProvider`
-  - consumes `dtensor.nat.mul` provenance through `NatProductFacts`;
+  - consumes `d_tensor.nat.mul` provenance through `NatProductFacts`;
   - chooses a positive factor according to the pass factor policy;
   - provides exact-divisibility proof (`ProofSource.NatMul`).
 - `OrdinaryProductFactProvider`
@@ -285,14 +285,14 @@ outer loop. Original loop results are remapped to the outer loop results.
 ## Nat Product Facts
 
 `NatProductFacts.flattenProduct(v)` asks `NatProvenance.resolveNat(v)` for the
-nat witness behind an index value. It then flattens nested `dtensor.nat.mul`
+nat witness behind an index value. It then flattens nested `d_tensor.nat.mul`
 operations.
 
 For example:
 
 ```mlir
-%ab = "dtensor.nat.mul"(%a, %b)
-%abc = "dtensor.nat.mul"(%ab, %c)
+%ab = "d_tensor.nat.mul"(%a, %b)
+%abc = "d_tensor.nat.mul"(%ab, %c)
 ```
 
 is modeled as:
@@ -322,11 +322,11 @@ cf.assert %ok
 and inserts:
 
 ```mlir
-%k_pos = "dtensor.nat.refine_positive"(%k, %ok)
+%k_pos = "d_tensor.nat.refine_positive"(%k, %ok)
 ```
 
 Later uses are rewritten to the positive nat where safe. `NatProvenance` then
-sees `!dtensor.posnat`, and tiling providers can treat the corresponding tile
+sees `!d_tensor.posnat`, and tiling providers can treat the corresponding tile
 size as positive.
 
 This is the current assert-derived path. The tiler does not yet scan arbitrary

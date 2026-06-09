@@ -9,94 +9,94 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce,tensor-shape-canonicalize,canonicalize,cse,dce | scair-opt --allow-unregistered-dialect --verify-diagnostics --split-input-file
 
 builtin.module {
-  %m = "dtensor.nat.param"() : () -> !dtensor.nat
-  %k = "dtensor.nat.param"() : () -> !dtensor.nat
-  %n = "dtensor.nat.param"() : () -> !dtensor.nat
-  %z = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-  %o = "dtensor.nat.const"() <{value = 1 : i32}> : () -> !dtensor.nat
+  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %k = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+  %o = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
 
-  %m0 = "dtensor.nat.add"(%m, %z) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %m1 = "dtensor.nat.mul"(%m0, %o) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %m2 = "dtensor.nat.add"(%m1, %z) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %m0 = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m1 = "d_tensor.nat.mul"(%m0, %o) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m2 = "d_tensor.nat.add"(%m1, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
 
-  %k0 = "dtensor.nat.add"(%k, %z) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %k1 = "dtensor.nat.mul"(%k0, %o) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
+  %k0 = "d_tensor.nat.add"(%k, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %k1 = "d_tensor.nat.mul"(%k0, %o) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
 
-  %lhs = "dtensor.empty"() : () -> !dtensor.tensor<[%m2, %k1], f32>
-  %rhs = "dtensor.empty"() : () -> !dtensor.tensor<[%k1, %n], f32>
-  %mm = "dtensor.matmul"(%lhs, %rhs)
-    : (!dtensor.tensor<[%m2, %k1], f32>, !dtensor.tensor<[%k1, %n], f32>) -> !dtensor.tensor<[%m2, %n], f32>
-  %bias = "dtensor.empty"() : () -> !dtensor.tensor<[%m2, %n], f32>
-  %sum = "dtensor.add"(%mm, %bias)
-    : (!dtensor.tensor<[%m2, %n], f32>, !dtensor.tensor<[%m2, %n], f32>) -> !dtensor.tensor<[%m2, %n], f32>
-  %prod = "dtensor.mul"(%sum, %sum)
-    : (!dtensor.tensor<[%m2, %n], f32>, !dtensor.tensor<[%m2, %n], f32>) -> !dtensor.tensor<[%m2, %n], f32>
-  %out = "dtensor.cast"(%prod)
-    : (!dtensor.tensor<[%m2, %n], f32>) -> !dtensor.tensor<[%m2, %n], f32>
-  "test.keep"(%out) : (!dtensor.tensor<[%m2, %n], f32>) -> ()
+  %lhs = "d_tensor.empty"() : () -> !d_tensor.tensor<[%m2, %k1], f32>
+  %rhs = "d_tensor.empty"() : () -> !d_tensor.tensor<[%k1, %n], f32>
+  %mm = "d_tensor.matmul"(%lhs, %rhs)
+    : (!d_tensor.tensor<[%m2, %k1], f32>, !d_tensor.tensor<[%k1, %n], f32>) -> !d_tensor.tensor<[%m2, %n], f32>
+  %bias = "d_tensor.empty"() : () -> !d_tensor.tensor<[%m2, %n], f32>
+  %sum = "d_tensor.add"(%mm, %bias)
+    : (!d_tensor.tensor<[%m2, %n], f32>, !d_tensor.tensor<[%m2, %n], f32>) -> !d_tensor.tensor<[%m2, %n], f32>
+  %prod = "d_tensor.mul"(%sum, %sum)
+    : (!d_tensor.tensor<[%m2, %n], f32>, !d_tensor.tensor<[%m2, %n], f32>) -> !d_tensor.tensor<[%m2, %n], f32>
+  %out = "d_tensor.cast"(%prod)
+    : (!d_tensor.tensor<[%m2, %n], f32>) -> !d_tensor.tensor<[%m2, %n], f32>
+  "test.keep"(%out) : (!d_tensor.tensor<[%m2, %n], f32>) -> ()
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// VERIFY:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// VERIFY:   %2 = "dtensor.nat.param"() : () -> !dtensor.nat
-// VERIFY:   %3 = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-// VERIFY:   %4 = "dtensor.nat.const"() <{value = 1 : i32}> : () -> !dtensor.nat
-// VERIFY:   %5 = "dtensor.nat.add"(%0, %3) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// VERIFY:   %6 = "dtensor.nat.mul"(%5, %4) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// VERIFY:   %7 = "dtensor.nat.add"(%6, %3) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// VERIFY:   %8 = "dtensor.nat.add"(%1, %3) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// VERIFY:   %9 = "dtensor.nat.mul"(%8, %4) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// VERIFY:   %10 = "dtensor.empty"() : () -> !dtensor.tensor<[%7, %9], f32>
-// VERIFY:   %11 = "dtensor.empty"() : () -> !dtensor.tensor<[%9, %2], f32>
-// VERIFY:   %12 = "dtensor.matmul"(%10, %11) : (!dtensor.tensor<[%7, %9], f32>, !dtensor.tensor<[%9, %2], f32>) -> !dtensor.tensor<[%7, %2], f32>
-// VERIFY:   %13 = "dtensor.empty"() : () -> !dtensor.tensor<[%7, %2], f32>
-// VERIFY:   %14 = "dtensor.add"(%12, %13) : (!dtensor.tensor<[%7, %2], f32>, !dtensor.tensor<[%7, %2], f32>) -> !dtensor.tensor<[%7, %2], f32>
-// VERIFY:   %15 = "dtensor.mul"(%14, %14) : (!dtensor.tensor<[%7, %2], f32>, !dtensor.tensor<[%7, %2], f32>) -> !dtensor.tensor<[%7, %2], f32>
-// VERIFY:   %16 = "dtensor.cast"(%15) : (!dtensor.tensor<[%7, %2], f32>) -> !dtensor.tensor<[%7, %2], f32>
-// VERIFY:   "test.keep"(%16) : (!dtensor.tensor<[%7, %2], f32>) -> ()
+// VERIFY:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY:   %3 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+// VERIFY:   %4 = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
+// VERIFY:   %5 = "d_tensor.nat.add"(%0, %3) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   %6 = "d_tensor.nat.mul"(%5, %4) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   %7 = "d_tensor.nat.add"(%6, %3) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   %8 = "d_tensor.nat.add"(%1, %3) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   %9 = "d_tensor.nat.mul"(%8, %4) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   %10 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%7, %9], f32>
+// VERIFY:   %11 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%9, %2], f32>
+// VERIFY:   %12 = "d_tensor.matmul"(%10, %11) : (!d_tensor.tensor<[%7, %9], f32>, !d_tensor.tensor<[%9, %2], f32>) -> !d_tensor.tensor<[%7, %2], f32>
+// VERIFY:   %13 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%7, %2], f32>
+// VERIFY:   %14 = "d_tensor.add"(%12, %13) : (!d_tensor.tensor<[%7, %2], f32>, !d_tensor.tensor<[%7, %2], f32>) -> !d_tensor.tensor<[%7, %2], f32>
+// VERIFY:   %15 = "d_tensor.mul"(%14, %14) : (!d_tensor.tensor<[%7, %2], f32>, !d_tensor.tensor<[%7, %2], f32>) -> !d_tensor.tensor<[%7, %2], f32>
+// VERIFY:   %16 = "d_tensor.cast"(%15) : (!d_tensor.tensor<[%7, %2], f32>) -> !d_tensor.tensor<[%7, %2], f32>
+// VERIFY:   "test.keep"(%16) : (!d_tensor.tensor<[%7, %2], f32>) -> ()
 // VERIFY: }
 
 // CANON: builtin.module {
-// CANON:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CANON:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CANON:   %2 = "dtensor.nat.param"() : () -> !dtensor.nat
-// CANON:   %3 = "dtensor.nat.const"() <{value = 0 : i32}> : () -> !dtensor.nat
-// CANON:   %4 = "dtensor.nat.const"() <{value = 1 : i32}> : () -> !dtensor.nat
-// CANON:   %5 = "dtensor.empty"() : () -> !dtensor.tensor<[%0, %1], f32>
-// CANON:   %6 = "dtensor.empty"() : () -> !dtensor.tensor<[%1, %2], f32>
-// CANON:   %7 = "dtensor.matmul"(%5, %6) : (!dtensor.tensor<[%0, %1], f32>, !dtensor.tensor<[%1, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// CANON:   %8 = "dtensor.empty"() : () -> !dtensor.tensor<[%0, %2], f32>
-// CANON:   %9 = "dtensor.add"(%7, %8) : (!dtensor.tensor<[%0, %2], f32>, !dtensor.tensor<[%0, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// CANON:   %10 = "dtensor.mul"(%9, %9) : (!dtensor.tensor<[%0, %2], f32>, !dtensor.tensor<[%0, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// CANON:   %11 = "dtensor.cast"(%10) : (!dtensor.tensor<[%0, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// CANON:   "test.keep"(%11) : (!dtensor.tensor<[%0, %2], f32>) -> ()
+// CANON:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON:   %3 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+// CANON:   %4 = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
+// CANON:   %5 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0, %1], f32>
+// CANON:   %6 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%1, %2], f32>
+// CANON:   %7 = "d_tensor.matmul"(%5, %6) : (!d_tensor.tensor<[%0, %1], f32>, !d_tensor.tensor<[%1, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// CANON:   %8 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0, %2], f32>
+// CANON:   %9 = "d_tensor.add"(%7, %8) : (!d_tensor.tensor<[%0, %2], f32>, !d_tensor.tensor<[%0, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// CANON:   %10 = "d_tensor.mul"(%9, %9) : (!d_tensor.tensor<[%0, %2], f32>, !d_tensor.tensor<[%0, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// CANON:   %11 = "d_tensor.cast"(%10) : (!d_tensor.tensor<[%0, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// CANON:   "test.keep"(%11) : (!d_tensor.tensor<[%0, %2], f32>) -> ()
 // CANON: }
 
 // PIPE1: builtin.module {
-// PIPE1:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE1:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE1:   %2 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE1:   %3 = "dtensor.empty"() : () -> !dtensor.tensor<[%0, %1], f32>
-// PIPE1:   %4 = "dtensor.empty"() : () -> !dtensor.tensor<[%1, %2], f32>
-// PIPE1:   %5 = "dtensor.matmul"(%3, %4) : (!dtensor.tensor<[%0, %1], f32>, !dtensor.tensor<[%1, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// PIPE1:   %6 = "dtensor.empty"() : () -> !dtensor.tensor<[%0, %2], f32>
-// PIPE1:   %7 = "dtensor.add"(%5, %6) : (!dtensor.tensor<[%0, %2], f32>, !dtensor.tensor<[%0, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// PIPE1:   %8 = "dtensor.mul"(%7, %7) : (!dtensor.tensor<[%0, %2], f32>, !dtensor.tensor<[%0, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// PIPE1:   %9 = "dtensor.cast"(%8) : (!dtensor.tensor<[%0, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// PIPE1:   "test.keep"(%9) : (!dtensor.tensor<[%0, %2], f32>) -> ()
+// PIPE1:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE1:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE1:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE1:   %3 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0, %1], f32>
+// PIPE1:   %4 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%1, %2], f32>
+// PIPE1:   %5 = "d_tensor.matmul"(%3, %4) : (!d_tensor.tensor<[%0, %1], f32>, !d_tensor.tensor<[%1, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// PIPE1:   %6 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0, %2], f32>
+// PIPE1:   %7 = "d_tensor.add"(%5, %6) : (!d_tensor.tensor<[%0, %2], f32>, !d_tensor.tensor<[%0, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// PIPE1:   %8 = "d_tensor.mul"(%7, %7) : (!d_tensor.tensor<[%0, %2], f32>, !d_tensor.tensor<[%0, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// PIPE1:   %9 = "d_tensor.cast"(%8) : (!d_tensor.tensor<[%0, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// PIPE1:   "test.keep"(%9) : (!d_tensor.tensor<[%0, %2], f32>) -> ()
 // PIPE1: }
 
 // PIPE2: builtin.module {
-// PIPE2:   %0 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE2:   %1 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE2:   %2 = "dtensor.nat.param"() : () -> !dtensor.nat
-// PIPE2:   %3 = "dtensor.empty"() : () -> !dtensor.tensor<[%0, %1], f32>
-// PIPE2:   %4 = "dtensor.empty"() : () -> !dtensor.tensor<[%1, %2], f32>
-// PIPE2:   %5 = "dtensor.matmul"(%3, %4) : (!dtensor.tensor<[%0, %1], f32>, !dtensor.tensor<[%1, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// PIPE2:   %6 = "dtensor.empty"() : () -> !dtensor.tensor<[%0, %2], f32>
-// PIPE2:   %7 = "dtensor.add"(%5, %6) : (!dtensor.tensor<[%0, %2], f32>, !dtensor.tensor<[%0, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// PIPE2:   %8 = "dtensor.mul"(%7, %7) : (!dtensor.tensor<[%0, %2], f32>, !dtensor.tensor<[%0, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// PIPE2:   %9 = "dtensor.cast"(%8) : (!dtensor.tensor<[%0, %2], f32>) -> !dtensor.tensor<[%0, %2], f32>
-// PIPE2:   "test.keep"(%9) : (!dtensor.tensor<[%0, %2], f32>) -> ()
+// PIPE2:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE2:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE2:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE2:   %3 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0, %1], f32>
+// PIPE2:   %4 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%1, %2], f32>
+// PIPE2:   %5 = "d_tensor.matmul"(%3, %4) : (!d_tensor.tensor<[%0, %1], f32>, !d_tensor.tensor<[%1, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// PIPE2:   %6 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0, %2], f32>
+// PIPE2:   %7 = "d_tensor.add"(%5, %6) : (!d_tensor.tensor<[%0, %2], f32>, !d_tensor.tensor<[%0, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// PIPE2:   %8 = "d_tensor.mul"(%7, %7) : (!d_tensor.tensor<[%0, %2], f32>, !d_tensor.tensor<[%0, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// PIPE2:   %9 = "d_tensor.cast"(%8) : (!d_tensor.tensor<[%0, %2], f32>) -> !d_tensor.tensor<[%0, %2], f32>
+// PIPE2:   "test.keep"(%9) : (!d_tensor.tensor<[%0, %2], f32>) -> ()
 // PIPE2: }

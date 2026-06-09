@@ -2,11 +2,11 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics | scair-opt --allow-unregistered-dialect --verify-diagnostics
 
 builtin.module {
-  %m = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-  %n = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-  %mn = "dtensor.nat.mul"(%m, %n) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-  %m_i = "dtensor.shape.to_index"(%m) : (!dtensor.nat) -> index
-  %n_i = "dtensor.shape.to_index"(%n) : (!dtensor.nat) -> index
+  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %n = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+  %mn = "d_tensor.nat.mul"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m_i = "d_tensor.shape.to_index"(%m) : (!d_tensor.nat) -> index
+  %n_i = "d_tensor.shape.to_index"(%n) : (!d_tensor.nat) -> index
   %z = "arith.constant"() <{value = 0 : index}> : () -> index
   %one = "arith.constant"() <{value = 1 : index}> : () -> index
   %dyn_axis = "test.dynamic_axis"() : () -> index
@@ -38,11 +38,11 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %[[M:[0-9]+]] = "dtensor.nat.const"() <{value = 4 : i32}> : () -> !dtensor.nat
-// CHECK-NEXT:   %[[N:[0-9]+]] = "dtensor.nat.const"() <{value = 8 : i32}> : () -> !dtensor.nat
-// CHECK-NEXT:   %[[MN:[0-9]+]] = "dtensor.nat.mul"(%[[M]], %[[N]]) : (!dtensor.nat, !dtensor.nat) -> !dtensor.nat
-// CHECK-NEXT:   %[[MI:[0-9]+]] = "dtensor.shape.to_index"(%[[M]]) : (!dtensor.nat) -> index
-// CHECK-NEXT:   %[[NI:[0-9]+]] = "dtensor.shape.to_index"(%[[N]]) : (!dtensor.nat) -> index
+// CHECK-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+// CHECK-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
+// CHECK-NEXT:   %[[MN:[0-9]+]] = "d_tensor.nat.mul"(%[[M]], %[[N]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CHECK-NEXT:   %[[MI:[0-9]+]] = "d_tensor.shape.to_index"(%[[M]]) : (!d_tensor.nat) -> index
+// CHECK-NEXT:   %[[NI:[0-9]+]] = "d_tensor.shape.to_index"(%[[N]]) : (!d_tensor.nat) -> index
 // CHECK-NEXT:   %[[Z:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
 // CHECK-NEXT:   %[[ONE:[0-9]+]] = "arith.constant"() <{value = 1 : index}> : () -> index
 // CHECK-NEXT:   %[[AXIS:[0-9]+]] = "test.dynamic_axis"() : () -> index

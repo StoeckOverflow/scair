@@ -3,10 +3,10 @@ builtin.module {
   func.func private @bench_inv_sqrt_index(index) -> f32
 
   func.func @attention_mha(
-    %batch_nat : !dtensor.nat,
-    %seq_nat : !dtensor.nat,
-    %heads_nat : !dtensor.posnat,
-    %head_dim_nat : !dtensor.posnat,
+    %batch_nat : !d_tensor.nat,
+    %seq_nat : !d_tensor.nat,
+    %heads_nat : !d_tensor.posnat,
+    %head_dim_nat : !d_tensor.posnat,
     %Qflat : !d_memref.memref<[], f32>,
     %Kflat : !d_memref.memref<[], f32>,
     %Vflat : !d_memref.memref<[], f32>,
@@ -15,18 +15,18 @@ builtin.module {
     %tmpOutFlat : !d_memref.memref<[], f32>,
     %outFlat : !d_memref.memref<[], f32>
   ) attributes {scair.emit_bare_interface = true} {
-    %hidden_nat = "dtensor.nat.mul"(%heads_nat, %head_dim_nat) : (!dtensor.posnat, !dtensor.posnat) -> !dtensor.posnat
+    %hidden_nat = "d_tensor.nat.mul"(%heads_nat, %head_dim_nat) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
 
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
     %fneg = "arith.constant"() <{value = -3.40282347E+38 : f32}> : () -> f32
 
-    %batch = "dtensor.shape.to_index"(%batch_nat) : (!dtensor.nat) -> index
-    %seq = "dtensor.shape.to_index"(%seq_nat) : (!dtensor.nat) -> index
-    %heads = "dtensor.shape.to_index"(%heads_nat) : (!dtensor.posnat) -> index
-    %head_dim = "dtensor.shape.to_index"(%head_dim_nat) : (!dtensor.posnat) -> index
-    %hidden = "dtensor.shape.to_index"(%hidden_nat) : (!dtensor.posnat) -> index
+    %batch = "d_tensor.shape.to_index"(%batch_nat) : (!d_tensor.nat) -> index
+    %seq = "d_tensor.shape.to_index"(%seq_nat) : (!d_tensor.nat) -> index
+    %heads = "d_tensor.shape.to_index"(%heads_nat) : (!d_tensor.posnat) -> index
+    %head_dim = "d_tensor.shape.to_index"(%head_dim_nat) : (!d_tensor.posnat) -> index
+    %hidden = "d_tensor.shape.to_index"(%hidden_nat) : (!d_tensor.posnat) -> index
     %seq_hidden = "arith.muli"(%seq, %hidden) : (index, index) -> index
     %seq_seq = "arith.muli"(%seq, %seq) : (index, index) -> index
     %heads_seq_seq = "arith.muli"(%heads, %seq_seq) : (index, index) -> index
