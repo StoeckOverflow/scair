@@ -5,17 +5,17 @@
 
 // CSE + deep RAUW: merged dim value must rewrite type-embedded use.
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-  %s0 = "d_tensor.nat.add"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %s1 = "d_tensor.nat.add"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 2 : index}> : () -> index
+  %n = "arith.constant"() <{value = 3 : index}> : () -> index
+  %s0 = "arith.addi"(%m, %n) : (index, index) -> index
+  %s1 = "arith.addi"(%m, %n) : (index, index) -> index
   %u = "test.use"() : () -> !d_tensor.tensor<[%s1], f32>
 }
 
 // CSE: builtin.module {
-// CSE:   %0 = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-// CSE:   %1 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-// CSE:   %2 = "d_tensor.nat.add"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CSE:   %0 = "arith.constant"() <{value = 2 : index}> : () -> index
+// CSE:   %1 = "arith.constant"() <{value = 3 : index}> : () -> index
+// CSE:   %2 = "arith.addi"(%0, %1) {{.*}} : (index, index) -> index
 // CSE:   %3 = "test.use"() : () -> !d_tensor.tensor<[%2], f32>
 // CSE: }
 
@@ -23,13 +23,13 @@ builtin.module {
 
 // DCE removes truly dead nat ops while preserving used dims.
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %dead = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 4 : index}> : () -> index
+  %z = "arith.constant"() <{value = 0 : index}> : () -> index
+  %dead = "arith.addi"(%m, %z) : (index, index) -> index
   %u = "test.keep"() : () -> !d_tensor.tensor<[%m], f32>
 }
 
 // DCE: builtin.module {
-// DCE:   %0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+// DCE:   %0 = "arith.constant"() <{value = 4 : index}> : () -> index
 // DCE:   %1 = "test.keep"() : () -> !d_tensor.tensor<[%0], f32>
 // DCE: }

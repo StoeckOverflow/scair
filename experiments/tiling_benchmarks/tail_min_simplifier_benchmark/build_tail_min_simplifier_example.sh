@@ -119,7 +119,7 @@ write_route_manifest() {
 |---|---|
 | `stock_affine_guarded_tile` | Stock affine negative control: upstream affine cleanup keeps the `affine.for ... to min` tail guard for an ordinary product. |
 | `ordinary_d_affine_guarded_tile` | Congruent ordinary `d_affine` dynamic-step control: a known-positive RHS permits guarded tiling, but there is no dependent product fact to consume, so the `arith.minsi` tail guard remains. |
-| `dependent_guarded_tile_simplified` | Congruent dependent `d_affine` route: explicit `d_tensor.nat.mul` facts let `dependent-tail-min-simplify` remove the `arith.minsi` tail guard. |
+| `dependent_guarded_tile_simplified` | Congruent dependent `d_affine` route: explicit `arith.muli` facts let `dependent-tail-min-simplify` remove the `arith.minsi` tail guard. |
 
 The simplifier is conservative. Missing a non-standard tail form is an
 optimization miss; removing a min without a dependent product proof is invalid.
@@ -143,7 +143,7 @@ MD
     "route": "dependent_guarded_tile_simplified",
     "claim_role": "proof_consuming_tail_cleanup",
     "expected_tail": "none",
-    "product_representation": "d_tensor.nat.mul"
+    "product_representation": "arith.muli"
   }
 ]
 JSON
@@ -163,7 +163,7 @@ CSV
 dependent_simplified="$OUT_DIR/dependent_guarded_tile_tail_min_simplified.mlir"
 ordinary_cleanup="$OUT_DIR/ordinary_d_affine_guarded_tile_cleanup.mlir"
 run_scair_pipeline "$ORDINARY_SOURCE" "$ordinary_cleanup" "ordinary-product-tile-with-tail,canonicalize,cse,dce"
-run_scair_pipeline "$DEPENDENT_SOURCE" "$dependent_simplified" "canonicalize-d-tensor-nat-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
+run_scair_pipeline "$DEPENDENT_SOURCE" "$dependent_simplified" "canonicalize-d-tensor-shape-products,dependent-tile-with-tail-control,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
 
 if [[ -x "$MLIR_OPT" ]]; then
   stock_guarded="$(mktemp "$OUT_DIR/stock_affine_guarded_tile.XXXXXX.tmp.mlir")"
@@ -186,7 +186,7 @@ metric_row "dependent_guarded_tile_simplified" "after_tail_min_simplify_cleanup"
   echo
   echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo
-  echo "| Variant | Stage | affine.min | arith.minsi | tail guards | dynamic steps | static steps | nat.mul | shape.to_index | total ops | LOC | Removed delta | Notes |"
+  echo "| Variant | Stage | affine.min | arith.minsi | tail guards | dynamic steps | static steps | arith.muli | direct index | total ops | LOC | Removed delta | Notes |"
   echo "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"
   tail -n +2 "$METRICS" | while IFS=, read -r variant stage toolchain status artifact affine_min arith_min d_affine_min tail_guard dynamic_step static_step nat_mul shape_to_index d_affine_for affine_for total_ops loc delta notes; do
     echo "| \`$variant\` | \`$stage\` | $affine_min | $arith_min | $tail_guard | $dynamic_step | $static_step | $nat_mul | $shape_to_index | $total_ops | $loc | $delta | $notes |"
@@ -195,7 +195,7 @@ metric_row "dependent_guarded_tile_simplified" "after_tail_min_simplify_cleanup"
   echo "Key comparison:"
   echo "- \`stock_affine_guarded_tile\` is the stock affine negative control: upstream \`affine-simplify-min-max\` keeps the \`affine.for ... to min\` tail because it cannot recover the dependent divisibility fact from ordinary SSA arithmetic."
   echo "- \`ordinary_d_affine_guarded_tile\` is the congruent ordinary dynamic-step control: it uses ordinary \`arith.muli\` provenance, emits a tail/min guard, and retains that guard because there is no dependent product proof to consume."
-  echo "- \`dependent_guarded_tile_simplified\` is the congruent dependent route: it consumes \`d_tensor.nat.mul\` provenance and rewrites the min upper bound to \`tile + tileSize\`, leaving no tail/min guard."
+  echo "- \`dependent_guarded_tile_simplified\` is the congruent dependent route: it consumes \`arith.muli\` provenance and rewrites the min upper bound to \`tile + tileSize\`, leaving no tail/min guard."
 } > "$SUMMARY"
 
 echo "Tail/min simplifier benchmark complete."

@@ -7,9 +7,9 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | scair-opt --allow-unregistered-dialect --verify-diagnostics --split-input-file
 
 builtin.module {
-  %x = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %s = "d_tensor.nat.add"(%x, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %x = "test.index"() : () -> index
+  %z = "arith.constant"() <{value = 0 : index}> : () -> index
+  %s = "arith.addi"(%x, %z) : (index, index) -> index
 
   %e0 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%s], f32>
   %e1 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%s], f32>
@@ -22,9 +22,9 @@ builtin.module {
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// VERIFY:   %1 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-// VERIFY:   %2 = "d_tensor.nat.add"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// VERIFY:   %0 = "test.index"() : () -> index
+// VERIFY:   %1 = "arith.constant"() <{value = 0 : index}> : () -> index
+// VERIFY:   %2 = "arith.addi"(%0, %1) {{.*}} : (index, index) -> index
 // VERIFY:   %3 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%2], f32>
 // VERIFY:   %4 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%2], f32>
 // VERIFY:   %5 = "d_tensor.cast"(%4) : (!d_tensor.tensor<[%2], f32>) -> !d_tensor.tensor<[%2], f32>
@@ -34,18 +34,19 @@ builtin.module {
 // VERIFY: }
 
 // CANON: builtin.module {
-// CANON:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON:   %1 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-// CANON:   %2 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0], f32>
-// CANON:   %3 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0], f32>
-// CANON:   %4 = "d_tensor.cast"(%3) : (!d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
-// CANON:   %5 = "d_tensor.add"(%2, %4) : (!d_tensor.tensor<[%0], f32>, !d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
-// CANON:   %6 = "d_tensor.mul"(%5, %2) : (!d_tensor.tensor<[%0], f32>, !d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
-// CANON:   "test.keep"(%6) : (!d_tensor.tensor<[%0], f32>) -> ()
+// CANON:   %0 = "test.index"() : () -> index
+// CANON:   %1 = "arith.constant"() <{value = 0 : index}> : () -> index
+// CANON:   %2 = "arith.addi"(%0, %1) {{.*}} : (index, index) -> index
+// CANON:   %3 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%2], f32>
+// CANON:   %4 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%2], f32>
+// CANON:   %5 = "d_tensor.cast"(%4) : (!d_tensor.tensor<[%2], f32>) -> !d_tensor.tensor<[%2], f32>
+// CANON:   %6 = "d_tensor.add"(%3, %5) : (!d_tensor.tensor<[%2], f32>, !d_tensor.tensor<[%2], f32>) -> !d_tensor.tensor<[%2], f32>
+// CANON:   %7 = "d_tensor.mul"(%6, %3) : (!d_tensor.tensor<[%2], f32>, !d_tensor.tensor<[%2], f32>) -> !d_tensor.tensor<[%2], f32>
+// CANON:   "test.keep"(%7) : (!d_tensor.tensor<[%2], f32>) -> ()
 // CANON: }
 
 // PIPE: builtin.module {
-// PIPE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE:   %0 = "test.index"() : () -> index
 // PIPE:   %1 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%0], f32>
 // PIPE:   %2 = "d_tensor.cast"(%1) : (!d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
 // PIPE:   %3 = "d_tensor.add"(%1, %2) : (!d_tensor.tensor<[%0], f32>, !d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>

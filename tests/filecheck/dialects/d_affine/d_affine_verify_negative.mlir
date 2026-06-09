@@ -118,8 +118,8 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 4 : index}> : () -> index
+  %n = "arith.constant"() <{value = 5 : index}> : () -> index
   %i = "arith.constant"() <{value = 1 : index}> : () -> index
   %j = "arith.constant"() <{value = 2 : index}> : () -> index
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], i32>
@@ -132,8 +132,8 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 4 : index}> : () -> index
+  %n = "arith.constant"() <{value = 5 : index}> : () -> index
   %i = "arith.constant"() <{value = 1 : index}> : () -> index
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], i32>
   %bad = "d_affine.load"(%buf, %i) <{map = affine_map<(d0) -> (d0)>}>
@@ -145,8 +145,8 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 4 : index}> : () -> index
+  %n = "arith.constant"() <{value = 5 : index}> : () -> index
   %i = "arith.constant"() <{value = 1 : index}> : () -> index
   %j = "arith.constant"() <{value = 2 : index}> : () -> index
   %v = "arith.constant"() <{value = 7 : i64}> : () -> i64
@@ -160,8 +160,8 @@ builtin.module {
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 4 : index}> : () -> index
+  %n = "arith.constant"() <{value = 5 : index}> : () -> index
   %i = "arith.constant"() <{value = 1 : index}> : () -> index
   %v = "arith.constant"() <{value = 7 : i32}> : () -> i32
   %buf = d_memref.alloc : () -> !d_memref.memref<[%m, %n], i32>

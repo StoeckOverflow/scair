@@ -1,25 +1,13 @@
 package scair.passes.d_tensor_shape_canonicalize
 
 import scair.MLContext
+import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.d_tensor.*
 import scair.ir.*
-import scair.utils.OK
+import scair.passes.ShapeIndexProvenance
+import scair.passes.analysis.ShapeProductFacts
 import scair.transformations.{GreedyRewritePatternApplier, PatternRewriteWalker, WalkerPass, PatternAction, pattern}
-
-private def constValue(
-    v: Value[DTensorNatLikeType]
-): Option[(BigInt, IntegerType | IndexType)] =
-  v.owner match
-    case Some(NatConst(IntegerAttr(IntData(k), typ), _)) => Some((k, typ))
-    case _                                               => None
-
-private def mkNatConst(
-    k: BigInt,
-    typ: IntegerType | IndexType,
-    resType: DTensorNatLikeType,
-): NatConst =
-  NatConst(IntegerAttr(IntData(k), typ), Result(resType))
 
 private def parseReassociationGroups(
     reassociation: ArrayAttribute[Attribute]
@@ -36,13 +24,18 @@ private def parseReassociationGroups(
     case _ => None
   }
 
-private def productType(
-    lhs: Value[Attribute],
-    rhs: Value[Attribute],
-): DTensorNatLikeType =
-  (lhs.typ, rhs.typ) match
-    case (_: DTensorPosNatType, _: DTensorPosNatType) => DTensorPosNatType()
-    case _                                            => DTensorNatType()
+private def idxConst(v: BigInt): arith.Constant =
+  arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
+
+private def asIndex(v: Value[Attribute]): Operand[IndexType] =
+  v.asInstanceOf[Operand[IndexType]]
+
+private def dimAsIndex(param: DimParam): (Seq[Operation], Value[Attribute]) =
+  param match
+    case v: ValueAttribute => (Seq.empty, v.getVal())
+    case IntegerAttr(IntData(v), _: IndexType | _: IntegerType) =>
+      val c = idxConst(v)
+      (Seq(c), c.result)
 
 private def buildOrderedProduct(
     dims: Seq[Value[Attribute]]
@@ -54,12 +47,8 @@ private def buildOrderedProduct(
       Some(
         rest.foldLeft((Seq.empty[Operation], first)) {
           case ((ops, acc), dim) =>
-            val mul = NatMul(
-              acc.asInstanceOf[Operand[DTensorNatLikeType]],
-              dim.asInstanceOf[Operand[DTensorNatLikeType]],
-              Result(productType(acc, dim)),
-            )
-            (ops :+ mul, mul.res)
+            val mul = arith.MulI(asIndex(acc), asIndex(dim), Result(IndexType()))
+            (ops :+ mul, mul.result)
         }
       )
 
@@ -71,7 +60,7 @@ private def tensorTypeWithDims(
 
 private def sameValueDims(
     lhs: Seq[Value[Attribute]],
-    rhs: Seq[ValueAttribute],
+    rhs: Seq[DimParam],
 ): Boolean =
   DTensorTypeUtil.sameDims(lhs.map(ValueAttribute(_)), rhs)
 
@@ -79,45 +68,32 @@ private def productMatches(
     product: Value[Attribute],
     factors: Seq[Value[Attribute]],
 ): Boolean =
-  DTensorTypeUtil.sameOrderedNatProduct(product, factors) match
-    case OK(true) => true
-    case _        => false
-
-private val NatAddFold = pattern { case NatAdd(lhs, rhs, res) =>
-  (constValue(lhs), constValue(rhs)) match
-    case (Some((0, _)), _)              => (Seq(), Seq(rhs))
-    case (_, Some((0, _)))              => (Seq(), Seq(lhs))
-    case (Some((a, aty)), Some((b, _))) =>
-      mkNatConst(a + b, aty, res.typ)
-    case _ => PatternAction.Abort
-}
-
-private val NatMulFold = pattern { case NatMul(lhs, rhs, res) =>
-  (constValue(lhs), constValue(rhs)) match
-    case (Some((0, _)), _)              => (Seq(), Seq(lhs))
-    case (_, Some((0, _)))              => (Seq(), Seq(rhs))
-    case (Some((1, _)), _)              => (Seq(), Seq(rhs))
-    case (_, Some((1, _)))              => (Seq(), Seq(lhs))
-    case (Some((a, aty)), Some((b, _))) =>
-      mkNatConst(a * b, aty, res.typ)
-    case _ => PatternAction.Abort
-}
+  val explicit = ShapeProductFacts.ProductFactors(
+    factors.map(f => ShapeProductFacts.Factor(f, ShapeIndexProvenance.exactConstInShapeExpr(f)))
+  )
+  ShapeProductFacts.flattenProduct(product).exists { full =>
+    full.factors.size == explicit.factors.size &&
+      full.containsAllExplicitFactors(explicit)
+  }
 
 private val MaterializeCollapseShapeProducts = pattern {
   case op: CollapseShape =>
     parseReassociationGroups(op.reassociation) match
       case None => PatternAction.Abort
       case Some(groups) =>
+        val (resPrefix, resDims) = op.res.typ.params.map(dimAsIndex).unzip
+        val (srcPrefix, srcDims) = op.src.typ.params.map(dimAsIndex).unzip
+        val dimPrefix = (resPrefix ++ srcPrefix).flatten
         if groups.zipWithIndex.forall { case (group, resIdx) =>
             productMatches(
-              op.res.typ.params(resIdx).getVal(),
-              group.map(idx => op.src.typ.params(idx).getVal()),
+              resDims(resIdx),
+              group.map(idx => srcDims(idx)),
             )
           }
         then PatternAction.Abort
         else
           val built = groups.map(group =>
-            buildOrderedProduct(group.map(idx => op.src.typ.params(idx).getVal()))
+            buildOrderedProduct(group.map(idx => srcDims(idx)))
           )
           if built.exists(_.isEmpty) then PatternAction.Abort
           else
@@ -131,7 +107,7 @@ private val MaterializeCollapseShapeProducts = pattern {
                 op.reassociation,
                 Result(tensorTypeWithDims(canonicalDims, op.res.typ.elem)),
               )
-              (productOps :+ canonical, Seq(canonical.res))
+              (dimPrefix ++ productOps :+ canonical, Seq(canonical.res))
 }
 
 private val MaterializeJoinDimProduct = pattern {
@@ -143,30 +119,33 @@ private val MaterializeJoinDimProduct = pattern {
       if axis < 0 || axis + 1 >= srcRank then PatternAction.Abort
       else
         val idx = axis.toInt
+        val (srcPrefix, srcDims) = op.src.typ.params.map(dimAsIndex).unzip
+        val (resPrefix, resDims) = op.res.typ.params.map(dimAsIndex).unzip
+        val dimPrefix = (srcPrefix ++ resPrefix).flatten
         if productMatches(
-            op.res.typ.params(idx).getVal(),
-            Seq(op.src.typ.params(idx).getVal(), op.src.typ.params(idx + 1).getVal()),
+            resDims(idx),
+            Seq(srcDims(idx), srcDims(idx + 1)),
           )
         then PatternAction.Abort
         else
           buildOrderedProduct(
-            Seq(op.src.typ.params(idx).getVal(), op.src.typ.params(idx + 1).getVal())
+            Seq(srcDims(idx), srcDims(idx + 1))
           ) match
             case None => PatternAction.Abort
             case Some((productOps, productDim)) =>
               val canonicalDims =
-                op.src.typ.params.take(idx).map(_.getVal()) ++
+                srcDims.take(idx) ++
                   Seq(productDim) ++
-                  op.src.typ.params.drop(idx + 2).map(_.getVal())
+                  srcDims.drop(idx + 2)
               if sameValueDims(canonicalDims, op.res.typ.params) then
                 PatternAction.Abort
               else
                 val canonical = JoinDim(
                   op.src,
                   op.dim,
-                  Result(tensorTypeWithDims(canonicalDims, op.res.typ.elem)),
-                )
-                (productOps :+ canonical, Seq(canonical.res))
+                Result(tensorTypeWithDims(canonicalDims, op.res.typ.elem)),
+              )
+                (dimPrefix ++ productOps :+ canonical, Seq(canonical.res))
 }
 
 final class DTensorShapeCanonicalize(ctx: MLContext) extends WalkerPass(ctx):
@@ -174,7 +153,6 @@ final class DTensorShapeCanonicalize(ctx: MLContext) extends WalkerPass(ctx):
 
   override val walker = PatternRewriteWalker(
     GreedyRewritePatternApplier(
-      Seq(NatAddFold, NatMulFold)
-        ++ Seq(MaterializeCollapseShapeProducts, MaterializeJoinDimProduct)
+      Seq(MaterializeCollapseShapeProducts, MaterializeJoinDimProduct)
     )
   )

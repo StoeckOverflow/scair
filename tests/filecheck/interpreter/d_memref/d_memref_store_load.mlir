@@ -3,7 +3,7 @@
 
 builtin.module {
   func.func @main() -> i32 {
-    %n = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+    %n = "arith.constant"() <{value = 4 : index}> : () -> index
     %o_i = "arith.constant"() <{value = 1 : index}> : () -> index
     %m = d_memref.alloc : () -> !d_memref.memref<[%n], i32>
     %v = "arith.constant"() <{value = 42 : i32}> : () -> i32
@@ -16,7 +16,7 @@ builtin.module {
 
 // IR-LABEL: builtin.module {
 // IR: func.func @main() -> i32 {
-// IR: %0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+// IR: %0 = "arith.constant"() <{value = 4 : index}> : () -> index
 // IR: %1 = "arith.constant"() <{value = 1 : index}> : () -> index
 // IR: %2 = d_memref.alloc : () -> !d_memref.memref<[%0], i32>
 // IR: %3 = "arith.constant"() <{value = 42 : i32}> : () -> i32

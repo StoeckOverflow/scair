@@ -1,4 +1,4 @@
-package scair.passes.dependent_natmul_tiling
+package scair.passes.dependent_product_tiling
 
 import scair.MLContext
 import scair.ir.Operation

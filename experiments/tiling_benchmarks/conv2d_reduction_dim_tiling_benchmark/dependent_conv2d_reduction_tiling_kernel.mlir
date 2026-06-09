@@ -1,36 +1,25 @@
 builtin.module {
   func.func @conv2d_reduction_dim_tiling(
-    %n_nat : !d_tensor.nat, %cin0_nat : !d_tensor.nat, %cin1_nat : !d_tensor.posnat,
-    %h_nat : !d_tensor.nat, %w_nat : !d_tensor.nat, %cout_nat : !d_tensor.nat,
-    %kh_nat : !d_tensor.posnat, %kw_nat : !d_tensor.posnat,
-    %oh_nat : !d_tensor.nat, %ow_nat : !d_tensor.nat,
+    %n : index, %cin0 : index, %cin1 : index,
+    %h : index, %w : index, %cout : index,
+    %kh : index, %kw : index,
+    %oh : index, %ow : index,
     %Xflat : !d_memref.memref<[], f32>, %Kflat : !d_memref.memref<[], f32>, %Yflat : !d_memref.memref<[], f32>
   ) {
-    %cin_nat = "d_tensor.nat.mul"(%cin0_nat, %cin1_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
-    %khkw_nat = "d_tensor.nat.mul"(%kh_nat, %kw_nat) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
-    %red_tile_nat = "d_tensor.nat.mul"(%cin1_nat, %khkw_nat) : (!d_tensor.posnat, !d_tensor.posnat) -> !d_tensor.posnat
-    %cin_khkw_nat = "d_tensor.nat.mul"(%cin0_nat, %red_tile_nat) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
+    %cin = "arith.muli"(%cin0, %cin1) : (index, index) -> index
+    %khkw = "arith.muli"(%kh, %kw) : (index, index) -> index
+    %red_tile = "arith.muli"(%cin1, %khkw) : (index, index) -> index
+    %cin_khkw = "arith.muli"(%cin0, %red_tile) : (index, index) -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %c1 = "arith.constant"() <{value = 1 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-    %n = "d_tensor.shape.to_index"(%n_nat) : (!d_tensor.nat) -> index
-    %cin = "d_tensor.shape.to_index"(%cin_nat) : (!d_tensor.nat) -> index
-    %h = "d_tensor.shape.to_index"(%h_nat) : (!d_tensor.nat) -> index
-    %w = "d_tensor.shape.to_index"(%w_nat) : (!d_tensor.nat) -> index
-    %cout = "d_tensor.shape.to_index"(%cout_nat) : (!d_tensor.nat) -> index
-    %kh = "d_tensor.shape.to_index"(%kh_nat) : (!d_tensor.posnat) -> index
-    %kw = "d_tensor.shape.to_index"(%kw_nat) : (!d_tensor.posnat) -> index
-    %oh = "d_tensor.shape.to_index"(%oh_nat) : (!d_tensor.nat) -> index
-    %ow = "d_tensor.shape.to_index"(%ow_nat) : (!d_tensor.nat) -> index
-    %khkw = "d_tensor.shape.to_index"(%khkw_nat) : (!d_tensor.posnat) -> index
-    %cin_khkw = "d_tensor.shape.to_index"(%cin_khkw_nat) : (!d_tensor.nat) -> index
     %hw = "arith.muli"(%h, %w) : (index, index) -> index
     %chw = "arith.muli"(%cin, %hw) : (index, index) -> index
     %ohow = "arith.muli"(%oh, %ow) : (index, index) -> index
     %cout_ohow = "arith.muli"(%cout, %ohow) : (index, index) -> index
-    %X = d_memref.reinterpret_cast %Xflat : !d_memref.memref<[], f32> to !d_memref.memref<[%n_nat, %cin_nat, %oh_nat, %ow_nat, %kh_nat, %kw_nat], f32, offset: 0, strides: [%chw, %hw, %w, %c1, %w, %c1]>
-    %K = d_memref.reinterpret_cast %Kflat : !d_memref.memref<[], f32> to !d_memref.memref<[%cout_nat, %cin_nat, %kh_nat, %kw_nat], f32, offset: 0, strides: [%cin_khkw, %khkw, %kw, %c1]>
-    %Y = d_memref.reinterpret_cast %Yflat : !d_memref.memref<[], f32> to !d_memref.memref<[%n_nat, %cout_nat, %oh_nat, %ow_nat], f32, offset: 0, strides: [%cout_ohow, %ohow, %ow, %c1]>
+    %X = d_memref.reinterpret_cast %Xflat : !d_memref.memref<[], f32> to !d_memref.memref<[%n, %cin, %oh, %ow, %kh, %kw], f32, offset: 0, strides: [%chw, %hw, %w, %c1, %w, %c1]>
+    %K = d_memref.reinterpret_cast %Kflat : !d_memref.memref<[], f32> to !d_memref.memref<[%cout, %cin, %kh, %kw], f32, offset: 0, strides: [%cin_khkw, %khkw, %kw, %c1]>
+    %Y = d_memref.reinterpret_cast %Yflat : !d_memref.memref<[], f32> to !d_memref.memref<[%n, %cout, %oh, %ow], f32, offset: 0, strides: [%cout_ohow, %ohow, %ow, %c1]>
     d_affine.for %ni = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%n) step 1 : index {
       d_affine.for %co = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%cout) step 1 : index {
         d_affine.for %ohi = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%oh) step 1 : index {
@@ -40,13 +29,13 @@ builtin.module {
               %filter_p = "arith.remui"(%p, %khkw) : (index, index) -> index
               %khi = "arith.divui"(%filter_p, %kw) : (index, index) -> index
               %kwi = "arith.remui"(%filter_p, %kw) : (index, index) -> index
-              %x = d_memref.load %X[%ni, %ci, %ohi, %owi, %khi, %kwi] : !d_memref.memref<[%n_nat, %cin_nat, %oh_nat, %ow_nat, %kh_nat, %kw_nat], f32, offset: 0, strides: [%chw, %hw, %w, %c1, %w, %c1]> -> f32
-              %k = d_memref.load %K[%co, %ci, %khi, %kwi] : !d_memref.memref<[%cout_nat, %cin_nat, %kh_nat, %kw_nat], f32, offset: 0, strides: [%cin_khkw, %khkw, %kw, %c1]> -> f32
+              %x = d_memref.load %X[%ni, %ci, %ohi, %owi, %khi, %kwi] : !d_memref.memref<[%n, %cin, %oh, %ow, %kh, %kw], f32, offset: 0, strides: [%chw, %hw, %w, %c1, %w, %c1]> -> f32
+              %k = d_memref.load %K[%co, %ci, %khi, %kwi] : !d_memref.memref<[%cout, %cin, %kh, %kw], f32, offset: 0, strides: [%cin_khkw, %khkw, %kw, %c1]> -> f32
               %mul = "arith.mulf"(%x, %k) : (f32, f32) -> f32
               %next = "arith.addf"(%acc, %mul) : (f32, f32) -> f32
               d_affine.yield %next : (f32)
             }
-            d_memref.store %sum, %Y[%ni, %co, %ohi, %owi] : f32, !d_memref.memref<[%n_nat, %cout_nat, %oh_nat, %ow_nat], f32, offset: 0, strides: [%cout_ohow, %ohow, %ow, %c1]>
+            d_memref.store %sum, %Y[%ni, %co, %ohi, %owi] : f32, !d_memref.memref<[%n, %cout, %oh, %ow], f32, offset: 0, strides: [%cout_ohow, %ohow, %ow, %c1]>
             d_affine.yield
           }
           d_affine.yield

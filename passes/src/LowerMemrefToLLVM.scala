@@ -42,8 +42,8 @@ private def pointerBasedRefinedTail(
     NormalizeRefinedLayoutAccesses(ctx),
   ) ++ Seq(
     LowerRefinedControlFlowToLLVM(ctx),
-    ConvertArithToLLVM(ctx),
     FinalizeRefinedDMemrefToLLVM(ctx),
+    ConvertArithToLLVM(ctx),
     DeadCodeElimination(ctx),
   )
 

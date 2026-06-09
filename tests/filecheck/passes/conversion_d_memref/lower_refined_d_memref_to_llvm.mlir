@@ -9,18 +9,14 @@ builtin.module {
     %f1 = "arith.constant"() <{value = 1.0 : f32}> : () -> f32
 
     %total = "arith.muli"(%c256, %stride0) : (index, index) -> index
-    %flat_nat = "d_tensor.index_to_nat"(%total) : (index) -> !d_tensor.nat
-    %flat = d_memref.alloc : () -> !d_memref.memref<[%flat_nat], f32>
-
-    %d0 = "d_tensor.nat.const"() <{value = 256 : i32}> : () -> !d_tensor.nat
-    %d1 = "d_tensor.nat.const"() <{value = 1024 : i32}> : () -> !d_tensor.nat
+    %flat = d_memref.alloc : () -> !d_memref.memref<[%total], f32>
 
     %buf = d_memref.reinterpret_cast %flat
-    : !d_memref.memref<[%flat_nat], f32> to !d_memref.memref<[%d0, %d1], f32, offset: %zero, strides: [%stride0, %stride1]>
+    : !d_memref.memref<[%total], f32> to !d_memref.memref<[%c256, %c1024], f32, offset: %zero, strides: [%stride0, %stride1]>
 
     d_affine.for %i = affine_map<(d0) -> (d0)>(%zero) to affine_map<(d0) -> (d0)>(%c256) step 1 : index {
       d_affine.for %j = affine_map<(d0) -> (d0)>(%zero) to affine_map<(d0) -> (d0)>(%c1024) step 1 : index {
-        d_memref.store %f1, %buf[%i, %j] : f32, !d_memref.memref<[%d0, %d1], f32, offset: %zero, strides: [%stride0, %stride1]>
+        d_memref.store %f1, %buf[%i, %j] : f32, !d_memref.memref<[%c256, %c1024], f32, offset: %zero, strides: [%stride0, %stride1]>
         d_affine.yield
       }
       d_affine.yield
@@ -28,13 +24,13 @@ builtin.module {
 
     %result = d_affine.for %i = affine_map<(d0) -> (d0)>(%zero) to affine_map<(d0) -> (d0)>(%c256) step 1 : index iter_args(%acc = %f0 : f32) {
       %inner = d_affine.for %j = affine_map<(d0) -> (d0)>(%zero) to affine_map<(d0) -> (d0)>(%c1024) step 1 : index iter_args(%acc2 = %acc : f32) {
-        %v = d_memref.load %buf[%i, %j] : !d_memref.memref<[%d0, %d1], f32, offset: %zero, strides: [%stride0, %stride1]> -> f32
+        %v = d_memref.load %buf[%i, %j] : !d_memref.memref<[%c256, %c1024], f32, offset: %zero, strides: [%stride0, %stride1]> -> f32
         %sum = "arith.addf"(%acc2, %v) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
         d_affine.yield %sum : (f32)
       }
       d_affine.yield %inner : (f32)
     }
-    d_memref.dealloc %flat : !d_memref.memref<[%flat_nat], f32>
+    d_memref.dealloc %flat : !d_memref.memref<[%total], f32>
     func.return %result : f32
   }
 }

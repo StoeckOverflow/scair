@@ -64,11 +64,10 @@ object DMemrefTypeUtil:
         v.getVal().typ match
           case _: IndexType      => OK(())
           case _: IntegerType    => OK(())
-          case _: DTensorNatLikeType => DTensorTypeUtil.resolveNatValue(v.getVal()).map(_ => ())
           case ValueRefType(ref) => checkLayoutParam(ValueAttribute(ref.getVal()))
           case other =>
             Err(
-              s"layout SSA parameter must have type index, integer, !d_tensor.nat, !d_tensor.posnat, or !value<...>, got ${renderAttr(other)}"
+              s"layout SSA parameter must have type index, integer, or !value<...>, got ${renderAttr(other)}"
             )
       case IntegerAttr(_, _: IndexType)   => OK(())
       case IntegerAttr(_, _: IntegerType) => OK(())
@@ -392,7 +391,7 @@ final case class DimExact(
     else
       selectedDimValue.flatMap(sel =>
         if res.typ.ref.getVal() eq sel then
-          DTensorTypeUtil.resolveNatValue(res.typ.ref.getVal()).map(_ => this)
+          DTensorTypeUtil.resolveIndexValue(res.typ.ref.getVal()).map(_ => this)
         else
           Err(
             "d_memref.dim_exact: expected result !value<...> to reference the selected embedded dim"
@@ -567,14 +566,14 @@ final case class Subview(
   ): Boolean =
     dim match
       case d: ValueAttribute =>
-        val dimNat = DTensorTypeUtil.resolveNatValue(d.getVal())
-        val sizeNat = DTensorTypeUtil.resolveNatFromIndexValue(size)
-        (dimNat, sizeNat) match
+        val dimIndex = DTensorTypeUtil.resolveIndexValue(d.getVal())
+        val sizeIndex = DTensorTypeUtil.resolveIndexValue(size)
+        (dimIndex, sizeIndex) match
           case (OK(lhs), OK(rhs)) => lhs eq rhs
           case _                  =>
             (d.getVal().owner, size.owner) match
               case (
-                    Some(NatConst(IntegerAttr(IntData(lhs), _), _)),
+                    Some(arith.Constant(IntegerAttr(IntData(lhs), _: IndexType), _)),
                     Some(arith.Constant(IntegerAttr(IntData(rhs), _: IndexType), _)),
                   ) => lhs == rhs
               case _ => false
@@ -608,7 +607,7 @@ final case class Subview(
       firstSizeProvenanceMismatch match
         case Some(axis) =>
           Err(
-            s"d_memref.subview: size provenance mismatch at axis $axis; expected result dim to match size operand via d_tensor.shape.to_index"
+            s"d_memref.subview: size provenance mismatch at axis $axis; expected result dim to match size operand"
           )
         case None =>
           OK(this)

@@ -3,7 +3,7 @@ package scair.passes.validate_d_affine_dynamic_steps
 import scair.MLContext
 import scair.dialects.d_affine
 import scair.ir.*
-import scair.passes.NatProvenance
+import scair.passes.ShapeIndexProvenance
 import scair.transformations.ModulePass
 
 final class ValidateDAffineDynamicSteps(ctx: MLContext) extends ModulePass(ctx):
@@ -13,7 +13,7 @@ final class ValidateDAffineDynamicSteps(ctx: MLContext) extends ModulePass(ctx):
     op match
       case loop: d_affine.For =>
         loop.stepOperands.headOption.foreach { step =>
-          if !NatProvenance.isPositive(step) then
+          if !ShapeIndexProvenance.isPositive(step) then
             throw new Exception(
               s"d_affine.for dynamic step must be proven strictly positive before lowering"
             )

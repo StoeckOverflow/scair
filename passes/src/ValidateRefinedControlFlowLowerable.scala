@@ -5,7 +5,7 @@ import scair.dialects.d_affine
 import scair.dialects.func
 import scair.dialects.scf
 import scair.ir.*
-import scair.passes.NatProvenance
+import scair.passes.ShapeIndexProvenance
 import scair.passes.control_flow_helpers.explainUnsupporteDAffineMap
 import scair.transformations.ModulePass
 
@@ -27,7 +27,7 @@ final class ValidateRefinedControlFlowLowerable(ctx: MLContext) extends ModulePa
     validateAffineMap("d_affine.for lower bound", loop.lowerBoundMap)
     validateAffineMap("d_affine.for upper bound", loop.upperBoundMap)
     loop.stepOperands.headOption.foreach { step =>
-      if !NatProvenance.isPositive(step) then
+      if !ShapeIndexProvenance.isPositive(step) then
         fail("d_affine.for dynamic step is not proven strictly positive")
     }
     if loop.inits.isEmpty && loop.res.nonEmpty then

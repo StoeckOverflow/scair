@@ -5,7 +5,7 @@ import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.d_affine
 import scair.ir.*
-import scair.passes.NatProvenance
+import scair.passes.ShapeIndexProvenance
 
 object TailBoundFacts:
   final case class TileEnd(
@@ -180,14 +180,16 @@ object TailBoundFacts:
 
   private def hasCompatibleStep(loop: d_affine.For, tileSize: Value[Attribute]): Boolean =
     val positiveTileSize =
-      NatProvenance.exactConst(tileSize).exists(_ > 0) || NatProvenance.isPositive(tileSize)
+      ShapeIndexProvenance.exactConst(tileSize).exists(_ > 0) ||
+        ShapeIndexProvenance.exactConstInShapeExpr(tileSize).exists(_ > 0) ||
+        ShapeIndexProvenance.isPositive(tileSize)
     if !positiveTileSize then false
     else if loop.stepOperands.nonEmpty then
       loop.stepOperands.size == 1 &&
-        (NatProvenance.equivalentNatOrConst(loop.stepOperands.head, tileSize) ||
-          NatProductFacts.sameProductModuloOrder(loop.stepOperands.head, tileSize))
+        (ShapeIndexProvenance.equivalentIndexOrConst(loop.stepOperands.head, tileSize) ||
+          ShapeProductFacts.sameProductModuloOrder(loop.stepOperands.head, tileSize))
     else
-      NatProvenance.exactConst(tileSize).contains(loop.step.value.value)
+      ShapeIndexProvenance.exactConstInShapeExpr(tileSize).contains(loop.step.value.value)
 
   private def loopCarriesTileIv(loop: d_affine.For, tileIv: Value[Attribute]): Boolean =
     loop.body.blocks.headOption.exists(_.arguments.headOption.exists(sameValue(_, tileIv)))
@@ -199,4 +201,4 @@ object TailBoundFacts:
     loopCarriesTileIv(enclosingLoop, clamp.tileEnd.tileIv) &&
       loopUpperBoundIs(enclosingLoop, clamp.fullBound) &&
       hasCompatibleStep(enclosingLoop, clamp.tileEnd.tileSize) &&
-      NatProductFacts.containsExplicitFactor(clamp.fullBound, clamp.tileEnd.tileSize)
+      ShapeProductFacts.containsExplicitFactor(clamp.fullBound, clamp.tileEnd.tileSize)

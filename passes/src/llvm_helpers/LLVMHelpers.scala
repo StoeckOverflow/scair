@@ -1,11 +1,9 @@
 package scair.passes.llvm_helpers
 
 import scair.dialects.builtin.*
-import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_memref
 import scair.dialects.llvm
 import scair.ir.*
-import scala.collection.mutable
 
 private def i32Attr(v: Int): IntegerAttr =
   IntegerAttr(IntData(v), I32)
@@ -252,10 +250,10 @@ final class RefinedIndexMaterializer(
     remap: Value[Attribute] => Value[Attribute],
     cache: CachedIndexConstants,
 ):
-  private def constNat(v: Value[Attribute]): Option[BigInt] =
+  private def constIndex(v: Value[Attribute]): Option[BigInt] =
     v.owner match
-      case Some(DTensor.NatConst(IntegerAttr(IntData(k), _), _)) => Some(k)
-      case _                                                     => None
+      case Some(llvm.Constant(IntegerAttr(IntData(k), _: IntegerType | _: IndexType), _)) => Some(k)
+      case _                                                                              => None
 
   def materializeNatOrIndex(v: Value[Attribute], block: Block): Value[Attribute] =
     remap(v) match
@@ -265,14 +263,7 @@ final class RefinedIndexMaterializer(
           } =>
         existing
       case other =>
-        constNat(other).map(k => cache.constIndex(k, block)).orElse {
-          other.owner.collect {
-            case DTensor.IndexToNat(idx, _) =>
-              materializeNatOrIndex(idx, block)
-            case DTensor.ShapeToIndex(nat, _) =>
-              constNat(nat).map(k => cache.constIndex(k, block)).getOrElse(other)
-          }
-        }.getOrElse(other)
+        constIndex(other).map(k => cache.constIndex(k, block)).getOrElse(other)
 
   def materializeLayoutParam(
       param: d_memref.LayoutParam,

@@ -1,10 +1,13 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics -p dependent-dim-query-elim | filecheck %s -DFILE=%s --check-prefix=CHECK
 
 builtin.module {
-  %n = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
-  %idx = "d_tensor.shape.to_index"(%n) : (!d_tensor.nat) -> index
-  "test.keep"(%idx) : (index) -> ()
+  %n = "arith.constant"() <{value = 7 : index}> : () -> index
+  %t = "test.tensor"() : () -> !d_tensor.tensor<[%n], i32>
+  %idx = "d_tensor.dim"(%t) <{axis = 0 : i32}> : (!d_tensor.tensor<[%n], i32>) -> !value<%n>
+  "test.keep"(%idx) : (!value<%n>) -> ()
 }
 
-// CHECK: "arith.constant"() <{value = 7 : index}> : () -> index
-// CHECK-NOT: "d_tensor.shape.to_index"
+// CHECK: %[[N:[0-9]+]] = "arith.constant"() <{value = 7 : index}> : () -> index
+// CHECK: "test.keep"(%[[N]]) : (index) -> ()
+// CHECK-NOT: "d_tensor.dim"
+// CHECK-NOT: d_tensor.shape

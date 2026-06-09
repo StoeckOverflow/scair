@@ -1,14 +1,13 @@
-package scair.passes.dependent_natmul_loop_factorization
+package scair.passes.dependent_product_loop_factorization
 
 import scair.MLContext
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_affine
 import scair.ir.*
-import scair.passes.NatProvenance
-import scair.passes.analysis.NatProductFacts
-import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
+import scair.passes.ShapeIndexProvenance
+import scair.passes.analysis.ShapeProductFacts
+import scair.passes.analysis.ShapeProductFacts.FactorSelectionPolicy
 import scair.transformations.ModulePass
 import scair.transformations.RewriteMethods
 
@@ -19,12 +18,6 @@ private def asIndex(v: Value[Attribute]): Operand[IndexType] =
 
 private def idxConst(v: BigInt): arith.Constant =
   arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
-
-private def toIndex(nat: Value[Attribute]): DTensor.ShapeToIndex =
-  DTensor.ShapeToIndex(
-    nat.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
-    Result(IndexType()),
-  )
 
 private def identityMap: AffineMapAttr =
   AffineMapAttr(
@@ -78,22 +71,20 @@ private def choosePlan(
   if loop.upperBoundOperands.size != 1 then None
   else
     for
-      product <- NatProductFacts.flattenProduct(loop.upperBoundOperands.head)
+      product <- ShapeProductFacts.flattenProduct(loop.upperBoundOperands.head)
       innerFactor <- product.selectFactor(factorPolicy)
-      residualFactors <- NatProductFacts.residualAfterRemovingFactorProduct(
+      residualFactors <- ShapeProductFacts.residualAfterRemovingFactor(
         loop.upperBoundOperands.head,
         innerFactor.value,
       )
       if residualFactors.nonEmpty
-      residual <- NatProductFacts.buildExplicitProduct(residualFactors)
+      residual <- ShapeProductFacts.buildExplicitProduct(residualFactors)
     yield
-      val (residualPrelude, residualNat) = residual
-      val outerIdx = toIndex(residualNat)
-      val innerIdx = toIndex(innerFactor.value)
+      val (residualPrelude, residualIndex) = residual
       FactorizationPlan(
-        prelude = residualPrelude ++ Seq(outerIdx, innerIdx),
-        outerUpperBound = outerIdx.res,
-        innerUpperBound = innerIdx.res,
+        prelude = residualPrelude,
+        outerUpperBound = residualIndex,
+        innerUpperBound = innerFactor.value,
       )
 
 private def buildLoop(
@@ -130,7 +121,7 @@ private def tryFactorize(
   if loop.body.blocks.size != 1 then false
   else if loop.lowerBoundOperands.size != 1 || loop.upperBoundOperands.size != 1 then false
   else if !isIdentityProjection(loop.lowerBoundMap) || !isIdentityProjection(loop.upperBoundMap) then false
-  else if NatProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then false
+  else if ShapeIndexProvenance.exactConstInShapeExpr(loop.lowerBoundOperands.head) != Some(0) then false
   else
     choosePlan(loop, factorPolicy) match
       case None => false
@@ -144,9 +135,9 @@ private def tryFactorize(
 private def stepMatchesInnerFactor(loop: d_affine.For, plan: FactorizationPlan): Boolean =
   loop.stepOperands match
     case Seq(dynamicStep) =>
-      NatProvenance.equivalentNatOrConst(dynamicStep, plan.innerUpperBound)
+      ShapeIndexProvenance.equivalentIndexOrConst(dynamicStep, plan.innerUpperBound)
     case Seq() =>
-      NatProvenance.exactConst(plan.innerUpperBound).contains(loop.step.value.value)
+      ShapeIndexProvenance.exactConstInShapeExpr(plan.innerUpperBound).contains(loop.step.value.value)
     case _ => false
 
 private def tryFactorizeUnitProductLoop(loop: d_affine.For, plan: FactorizationPlan): Boolean =
@@ -248,11 +239,11 @@ private def tryFactorizeTiledProductLoop(loop: d_affine.For, plan: Factorization
   )
   true
 
-final class DependentNatmulLoopFactorization(
+final class DependentProductLoopFactorization(
     ctx: MLContext,
     factorPolicy: FactorSelectionPolicy = FactorSelectionPolicy.RightmostPositive,
 ) extends ModulePass(ctx):
-  override val name: String = "dependent-natmul-loop-factorization"
+  override val name: String = "dependent-product-loop-factorization"
 
   override def transform(op: Operation): Operation =
     var changed = true

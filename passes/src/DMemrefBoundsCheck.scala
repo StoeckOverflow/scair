@@ -7,7 +7,7 @@ import scair.dialects.d_memref
 import scair.dialects.arith
 import scair.exceptions.VerifyException
 import scair.ir.*
-import scair.passes.NatProvenance
+import scair.passes.ShapeIndexProvenance
 import scair.transformations.ModulePass
 
 /**
@@ -20,6 +20,9 @@ import scair.transformations.ModulePass
  */
 final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
   override val name: String = "d-memref-bounds-check"
+
+  private def exactConst(v: Value[Attribute]): Option[BigInt] =
+    ShapeIndexProvenance.exactConst(v).orElse(ShapeIndexProvenance.exactConstInShapeExpr(v))
 
   private def recoverProjectedBoundOperand(
       operands: Seq[Value[Attribute]],
@@ -59,11 +62,11 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
       axis: Int,
   ): Unit =
     val safeByLoop =
-      loopIvUpperBound(idx).exists(ub => NatProvenance.sameNat(ub, dim))
+      loopIvUpperBound(idx).exists(ub => ShapeIndexProvenance.sameIndex(ub, dim))
     if safeByLoop then return
 
-    val idxConst = NatProvenance.exactConst(idx)
-    val dimConst = NatProvenance.exactConst(dim)
+    val idxConst = exactConst(idx)
+    val dimConst = exactConst(dim)
     (idxConst, dimConst) match
       case (Some(i), _) if i < 0 =>
         throw VerifyException(
@@ -81,9 +84,9 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
       dim: Value[Attribute],
       axis: Int,
   ): Unit =
-    val offConst = NatProvenance.exactConst(off)
-    val sizeConst = NatProvenance.exactConst(size)
-    val dimConst = NatProvenance.exactConst(dim)
+    val offConst = exactConst(off)
+    val sizeConst = exactConst(size)
+    val dimConst = exactConst(dim)
 
     (offConst, sizeConst, dimConst) match
       case (Some(o), _, _) if o < 0 =>
@@ -100,7 +103,7 @@ final class DMemrefBoundsCheck(ctx: MLContext) extends ModulePass(ctx):
         )
       case _ =>
         val isZeroOffset = offConst.contains(0)
-        if isZeroOffset && NatProvenance.sameNat(size, dim) then ()
+        if isZeroOffset && ShapeIndexProvenance.sameIndex(size, dim) then ()
         else ()
 
   private def dimValue(dim: d_memref.DimParam): Value[Attribute] =

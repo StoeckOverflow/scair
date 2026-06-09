@@ -3,11 +3,11 @@
 
 // Valid: SSA shape param is defined earlier.
 builtin.module {
-  %n = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
+  %n = "arith.constant"() <{value = 7 : index}> : () -> index
   %v = "test.ok"() : () -> !d_tensor.vector<%n, f32>
 }
 
 // CHECK: builtin.module {
-// CHECK:   %0 = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
+// CHECK:   %0 = "arith.constant"() <{value = 7 : index}> : () -> index
 // CHECK:   %1 = "test.ok"() : () -> !d_tensor.vector<%0, f32>
 // CHECK: }

@@ -8,38 +8,38 @@
 
 // Smoke: pass pipeline keeps a simple valid tensor program intact.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   "test.keep_smoke"(%a) : (!d_tensor.tensor<[%m], f32>) -> ()
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY:   %0 = "test.index"() : () -> index
 // VERIFY:   %1 = "test.a"() : () -> !d_tensor.tensor<[%0], f32>
 // VERIFY:   "test.keep_smoke"(%1) : (!d_tensor.tensor<[%0], f32>) -> ()
 // VERIFY: }
 // CANON: builtin.module {
-// CANON:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON:   %0 = "test.index"() : () -> index
 // CANON:   %1 = "test.a"() : () -> !d_tensor.tensor<[%0], f32>
 // CANON:   "test.keep_smoke"(%1) : (!d_tensor.tensor<[%0], f32>) -> ()
 // CANON: }
 // CN: builtin.module {
-// CN:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CN:   %0 = "test.index"() : () -> index
 // CN:   %1 = "test.a"() : () -> !d_tensor.tensor<[%0], f32>
 // CN:   "test.keep_smoke"(%1) : (!d_tensor.tensor<[%0], f32>) -> ()
 // CN: }
 // CSE: builtin.module {
-// CSE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CSE:   %0 = "test.index"() : () -> index
 // CSE:   %1 = "test.a"() : () -> !d_tensor.tensor<[%0], f32>
 // CSE:   "test.keep_smoke"(%1) : (!d_tensor.tensor<[%0], f32>) -> ()
 // CSE: }
 // DCE: builtin.module {
-// DCE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// DCE:   %0 = "test.index"() : () -> index
 // DCE:   %1 = "test.a"() : () -> !d_tensor.tensor<[%0], f32>
 // DCE:   "test.keep_smoke"(%1) : (!d_tensor.tensor<[%0], f32>) -> ()
 // DCE: }
 // PIPE: builtin.module {
-// PIPE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE:   %0 = "test.index"() : () -> index
 // PIPE:   %1 = "test.a"() : () -> !d_tensor.tensor<[%0], f32>
 // PIPE:   "test.keep_smoke"(%1) : (!d_tensor.tensor<[%0], f32>) -> ()
 // PIPE: }
@@ -48,9 +48,9 @@ builtin.module {
 
 // Invalid: matmul rank mismatch.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %k = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %lhs = "test.lhs"() : () -> !d_tensor.tensor<[%m], f32>
   %rhs = "test.rhs"() : () -> !d_tensor.tensor<[%k, %n], f32>
   // expected-error @below {{d_tensor.matmul: expected rank-2 operands}}
@@ -64,10 +64,10 @@ builtin.module {
 
 // Invalid: matmul inner dims not SSA-identical.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %k0 = "test.index"() : () -> index
+  %k1 = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %lhs = "test.lhs"() : () -> !d_tensor.tensor<[%m, %k0], f32>
   %rhs = "test.rhs"() : () -> !d_tensor.tensor<[%k1, %n], f32>
   // expected-error @below {{d_tensor.matmul: expected SSA-identical inner dims}}
@@ -81,10 +81,10 @@ builtin.module {
 
 // Invalid: matmul result dims not outer dims.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %x = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %k = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %x = "test.index"() : () -> index
   %lhs = "test.lhs"() : () -> !d_tensor.tensor<[%m, %k], f32>
   %rhs = "test.rhs"() : () -> !d_tensor.tensor<[%k, %n], f32>
   // expected-error @below {{d_tensor.matmul: expected result dims to be outer dims}}
@@ -98,7 +98,7 @@ builtin.module {
 
 // Invalid: add element mismatch.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   %b = "test.b"() : () -> !d_tensor.tensor<[%m], i32>
   // expected-error @below {{d_tensor.add: expected equal element types for lhs/rhs}}
@@ -112,8 +112,8 @@ builtin.module {
 
 // Invalid: add rank mismatch.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   %b = "test.b"() : () -> !d_tensor.tensor<[%m, %n], f32>
   // expected-error @below {{d_tensor.add: expected equal ranks for lhs/rhs}}
@@ -127,8 +127,8 @@ builtin.module {
 
 // Invalid: add dims not SSA-identical.
 builtin.module {
-  %m0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %m1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m0 = "test.index"() : () -> index
+  %m1 = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m0], f32>
   %b = "test.b"() : () -> !d_tensor.tensor<[%m1], f32>
   // expected-error @below {{d_tensor.add: expected pairwise SSA-identical dims for lhs/rhs}}
@@ -142,7 +142,7 @@ builtin.module {
 
 // Invalid: mul element mismatch.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   %b = "test.b"() : () -> !d_tensor.tensor<[%m], i32>
   // expected-error @below {{d_tensor.mul: expected equal element types for lhs/rhs}}
@@ -156,8 +156,8 @@ builtin.module {
 
 // Invalid: mul rank mismatch.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   %b = "test.b"() : () -> !d_tensor.tensor<[%m, %n], f32>
   // expected-error @below {{d_tensor.mul: expected equal ranks for lhs/rhs}}
@@ -171,8 +171,8 @@ builtin.module {
 
 // Invalid: mul dims not SSA-identical.
 builtin.module {
-  %m0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %m1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m0 = "test.index"() : () -> index
+  %m1 = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m0], f32>
   %b = "test.b"() : () -> !d_tensor.tensor<[%m1], f32>
   // expected-error @below {{d_tensor.mul: expected pairwise SSA-identical dims for lhs/rhs}}
@@ -186,8 +186,8 @@ builtin.module {
 
 // Invalid: cast rank mismatch.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %src = "test.src"() : () -> !d_tensor.tensor<[%m], f32>
   // expected-error @below {{d_tensor.cast: expected equal ranks}}
   %bad = "d_tensor.cast"(%src) : (!d_tensor.tensor<[%m], f32>) -> !d_tensor.tensor<[%m, %n], f32>
@@ -199,7 +199,7 @@ builtin.module {
 
 // Invalid: cast element mismatch.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
   %src = "test.src"() : () -> !d_tensor.tensor<[%m], f32>
   // expected-error @below {{d_tensor.cast: expected equal element types}}
   %bad = "d_tensor.cast"(%src) : (!d_tensor.tensor<[%m], f32>) -> !d_tensor.tensor<[%m], i32>
@@ -211,10 +211,10 @@ builtin.module {
 
 // Invalid: cast dims mismatch.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %d0 = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %d1 = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %z = "arith.constant"() <{value = 0 : index}> : () -> index
+  %d0 = "arith.addi"(%m, %z) : (index, index) -> index
+  %d1 = "arith.addi"(%m, %z) : (index, index) -> index
   %src = "test.src"() : () -> !d_tensor.tensor<[%d0], f32>
   // expected-error @below {{d_tensor.cast: expected pairwise SSA-identical dims}}
   %bad = "d_tensor.cast"(%src) : (!d_tensor.tensor<[%d0], f32>) -> !d_tensor.tensor<[%d1], f32>
@@ -226,8 +226,8 @@ builtin.module {
 
 // Invalid: dim axis = -1.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   // expected-error @below {{d_tensor.dim: axis -1 out of bounds for rank 2}}
   %bad = "d_tensor.dim"(%a) <{axis = -1 : i32}> : (!d_tensor.tensor<[%m, %n], f32>) -> !value<%m>
@@ -239,8 +239,8 @@ builtin.module {
 
 // Invalid: dim axis == rank.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   // expected-error @below {{d_tensor.dim: axis 2 out of bounds for rank 2}}
   %bad = "d_tensor.dim"(%a) <{axis = 2 : i32}> : (!d_tensor.tensor<[%m, %n], f32>) -> !value<%m>
@@ -252,7 +252,7 @@ builtin.module {
 
 // Invalid: dim axis attribute type.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   // expected-error @below {{d_tensor.dim: expected i32 axis attribute}}
   %bad = "d_tensor.dim"(%a) <{axis = 0 : i64}> : (!d_tensor.tensor<[%m], f32>) -> !value<%m>
@@ -262,56 +262,47 @@ builtin.module {
 
 // -----
 
-// Invalid: nat.const negative literal.
+// Valid: dimension validation accepts index-typed SSA values, not numeric proofs.
 builtin.module {
-  // expected-error @below {{d_tensor.nat.const: expected non-negative literal}}
-  %n = "d_tensor.nat.const"() <{value = -1 : i32}> : () -> !d_tensor.nat
+  %n = "arith.constant"() <{value = -1 : index}> : () -> index
+  %t = "test.t"() : () -> !d_tensor.tensor<[%n], f32>
 }
-
-// DIAG: d_tensor.nat.const: expected non-negative literal
 
 // -----
 
-// Invalid: posnat const must be strictly positive.
+// Valid: zero index values are accepted as SSA dimensions.
 builtin.module {
-  // expected-error @below {{d_tensor.nat.const: expected positive literal for !d_tensor.posnat}}
-  %n = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.posnat
+  %n = "arith.constant"() <{value = 0 : index}> : () -> index
+  %t = "test.t"() : () -> !d_tensor.tensor<[%n], f32>
 }
-
-// DIAG: d_tensor.nat.const: expected positive literal for !d_tensor.posnat
 
 // -----
 
-// Invalid: posnat sum requires at least one positive operand.
+// Valid: arith.addi index result may be used as a dimension.
 builtin.module {
-  %lhs = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %rhs = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  // expected-error @below {{d_tensor.nat.add: !d_tensor.posnat result requires at least one !d_tensor.posnat operand}}
-  %bad = "d_tensor.nat.add"(%lhs, %rhs) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.posnat
+  %lhs = "test.index"() : () -> index
+  %rhs = "test.index"() : () -> index
+  %sum = "arith.addi"(%lhs, %rhs) : (index, index) -> index
+  %t = "test.t"() : () -> !d_tensor.tensor<[%sum], f32>
 }
-
-// DIAG: d_tensor.nat.add: !d_tensor.posnat result requires at least one !d_tensor.posnat operand
 
 // -----
 
-// Invalid: posnat product requires positive operands.
+// Valid: arith.muli index result may be used as a dimension.
 builtin.module {
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %p = "d_tensor.nat.param"() : () -> !d_tensor.posnat
-  // expected-error @below {{d_tensor.nat.mul: !d_tensor.posnat result requires two !d_tensor.posnat operands}}
-  %bad = "d_tensor.nat.mul"(%n, %p) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.posnat
+  %n = "test.index"() : () -> index
+  %p = "test.index"() : () -> index
+  %prod = "arith.muli"(%n, %p) : (index, index) -> index
+  %t = "test.t"() : () -> !d_tensor.tensor<[%prod], f32>
 }
-
-// DIAG: d_tensor.nat.mul: !d_tensor.posnat result requires two !d_tensor.posnat operands
 
 // -----
 
-// Invalid: refine_positive proof must be i1.
+// Invalid: non-index SSA values cannot be used as tensor dimensions.
 builtin.module {
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %proof = "arith.constant"() <{value = 1 : i32}> : () -> i32
-  // expected-error @below {{d_tensor.nat.refine_positive: expected i1 proof}}
-  %bad = "d_tensor.nat.refine_positive"(%n, %proof) : (!d_tensor.nat, i32) -> !d_tensor.posnat
+  %bad_dim = "arith.constant"() <{value = 1 : i32}> : () -> i32
+  // expected-error @below {{shape SSA parameter must have type index, got i32}}
+  %bad = "test.bad"() : () -> !d_tensor.tensor<[%bad_dim], f32>
 }
 
-// DIAG: d_tensor.nat.refine_positive: expected i1 proof
+// DIAG: shape SSA parameter must have type index, got i32

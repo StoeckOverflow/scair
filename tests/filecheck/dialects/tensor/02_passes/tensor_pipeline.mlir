@@ -2,18 +2,18 @@
 
 // End-to-end: shape-canon + canonicalize + cse + dce preserves WF and reduces nat ops.
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %o = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
-  %s0 = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %s1 = "d_tensor.nat.mul"(%s0, %o) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %s2 = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 4 : index}> : () -> index
+  %z = "arith.constant"() <{value = 0 : index}> : () -> index
+  %o = "arith.constant"() <{value = 1 : index}> : () -> index
+  %s0 = "arith.addi"(%m, %z) : (index, index) -> index
+  %s1 = "arith.muli"(%s0, %o) : (index, index) -> index
+  %s2 = "arith.addi"(%m, %z) : (index, index) -> index
   %u0 = "test.keep"() : () -> !d_tensor.tensor<[%s1], f32>
   %u1 = "test.keep"() : () -> !d_tensor.tensor<[%s2], f32>
 }
 
 // PIPE: builtin.module {
-// PIPE:   %0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+// PIPE:   %0 = "arith.constant"() <{value = 4 : index}> : () -> index
 // PIPE:   %1 = "test.keep"() : () -> !d_tensor.tensor<[%0], f32>
 // PIPE:   %2 = "test.keep"() : () -> !d_tensor.tensor<[%0], f32>
 // PIPE: }
@@ -27,7 +27,7 @@ builtin.module {
     %c = "arith.constant"() <{value = true}> : () -> i1
     "test.cond_br"(%c) [^bb1, ^bb2] : (i1) -> ()
   ^bb1:
-    %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+    %m = "arith.constant"() <{value = 4 : index}> : () -> index
     "test.br"() [^bb2] : () -> ()
   ^bb2:
     %u = "test.use"() : () -> !d_tensor.tensor<[%m], f32>
@@ -36,4 +36,4 @@ builtin.module {
 }
 
 // PIPE: // -----
-// PIPE: ssa-dominance: value Value(!d_tensor.nat) does not dominate its use in op `test.use`
+// PIPE: ssa-dominance: value Value(index) does not dominate its use in op `test.use`

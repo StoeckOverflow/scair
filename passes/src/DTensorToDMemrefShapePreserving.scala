@@ -7,7 +7,8 @@ import scair.dialects.d_tensor.*
 import scair.dialects.d_affine
 import scair.dialects.d_memref
 import scair.ir.*
-import scair.utils.OK
+import scair.passes.ShapeIndexProvenance
+import scair.passes.analysis.ShapeProductFacts
 import scair.transformations.{
   GreedyRewritePatternApplier,
   PatternAction,
@@ -38,11 +39,8 @@ private def asMemref(
 ): Operand[d_memref.DMemrefMemrefType] =
   v.asInstanceOf[Operand[d_memref.DMemrefMemrefType]]
 
-private def idxConst(v: Int): arith.Constant =
+private def idxConst(v: BigInt): arith.Constant =
   arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
-
-private def toIndex(nat: Value[Attribute]): ShapeToIndex =
-  ShapeToIndex(nat.asInstanceOf[Operand[DTensorNatLikeType]], Result(IndexType()))
 
 private def identityMap: AffineMapAttr =
   AffineMapAttr(
@@ -102,17 +100,20 @@ private def productMatches(
     product: Value[Attribute],
     factors: Seq[Value[Attribute]],
 ): Boolean =
-  DTensorTypeUtil.sameOrderedNatProduct(product, factors) match
-    case OK(true) => true
-    case _        => false
+  val explicit = ShapeProductFacts.ProductFactors(
+    factors.map(f => ShapeProductFacts.Factor(f, ShapeIndexProvenance.exactConstInShapeExpr(f)))
+  )
+  ShapeProductFacts.flattenProduct(product).exists { full =>
+    full.factors.size == explicit.factors.size &&
+      full.containsAllExplicitFactors(explicit)
+  }
 
-private def productType(
-    lhs: Value[Attribute],
-    rhs: Value[Attribute],
-): DTensorNatLikeType =
-  (lhs.typ, rhs.typ) match
-    case (_: DTensorPosNatType, _: DTensorPosNatType) => DTensorPosNatType()
-    case _                                            => DTensorNatType()
+private def dimAsIndex(param: DimParam): (Seq[Operation], Value[Attribute]) =
+  param match
+    case v: ValueAttribute => (Seq.empty, v.getVal())
+    case IntegerAttr(IntData(v), _: IndexType | _: IntegerType) =>
+      val c = idxConst(v)
+      (Seq(c), c.result)
 
 private def buildOrderedProduct(
     dims: Seq[Value[Attribute]]
@@ -125,19 +126,19 @@ private def buildOrderedProduct(
     case first +: rest =>
       val (ops, product) = rest.foldLeft((Seq.empty[Operation], first)) {
         case ((ops, acc), dim) =>
-          val mul = NatMul(
-            acc.asInstanceOf[Operand[DTensorNatLikeType]],
-            dim.asInstanceOf[Operand[DTensorNatLikeType]],
-            Result(productType(acc, dim)),
+          val mul = arith.MulI(
+            acc.asInstanceOf[Operand[IndexType]],
+            dim.asInstanceOf[Operand[IndexType]],
+            Result(IndexType()),
           )
-          (ops :+ mul, mul.res)
+          (ops :+ mul, mul.result)
       }
       (ops, ValueAttribute(product))
 
 private def rowMajorMemrefType(
     tensorType: DTensorTensorType
 ): (Seq[Operation], d_memref.DMemrefMemrefType) =
-  val dims = tensorType.params.map(_.getVal())
+  val (dimPrefix, dims) = tensorType.params.map(dimAsIndex).unzip
   val (strideOps, strides) =
     dims.indices.foldLeft((Seq.empty[Operation], Seq.empty[d_memref.LayoutParam])) {
       case ((ops, ss), idx) =>
@@ -150,7 +151,7 @@ private def rowMajorMemrefType(
     Some(IntegerAttr(IntData(0), IndexType())),
     Some(strides),
   )
-  (strideOps, memType)
+  (dimPrefix.flatten ++ strideOps, memType)
 
 private def lowerReinterpretView(
     src: Operand[DTensorTensorType],
@@ -200,12 +201,12 @@ private val LowerEmpty = pattern {
 private val LowerFill = pattern {
   case Fill(v, res) =>
     val memTy = DTensorDMemrefConversion.tensorToMemrefType(res.typ)
-    val idxDims = res.typ.params.map(_.getVal()).map(toIndex)
+    val (dimPrefix, idxDims) = res.typ.params.map(dimAsIndex).unzip
     val zero = idxConst(0)
     val alloc = d_memref.Alloc(Result(memTy))
-    val fillOps = buildFillNest(alloc.res, v, idxDims.map(_.res), zero.result)
+    val fillOps = buildFillNest(alloc.res, v, idxDims, zero.result, Seq.empty)
     val castBack = castBackToTensor(alloc.res, res.typ)
-    (Seq(zero) ++ idxDims ++ Seq(alloc) ++ fillOps ++ Seq(castBack), Seq(castBack.outputs.head))
+    (dimPrefix.flatten ++ Seq(zero, alloc) ++ fillOps ++ Seq(castBack), Seq(castBack.outputs.head))
 }
 
 private val LowerDim = pattern {

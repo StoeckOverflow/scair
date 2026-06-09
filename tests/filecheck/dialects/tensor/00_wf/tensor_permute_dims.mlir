@@ -2,8 +2,8 @@
 
 // Valid: identity permutation preserves dimensions by SSA identity.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %out = "d_tensor.permute_dims"(%a)
     <{permutation = [0 : i32, 1 : i32]}>
@@ -19,8 +19,8 @@ builtin.module {
 
 // Valid: 2D swap.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %out = "d_tensor.permute_dims"(%a)
     <{permutation = [1 : i32, 0 : i32]}>
@@ -36,10 +36,10 @@ builtin.module {
 
 // Valid: 4D tile-major permutation.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %nt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %nt = "test.index"() : () -> index
+  %tn = "test.index"() : () -> index
   %c = "test.c"() : () -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
   %out = "d_tensor.permute_dims"(%c)
     <{permutation = [0 : i32, 2 : i32, 1 : i32, 3 : i32]}>
@@ -55,10 +55,10 @@ builtin.module {
 
 // Valid: tile-major permutation is its own inverse.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %nt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %nt = "test.index"() : () -> index
+  %tn = "test.index"() : () -> index
   %c = "test.c"() : () -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
   %tile_major = "d_tensor.permute_dims"(%c)
     <{permutation = [0 : i32, 2 : i32, 1 : i32, 3 : i32]}>
@@ -78,8 +78,8 @@ builtin.module {
 
 // Invalid: wrong result rank.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.permute_dims"(%a)
     <{permutation = [0 : i32, 1 : i32]}>
@@ -92,8 +92,8 @@ builtin.module {
 
 // Invalid: wrong permutation length.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.permute_dims"(%a)
     <{permutation = [0 : i32, 1 : i32, 0 : i32]}>
@@ -106,8 +106,8 @@ builtin.module {
 
 // Invalid: duplicate permutation entry.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.permute_dims"(%a)
     <{permutation = [0 : i32, 0 : i32]}>
@@ -120,8 +120,8 @@ builtin.module {
 
 // Invalid: missing permutation entry.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.permute_dims"(%a)
     <{permutation = [0 : i32]}>
@@ -134,8 +134,8 @@ builtin.module {
 
 // Invalid: negative permutation entry.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.permute_dims"(%a)
     <{permutation = [-1 : i32, 0 : i32]}>
@@ -148,8 +148,8 @@ builtin.module {
 
 // Invalid: out-of-bounds permutation entry.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.permute_dims"(%a)
     <{permutation = [0 : i32, 2 : i32]}>
@@ -162,8 +162,8 @@ builtin.module {
 
 // Invalid: output dims do not match the declared permutation.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.permute_dims"(%a)
     <{permutation = [1 : i32, 0 : i32]}>
@@ -176,8 +176,8 @@ builtin.module {
 
 // Invalid: element type must be preserved.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.permute_dims"(%a)
     <{permutation = [1 : i32, 0 : i32]}>

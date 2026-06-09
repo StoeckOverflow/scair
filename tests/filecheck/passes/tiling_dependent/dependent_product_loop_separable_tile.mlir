@@ -11,12 +11,11 @@ builtin.module {
     func.return %sum : f32
   }
 
-  func.func @natmul_still_prefers_exact(%init: f32) -> f32 {
-    %n0 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-    %tile_nat = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-    %n_nat = "d_tensor.nat.mul"(%n0, %tile_nat) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  func.func @shape_product_prefers_exact(%init: f32) -> f32 {
+    %n0 = "arith.constant"() <{value = 3 : index}> : () -> index
+    %tile = "arith.constant"() <{value = 4 : index}> : () -> index
+    %n = "arith.muli"(%n0, %tile) : (index, index) -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
-    %n = "d_tensor.shape.to_index"(%n_nat) : (!d_tensor.nat) -> index
     %sum = d_affine.for %i = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%n) step 1 : index iter_args(%acc = %init : f32) {
       d_affine.yield %acc : (f32)
     }
@@ -26,14 +25,11 @@ builtin.module {
 
 // CHECK-LABEL: func.func @ordinary_product_gets_separable_tile
 // CHECK: d_affine.for %[[TILE:[0-9]+]] = #map(%{{[0-9]+}}) to #map(%{{[0-9]+}}) step 4 : i32 iter_args
-// CHECK: "d_affine.if"(%[[TILE]], %{{[0-9]+}}, %{{[0-9]+}}) <{condition = #set}> ({
-// CHECK: d_affine.yield
-// CHECK: }, {
-// CHECK: arith.minsi
-// CHECK: d_affine.yield
-// CHECK: }) : (index, index, index) -> f32
+// CHECK: = d_affine.for %{{[0-9]+}} = #map(%[[TILE]]) to #map
+// CHECK-NOT: d_affine.if
+// CHECK-NOT: arith.minsi
 
-// CHECK-LABEL: func.func @natmul_still_prefers_exact
+// CHECK-LABEL: func.func @shape_product_prefers_exact
 // CHECK: d_affine.for %[[TILE:[0-9]+]] = #map(%{{[0-9]+}}) to #map(%{{[0-9]+}}) step 4 : i32 iter_args
 // CHECK: = d_affine.for %{{[0-9]+}} = #map(%[[TILE]]) to #map
 // CHECK-NOT: d_affine.if

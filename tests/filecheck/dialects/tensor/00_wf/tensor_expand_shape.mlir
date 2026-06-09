@@ -2,23 +2,23 @@
 
 // Valid: expand_shape carries explicit output dimensions like baseline tensor.expand_shape.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %mn = "test.index"() : () -> index
   %flat = "test.flat"() : () -> !d_tensor.tensor<[%mn], f32>
   %expanded = "d_tensor.expand_shape"(%flat, %m, %n)
     <{reassociation = [[0 : i32, 1 : i32]]}>
-    : (!d_tensor.tensor<[%mn], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%mn], f32>, index, index)
       -> !d_tensor.tensor<[%m, %n], f32>
   "test.keep"(%expanded) : (!d_tensor.tensor<[%m, %n], f32>) -> ()
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "test.index"() : () -> index
 // CHECK-NEXT:   %3 = "test.flat"() : () -> !d_tensor.tensor<[%2], f32>
-// CHECK-NEXT:   %4 = "d_tensor.expand_shape"(%3, %0, %1) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!d_tensor.tensor<[%2], f32>, !d_tensor.nat, !d_tensor.nat) -> !d_tensor.tensor<[%0, %1], f32>
+// CHECK-NEXT:   %4 = "d_tensor.expand_shape"(%3, %0, %1) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!d_tensor.tensor<[%2], f32>, index, index) -> !d_tensor.tensor<[%0, %1], f32>
 // CHECK-NEXT:   "test.keep"(%4) : (!d_tensor.tensor<[%0, %1], f32>) -> ()
 // CHECK-NEXT: }
 
@@ -26,29 +26,29 @@ builtin.module {
 
 // Valid: rank-preserving expand_shape is just structural.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
   %src = "test.src"() : () -> !d_tensor.tensor<[%m], f32>
   %same = "d_tensor.expand_shape"(%src, %m)
     <{reassociation = [[0 : i32]]}>
-    : (!d_tensor.tensor<[%m], f32>, !d_tensor.nat) -> !d_tensor.tensor<[%m], f32>
+    : (!d_tensor.tensor<[%m], f32>, index) -> !d_tensor.tensor<[%m], f32>
   "test.keep"(%same) : (!d_tensor.tensor<[%m], f32>) -> ()
 }
 
 // CHECK: "d_tensor.expand_shape"
-// CHECK-SAME: (!d_tensor.tensor<[%0], f32>, !d_tensor.nat) -> !d_tensor.tensor<[%0], f32>
+// CHECK-SAME: (!d_tensor.tensor<[%0], f32>, index) -> !d_tensor.tensor<[%0], f32>
 
 // -----
 
 // Invalid: output shape operands must match the result type dimensions.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %other = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %other = "test.index"() : () -> index
+  %mn = "test.index"() : () -> index
   %flat = "test.flat"() : () -> !d_tensor.tensor<[%mn], f32>
   %bad = "d_tensor.expand_shape"(%flat, %m, %n)
     <{reassociation = [[0 : i32, 1 : i32]]}>
-    : (!d_tensor.tensor<[%mn], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%mn], f32>, index, index)
       -> !d_tensor.tensor<[%m, %other], f32>
 }
 
@@ -58,13 +58,13 @@ builtin.module {
 
 // Invalid: output shape operand count must equal result rank.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %mn = "test.index"() : () -> index
   %flat = "test.flat"() : () -> !d_tensor.tensor<[%mn], f32>
   %bad = "d_tensor.expand_shape"(%flat, %m)
     <{reassociation = [[0 : i32, 1 : i32]]}>
-    : (!d_tensor.tensor<[%mn], f32>, !d_tensor.nat) -> !d_tensor.tensor<[%m, %n], f32>
+    : (!d_tensor.tensor<[%mn], f32>, index) -> !d_tensor.tensor<[%m, %n], f32>
 }
 
 // CHECK: d_tensor.expand_shape: expected 2 output shape operands, got 1
@@ -73,13 +73,13 @@ builtin.module {
 
 // Invalid: reassociation must cover result dims contiguously.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %mn = "test.index"() : () -> index
   %flat = "test.flat"() : () -> !d_tensor.tensor<[%mn], f32>
   %bad = "d_tensor.expand_shape"(%flat, %m, %n)
     <{reassociation = [[1 : i32, 0 : i32]]}>
-    : (!d_tensor.tensor<[%mn], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%mn], f32>, index, index)
       -> !d_tensor.tensor<[%m, %n], f32>
 }
 
@@ -89,13 +89,13 @@ builtin.module {
 
 // Invalid: element type mismatch is rejected.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %mn = "test.index"() : () -> index
   %flat = "test.flat"() : () -> !d_tensor.tensor<[%mn], f32>
   %bad = "d_tensor.expand_shape"(%flat, %m, %n)
     <{reassociation = [[0 : i32, 1 : i32]]}>
-    : (!d_tensor.tensor<[%mn], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%mn], f32>, index, index)
       -> !d_tensor.tensor<[%m, %n], i32>
 }
 

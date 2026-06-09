@@ -1,8 +1,8 @@
 builtin.module {
   func.func @matmul_strided(
-    %n_nat : !d_tensor.nat,
-    %m_nat : !d_tensor.nat,
-    %k_nat : !d_tensor.nat,
+    %n : index,
+    %m : index,
+    %k : index,
     %a_stride0 : index,
     %a_stride1 : index,
     %b_stride0 : index,
@@ -15,55 +15,52 @@ builtin.module {
   ) attributes {scair.emit_bare_interface = true} {
     %A = d_memref.reinterpret_cast %Aflat
       : !d_memref.memref<[], f32>
-        to !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%a_stride0, %a_stride1]>
+        to !d_memref.memref<[%n, %k], f32, offset: 0, strides: [%a_stride0, %a_stride1]>
 
     %B = d_memref.reinterpret_cast %Bflat
       : !d_memref.memref<[], f32>
-        to !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>
+        to !d_memref.memref<[%k, %m], f32, offset: 0, strides: [%b_stride0, %b_stride1]>
 
     %C = d_memref.reinterpret_cast %Cflat
       : !d_memref.memref<[], f32>
-        to !d_memref.memref<[%n_nat, %m_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>
+        to !d_memref.memref<[%n, %m], f32, offset: 0, strides: [%c_stride0, %c_stride1]>
 
-    "func.call"(%n_nat, %m_nat, %k_nat, %a_stride0, %a_stride1, %b_stride0, %b_stride1, %c_stride0, %c_stride1, %A, %B, %C)
+    "func.call"(%n, %m, %k, %a_stride0, %a_stride1, %b_stride0, %b_stride1, %c_stride0, %c_stride1, %A, %B, %C)
       <{callee = @matmul_strided_typed}>
-      : (!d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index,
-         !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%a_stride0, %a_stride1]>,
-         !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
-         !d_memref.memref<[%n_nat, %m_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>) -> ()
+      : (index, index, index, index, index, index, index, index, index,
+         !d_memref.memref<[%n, %k], f32, offset: 0, strides: [%a_stride0, %a_stride1]>,
+         !d_memref.memref<[%k, %m], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
+         !d_memref.memref<[%n, %m], f32, offset: 0, strides: [%c_stride0, %c_stride1]>) -> ()
     "func.return"() : () -> ()
   }
 
   func.func @matmul_strided_typed(
-    %n_nat : !d_tensor.nat,
-    %m_nat : !d_tensor.nat,
-    %k_nat : !d_tensor.nat,
+    %n : index,
+    %m : index,
+    %k : index,
     %a_stride0 : index,
     %a_stride1 : index,
     %b_stride0 : index,
     %b_stride1 : index,
     %c_stride0 : index,
     %c_stride1 : index,
-    %A : !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%a_stride0, %a_stride1]>,
-    %B : !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
-    %C : !d_memref.memref<[%n_nat, %m_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>
+    %A : !d_memref.memref<[%n, %k], f32, offset: 0, strides: [%a_stride0, %a_stride1]>,
+    %B : !d_memref.memref<[%k, %m], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
+    %C : !d_memref.memref<[%n, %m], f32, offset: 0, strides: [%c_stride0, %c_stride1]>
   ) {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-    %n = "d_tensor.shape.to_index"(%n_nat) : (!d_tensor.nat) -> index
-    %m = "d_tensor.shape.to_index"(%m_nat) : (!d_tensor.nat) -> index
-    %k = "d_tensor.shape.to_index"(%k_nat) : (!d_tensor.nat) -> index
 
     d_affine.for %i = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%n) step 1 : index {
       d_affine.for %j = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%m) step 1 : index {
         %sum = d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k) step 1 : index iter_args(%acc = %f0 : f32) {
-          %a = d_memref.load %A[%i, %p] : !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%a_stride0, %a_stride1]> -> f32
-          %b = d_memref.load %B[%p, %j] : !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]> -> f32
+          %a = d_memref.load %A[%i, %p] : !d_memref.memref<[%n, %k], f32, offset: 0, strides: [%a_stride0, %a_stride1]> -> f32
+          %b = d_memref.load %B[%p, %j] : !d_memref.memref<[%k, %m], f32, offset: 0, strides: [%b_stride0, %b_stride1]> -> f32
           %mul = "arith.mulf"(%a, %b) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
           %next = "arith.addf"(%acc, %mul) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
           d_affine.yield %next : (f32)
         }
-        d_memref.store %sum, %C[%i, %j] : f32, !d_memref.memref<[%n_nat, %m_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>
+        d_memref.store %sum, %C[%i, %j] : f32, !d_memref.memref<[%n, %m], f32, offset: 0, strides: [%c_stride0, %c_stride1]>
         d_affine.yield
       }
       d_affine.yield

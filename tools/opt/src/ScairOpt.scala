@@ -6,17 +6,17 @@ import scair.ir.*
 import scair.parse.*
 import scair.print.AssemblyPrinter
 import scair.print.ErrorPrinter
-import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
+import scair.passes.analysis.ShapeProductFacts.FactorSelectionPolicy
 import scair.passes.context_band_tiling.DependentContextBandExactTile
 import scair.passes.context_band_tiling.DependentContextBandFactorTileWithTail
 import scair.passes.context_band_tiling.DependentContextBandTileWithTail
 import scair.passes.context_band_tiling.OrdinaryAffineContextBandTileWithTail
-import scair.passes.dependent_natmul_loop_factorization.DependentNatmulLoopFactorization
-import scair.passes.dependent_natmul_tiling.DependentExactTile
-import scair.passes.dependent_natmul_tiling.DependentProductLoopExactTile
-import scair.passes.dependent_natmul_tiling.DependentTileWithTailControl
-import scair.passes.dependent_natmul_tiling.OrdinaryAffineProductTileWithTail
-import scair.passes.dependent_natmul_tiling.OrdinaryAffineProductLoopTileWithTail
+import scair.passes.dependent_product_loop_factorization.DependentProductLoopFactorization
+import scair.passes.dependent_product_tiling.DependentExactTile
+import scair.passes.dependent_product_tiling.DependentProductLoopExactTile
+import scair.passes.dependent_product_tiling.DependentTileWithTailControl
+import scair.passes.dependent_product_tiling.OrdinaryAffineProductTileWithTail
+import scair.passes.dependent_product_tiling.OrdinaryAffineProductLoopTileWithTail
 import scair.tools.ScairToolBase
 import scair.utils.*
 import scair.verify.Verifier
@@ -182,7 +182,7 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
                   val dependentTileWithTailPrefix = "dependent-tile-with-tail-control:"
                   val dependentProductExactPrefix = "dependent-product-loop-exact-tile:"
                   val dependentExactPrefix = "dependent-exact-tile:"
-                  val dependentFactorizationPrefix = "dependent-natmul-loop-factorization:"
+                  val dependentFactorizationPrefix = "dependent-product-loop-factorization:"
                   def parsePositiveTileSize(passName: String, tileSizeText: String): BigInt =
                     if !tileSizeText.matches("[1-9][0-9]*") then
                       Console.err.println(
@@ -265,9 +265,9 @@ trait ScairOptBase extends ScairToolBase[ScairOptArgs]:
                       )
                     else if parsedPass.startsWith(dependentFactorizationPrefix) then
                       val policyText = parsedPass.stripPrefix(dependentFactorizationPrefix)
-                      DependentNatmulLoopFactorization(
+                      DependentProductLoopFactorization(
                         ctx,
-                        parseFactorPolicy("dependent-natmul-loop-factorization", policyText),
+                        parseFactorPolicy("dependent-product-loop-factorization", policyText),
                       )
                     else ctx.passContext.get(parsedPass) match
                     case Some(pass) => pass

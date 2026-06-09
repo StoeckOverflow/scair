@@ -1,11 +1,11 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s
 
-// Valid: join the first two dimensions using an explicit nat.mul result.
+// Valid: join the first two dimensions using an explicit arith.muli result.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %m = "d_tensor.nat.mul"(%mt, %tm) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %m = "arith.muli"(%mt, %tm) : (index, index) -> index
   %b = "test.b"() : () -> !d_tensor.tensor<[%mt, %tm, %n], f32>
   %c = "d_tensor.join_dim"(%b) <{dim = 0 : i32}>
     : (!d_tensor.tensor<[%mt, %tm, %n], f32>) -> !d_tensor.tensor<[%m, %n], f32>
@@ -13,10 +13,10 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %3 = "d_tensor.nat.mul"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "test.index"() : () -> index
+// CHECK-NEXT:   %3 = "arith.muli"(%0, %1) {{.*}} : (index, index) -> index
 // CHECK-NEXT:   %4 = "test.b"() : () -> !d_tensor.tensor<[%0, %1, %2], f32>
 // CHECK-NEXT:   %5 = "d_tensor.join_dim"(%4) <{dim = 0 : i32}> : (!d_tensor.tensor<[%0, %1, %2], f32>) -> !d_tensor.tensor<[%3, %2], f32>
 // CHECK-NEXT:   "test.keep"(%5) : (!d_tensor.tensor<[%3, %2], f32>) -> ()
@@ -26,10 +26,10 @@ builtin.module {
 
 // Valid: join the second and third dimensions.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %nt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tn = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.mul"(%nt, %tn) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %nt = "test.index"() : () -> index
+  %tn = "test.index"() : () -> index
+  %n = "arith.muli"(%nt, %tn) : (index, index) -> index
   %b = "test.b"() : () -> !d_tensor.tensor<[%m, %nt, %tn], f32>
   %c = "d_tensor.join_dim"(%b) <{dim = 1 : i32}>
     : (!d_tensor.tensor<[%m, %nt, %tn], f32>) -> !d_tensor.tensor<[%m, %n], f32>
@@ -37,10 +37,10 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %3 = "d_tensor.nat.mul"(%1, %2) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "test.index"() : () -> index
+// CHECK-NEXT:   %3 = "arith.muli"(%1, %2) {{.*}} : (index, index) -> index
 // CHECK-NEXT:   %4 = "test.b"() : () -> !d_tensor.tensor<[%0, %1, %2], f32>
 // CHECK-NEXT:   %5 = "d_tensor.join_dim"(%4) <{dim = 1 : i32}> : (!d_tensor.tensor<[%0, %1, %2], f32>) -> !d_tensor.tensor<[%0, %3], f32>
 // CHECK-NEXT:   "test.keep"(%5) : (!d_tensor.tensor<[%0, %3], f32>) -> ()
@@ -50,9 +50,9 @@ builtin.module {
 
 // Valid structural IR: join result dimension may be unrelated before canonicalization.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %other = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %other = "test.index"() : () -> index
   %b = "test.b"() : () -> !d_tensor.tensor<[%mt, %tm], f32>
   %structural = "d_tensor.join_dim"(%b) <{dim = 0 : i32}>
     : (!d_tensor.tensor<[%mt, %tm], f32>) -> !d_tensor.tensor<[%other], f32>
@@ -60,9 +60,9 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "test.index"() : () -> index
 // CHECK-NEXT:   %3 = "test.b"() : () -> !d_tensor.tensor<[%0, %1], f32>
 // CHECK-NEXT:   %4 = "d_tensor.join_dim"(%3) <{dim = 0 : i32}> : (!d_tensor.tensor<[%0, %1], f32>) -> !d_tensor.tensor<[%2], f32>
 // CHECK-NEXT:   "test.keep"(%4) : (!d_tensor.tensor<[%2], f32>) -> ()
@@ -72,9 +72,9 @@ builtin.module {
 
 // Valid structural IR: missing product provenance is materialized by tensor-shape-canonicalize.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %m = "test.index"() : () -> index
   %b = "test.b"() : () -> !d_tensor.tensor<[%mt, %tm], f32>
   %structural = "d_tensor.join_dim"(%b) <{dim = 0 : i32}>
     : (!d_tensor.tensor<[%mt, %tm], f32>) -> !d_tensor.tensor<[%m], f32>
@@ -82,9 +82,9 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "test.index"() : () -> index
 // CHECK-NEXT:   %3 = "test.b"() : () -> !d_tensor.tensor<[%0, %1], f32>
 // CHECK-NEXT:   %4 = "d_tensor.join_dim"(%3) <{dim = 0 : i32}> : (!d_tensor.tensor<[%0, %1], f32>) -> !d_tensor.tensor<[%2], f32>
 // CHECK-NEXT:   "test.keep"(%4) : (!d_tensor.tensor<[%2], f32>) -> ()
@@ -94,9 +94,9 @@ builtin.module {
 
 // Valid structural IR: product order is not checked by the verifier.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %m = "d_tensor.nat.mul"(%tm, %mt) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %m = "arith.muli"(%tm, %mt) : (index, index) -> index
   %b = "test.b"() : () -> !d_tensor.tensor<[%mt, %tm], f32>
   %structural = "d_tensor.join_dim"(%b) <{dim = 0 : i32}>
     : (!d_tensor.tensor<[%mt, %tm], f32>) -> !d_tensor.tensor<[%m], f32>
@@ -104,9 +104,9 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.mul"(%1, %0) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "arith.muli"(%1, %0) {{.*}} : (index, index) -> index
 // CHECK-NEXT:   %3 = "test.b"() : () -> !d_tensor.tensor<[%0, %1], f32>
 // CHECK-NEXT:   %4 = "d_tensor.join_dim"(%3) <{dim = 0 : i32}> : (!d_tensor.tensor<[%0, %1], f32>) -> !d_tensor.tensor<[%2], f32>
 // CHECK-NEXT:   "test.keep"(%4) : (!d_tensor.tensor<[%2], f32>) -> ()
@@ -116,9 +116,9 @@ builtin.module {
 
 // Invalid: join dim out of bounds.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %m = "d_tensor.nat.mul"(%mt, %tm) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %m = "arith.muli"(%mt, %tm) : (index, index) -> index
   %b = "test.b"() : () -> !d_tensor.tensor<[%mt, %tm], f32>
   %bad = "d_tensor.join_dim"(%b) <{dim = 1 : i32}>
     : (!d_tensor.tensor<[%mt, %tm], f32>) -> !d_tensor.tensor<[%m], f32>
@@ -130,9 +130,9 @@ builtin.module {
 
 // Invalid: join wrong result rank.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %m = "d_tensor.nat.mul"(%mt, %tm) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %m = "arith.muli"(%mt, %tm) : (index, index) -> index
   %b = "test.b"() : () -> !d_tensor.tensor<[%mt, %tm], f32>
   %bad = "d_tensor.join_dim"(%b) <{dim = 0 : i32}>
     : (!d_tensor.tensor<[%mt, %tm], f32>) -> !d_tensor.tensor<[%m, %mt], f32>
@@ -144,9 +144,9 @@ builtin.module {
 
 // Invalid: element type mismatch is rejected for join.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %m = "d_tensor.nat.mul"(%mt, %tm) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %m = "arith.muli"(%mt, %tm) : (index, index) -> index
   %b = "test.b"() : () -> !d_tensor.tensor<[%mt, %tm], f32>
   %bad = "d_tensor.join_dim"(%b) <{dim = 0 : i32}>
     : (!d_tensor.tensor<[%mt, %tm], f32>) -> !d_tensor.tensor<[%m], i32>

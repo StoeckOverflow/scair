@@ -1,57 +1,60 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file --verify-diagnostics -p tensor-shape-canonicalize | filecheck %s -DFILE=%s
 // RUN: scair-opt %s --allow-unregistered-dialect --split-input-file --verify-diagnostics -p tensor-shape-canonicalize | scair-opt --allow-unregistered-dialect --split-input-file --verify-diagnostics
 
-// add(x, 0) -> x with deep RAUW into type-embedded dims.
+// Index arith dimensions remain valid before the arith canonicalizer retargeting phase.
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %s = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 4 : index}> : () -> index
+  %z = "arith.constant"() <{value = 0 : index}> : () -> index
+  %s = "arith.addi"(%m, %z) : (index, index) -> index
   %u = "test.use"() : () -> !d_tensor.tensor<[%s], f32>
 }
 
 // CHECK: builtin.module {
-// CHECK:   %0 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-// CHECK:   %1 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-// CHECK:   %2 = "test.use"() : () -> !d_tensor.tensor<[%0], f32>
-// CHECK: }
-
-// -----
-
-// mul(x, 1) -> x and mul(x, 0) -> 0.
-builtin.module {
-  %x = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
-  %one = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
-  %zero = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %m1 = "d_tensor.nat.mul"(%x, %one) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %m0 = "d_tensor.nat.mul"(%m1, %zero) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %u = "test.use"() : () -> !d_tensor.tensor<[%m0], f32>
-}
-
-// CHECK: builtin.module {
-// CHECK:   %0 = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
-// CHECK:   %1 = "d_tensor.nat.const"() <{value = 1 : i32}> : () -> !d_tensor.nat
-// CHECK:   %2 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
+// CHECK:   %0 = "arith.constant"() <{value = 4 : index}> : () -> index
+// CHECK:   %1 = "arith.constant"() <{value = 0 : index}> : () -> index
+// CHECK:   %2 = "arith.addi"(%0, %1) {{.*}} : (index, index) -> index
 // CHECK:   %3 = "test.use"() : () -> !d_tensor.tensor<[%2], f32>
 // CHECK: }
 
 // -----
 
-// Constant-fold nat.add/nat.mul.
+// Index multiplication dimensions are preserved by tensor-shape-canonicalize in Phase 1.
 builtin.module {
-  %a = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-  %b = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-  %c = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-  %s = "d_tensor.nat.add"(%a, %b) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %p = "d_tensor.nat.mul"(%s, %c) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %x = "arith.constant"() <{value = 7 : index}> : () -> index
+  %one = "arith.constant"() <{value = 1 : index}> : () -> index
+  %zero = "arith.constant"() <{value = 0 : index}> : () -> index
+  %m1 = "arith.muli"(%x, %one) : (index, index) -> index
+  %m0 = "arith.muli"(%m1, %zero) : (index, index) -> index
+  %u = "test.use"() : () -> !d_tensor.tensor<[%m0], f32>
+}
+
+// CHECK: builtin.module {
+// CHECK:   %0 = "arith.constant"() <{value = 7 : index}> : () -> index
+// CHECK:   %1 = "arith.constant"() <{value = 1 : index}> : () -> index
+// CHECK:   %2 = "arith.constant"() <{value = 0 : index}> : () -> index
+// CHECK:   %3 = "arith.muli"(%0, %1) {{.*}} : (index, index) -> index
+// CHECK:   %4 = "arith.muli"(%3, %2) {{.*}} : (index, index) -> index
+// CHECK:   %5 = "test.use"() : () -> !d_tensor.tensor<[%4], f32>
+// CHECK: }
+
+// -----
+
+// Constant index shape arithmetic remains a valid dimension.
+builtin.module {
+  %a = "arith.constant"() <{value = 2 : index}> : () -> index
+  %b = "arith.constant"() <{value = 3 : index}> : () -> index
+  %c = "arith.constant"() <{value = 4 : index}> : () -> index
+  %s = "arith.addi"(%a, %b) : (index, index) -> index
+  %p = "arith.muli"(%s, %c) : (index, index) -> index
   %u = "test.use"() : () -> !d_tensor.tensor<[%p], f32>
 }
 
 // CHECK: builtin.module {
-// CHECK:   %0 = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
-// CHECK:   %1 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-// CHECK:   %2 = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
-// CHECK:   %3 = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
-// CHECK:   %4 = "d_tensor.nat.const"() <{value = 20 : i32}> : () -> !d_tensor.nat
+// CHECK:   %0 = "arith.constant"() <{value = 2 : index}> : () -> index
+// CHECK:   %1 = "arith.constant"() <{value = 3 : index}> : () -> index
+// CHECK:   %2 = "arith.constant"() <{value = 4 : index}> : () -> index
+// CHECK:   %3 = "arith.addi"(%0, %1) {{.*}} : (index, index) -> index
+// CHECK:   %4 = "arith.muli"(%3, %2) {{.*}} : (index, index) -> index
 // CHECK:   %5 = "test.use"() : () -> !d_tensor.tensor<[%4], f32>
 // CHECK: }
 
@@ -59,8 +62,8 @@ builtin.module {
 
 // d_tensor.dim remains (no dim-fold in strict !value<...> typing mode).
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 6 : i32}> : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 9 : i32}> : () -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 6 : index}> : () -> index
+  %n = "arith.constant"() <{value = 9 : index}> : () -> index
   %A = "test.A"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %d0 = "d_tensor.dim"(%A) <{axis = 0 : i32}>
     : (!d_tensor.tensor<[%m, %n], f32>) -> !value<%m>
@@ -68,8 +71,8 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK:   %0 = "d_tensor.nat.const"() <{value = 6 : i32}> : () -> !d_tensor.nat
-// CHECK:   %1 = "d_tensor.nat.const"() <{value = 9 : i32}> : () -> !d_tensor.nat
+// CHECK:   %0 = "arith.constant"() <{value = 6 : index}> : () -> index
+// CHECK:   %1 = "arith.constant"() <{value = 9 : index}> : () -> index
 // CHECK:   %2 = "test.A"() : () -> !d_tensor.tensor<[%0, %1], f32>
 // CHECK:   %3 = "d_tensor.dim"(%2) <{axis = 0 : i32}> : (!d_tensor.tensor<[%0, %1], f32>) -> !value<%0>
 // CHECK:   %4 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%3], f32>
@@ -79,15 +82,15 @@ builtin.module {
 
 // Must-not-fold: no neutral/constant identities present.
 builtin.module {
-  %x = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
-  %s = "d_tensor.nat.add"(%x, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %x = "test.index"() : () -> index
+  %n = "arith.constant"() <{value = 7 : index}> : () -> index
+  %s = "arith.addi"(%x, %n) : (index, index) -> index
   %u = "test.use"() : () -> !d_tensor.tensor<[%s], f32>
 }
 
 // CHECK: builtin.module {
-// CHECK:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK:   %1 = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
-// CHECK:   %2 = "d_tensor.nat.add"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CHECK:   %0 = "test.index"() : () -> index
+// CHECK:   %1 = "arith.constant"() <{value = 7 : index}> : () -> index
+// CHECK:   %2 = "arith.addi"(%0, %1) {{.*}} : (index, index) -> index
 // CHECK:   %3 = "test.use"() : () -> !d_tensor.tensor<[%2], f32>
 // CHECK: }

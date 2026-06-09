@@ -1,10 +1,10 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s
 
-// Valid: 2D to 1D collapse with direct nat.mul-backed result dim.
+// Valid: 2D to 1D collapse with direct arith.muli-backed result dim.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.mul"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %mn = "arith.muli"(%m, %n) : (index, index) -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %flat = "d_tensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 1 : i32]]}>
@@ -13,9 +13,9 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.mul"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "arith.muli"(%0, %1) {{.*}} : (index, index) -> index
 // CHECK-NEXT:   %3 = "test.a"() : () -> !d_tensor.tensor<[%0, %1], f32>
 // CHECK-NEXT:   %4 = "d_tensor.collapse_shape"(%3) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!d_tensor.tensor<[%0, %1], f32>) -> !d_tensor.tensor<[%2], f32>
 // CHECK-NEXT:   "test.keep"(%4) : (!d_tensor.tensor<[%2], f32>) -> ()
@@ -25,12 +25,12 @@ builtin.module {
 
 // Valid: 4D to 2D collapse for exact tiling-shaped tensors.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %nt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tn = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %m = "d_tensor.nat.mul"(%mt, %tm) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %n = "d_tensor.nat.mul"(%nt, %tn) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %nt = "test.index"() : () -> index
+  %tn = "test.index"() : () -> index
+  %m = "arith.muli"(%mt, %tm) : (index, index) -> index
+  %n = "arith.muli"(%nt, %tn) : (index, index) -> index
   %tiled = "test.tiled"() : () -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
   %untiled = "d_tensor.collapse_shape"(%tiled)
     <{reassociation = [[0 : i32, 1 : i32], [2 : i32, 3 : i32]]}>
@@ -39,12 +39,12 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %3 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %4 = "d_tensor.nat.mul"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// CHECK-NEXT:   %5 = "d_tensor.nat.mul"(%2, %3) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "test.index"() : () -> index
+// CHECK-NEXT:   %3 = "test.index"() : () -> index
+// CHECK-NEXT:   %4 = "arith.muli"(%0, %1) {{.*}} : (index, index) -> index
+// CHECK-NEXT:   %5 = "arith.muli"(%2, %3) {{.*}} : (index, index) -> index
 // CHECK-NEXT:   %6 = "test.tiled"() : () -> !d_tensor.tensor<[%0, %1, %2, %3], f32>
 // CHECK-NEXT:   %7 = "d_tensor.collapse_shape"(%6) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%0, %1, %2, %3], f32>) -> !d_tensor.tensor<[%4, %5], f32>
 // CHECK-NEXT:   "test.keep"(%7) : (!d_tensor.tensor<[%4, %5], f32>) -> ()
@@ -54,9 +54,9 @@ builtin.module {
 
 // Valid structural IR: result dimension may be unrelated before canonicalization.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %other = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %other = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %structural = "d_tensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 1 : i32]]}>
@@ -65,9 +65,9 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "test.index"() : () -> index
 // CHECK-NEXT:   %3 = "test.a"() : () -> !d_tensor.tensor<[%0, %1], f32>
 // CHECK-NEXT:   %4 = "d_tensor.collapse_shape"(%3) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!d_tensor.tensor<[%0, %1], f32>) -> !d_tensor.tensor<[%2], f32>
 // CHECK-NEXT:   "test.keep"(%4) : (!d_tensor.tensor<[%2], f32>) -> ()
@@ -77,9 +77,9 @@ builtin.module {
 
 // Valid structural IR: product order is not checked by the verifier.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %nm = "d_tensor.nat.mul"(%n, %m) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %nm = "arith.muli"(%n, %m) : (index, index) -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %structural = "d_tensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 1 : i32]]}>
@@ -88,9 +88,9 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.mul"(%1, %0) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "arith.muli"(%1, %0) {{.*}} : (index, index) -> index
 // CHECK-NEXT:   %3 = "test.a"() : () -> !d_tensor.tensor<[%0, %1], f32>
 // CHECK-NEXT:   %4 = "d_tensor.collapse_shape"(%3) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!d_tensor.tensor<[%0, %1], f32>) -> !d_tensor.tensor<[%2], f32>
 // CHECK-NEXT:   "test.keep"(%4) : (!d_tensor.tensor<[%2], f32>) -> ()
@@ -100,9 +100,9 @@ builtin.module {
 
 // Valid structural IR: missing product provenance is materialized by tensor-shape-canonicalize.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %mn = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %structural = "d_tensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 1 : i32]]}>
@@ -111,9 +111,9 @@ builtin.module {
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "test.index"() : () -> index
 // CHECK-NEXT:   %3 = "test.a"() : () -> !d_tensor.tensor<[%0, %1], f32>
 // CHECK-NEXT:   %4 = "d_tensor.collapse_shape"(%3) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!d_tensor.tensor<[%0, %1], f32>) -> !d_tensor.tensor<[%2], f32>
 // CHECK-NEXT:   "test.keep"(%4) : (!d_tensor.tensor<[%2], f32>) -> ()
@@ -123,10 +123,10 @@ builtin.module {
 
 // Invalid: reassociation must be contiguous and complete over source dims.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %p = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.mul"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %p = "test.index"() : () -> index
+  %mn = "arith.muli"(%m, %n) : (index, index) -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n, %p], f32>
   %bad = "d_tensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 2 : i32], [1 : i32]]}>
@@ -139,9 +139,9 @@ builtin.module {
 
 // Invalid: malformed reassociation group.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.mul"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %mn = "arith.muli"(%m, %n) : (index, index) -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.collapse_shape"(%a)
     <{reassociation = [0 : i32]}>
@@ -154,9 +154,9 @@ builtin.module {
 
 // Invalid: element type must be preserved.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.mul"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %mn = "arith.muli"(%m, %n) : (index, index) -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 1 : i32]]}>
@@ -169,9 +169,9 @@ builtin.module {
 
 // Invalid: collapse_shape cannot increase rank.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mn = "d_tensor.nat.mul"(%m, %n) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %mn = "arith.muli"(%m, %n) : (index, index) -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%mn], f32>
   %bad = "d_tensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32], [1 : i32]]}>

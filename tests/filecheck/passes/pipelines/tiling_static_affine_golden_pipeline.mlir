@@ -1,11 +1,9 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible,erase-d-tensor-nat-proofs-to-index,canonicalize,cse,dce | filecheck %s --implicit-check-not=d_tensor. --implicit-check-not=d_affine.for --implicit-check-not=arith.minsi --implicit-check-not=affine.min --implicit-check-not="step %"
+// RUN: scair-opt %s --allow-unregistered-dialect -p canonicalize-d-tensor-shape-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible,canonicalize,cse,dce | filecheck %s --implicit-check-not=d_tensor. --implicit-check-not=d_affine.for --implicit-check-not=arith.minsi --implicit-check-not=affine.min --implicit-check-not="step %"
 
 builtin.module {
   func.func @static_affine_exact(%k0_idx: index, %out: memref<?xf32>) {
-    %k0 = "d_tensor.index_to_nat"(%k0_idx) : (index) -> !d_tensor.nat
-    %k1 = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
-    %k = "d_tensor.nat.mul"(%k0, %k1) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-    %ub = "d_tensor.shape.to_index"(%k) : (!d_tensor.nat) -> index
+    %k1 = "arith.constant"() <{value = 3 : index}> : () -> index
+    %ub = "arith.muli"(%k0_idx, %k1) : (index, index) -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 

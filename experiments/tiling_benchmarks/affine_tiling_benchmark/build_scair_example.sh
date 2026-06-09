@@ -19,8 +19,8 @@ AFFINE_TILING_ROUTES="${AFFINE_TILING_ROUTES:-mlir_runtime_product,mlir_static_f
 MLIR_RUNTIME_PRODUCT_SRC="${MLIR_RUNTIME_PRODUCT_SRC:-$EXAMPLE_DIR/affine_runtime_product_mlir.mlir}"
 MLIR_STATIC_FACTOR_SRC="${MLIR_STATIC_FACTOR_SRC:-$EXAMPLE_DIR/affine_static_factor_mlir.mlir}"
 ORDINARY_PRODUCT_SRC="${ORDINARY_PRODUCT_SRC:-$EXAMPLE_DIR/affine_runtime_product_scair_ordinary.mlir}"
-VALUE_DEP_PRODUCT_SRC="${VALUE_DEP_PRODUCT_SRC:-$EXAMPLE_DIR/affine_natmul_scair_value_dependent.mlir}"
-VALUE_DEP_STATIC_SRC="${VALUE_DEP_STATIC_SRC:-$EXAMPLE_DIR/affine_natmul_scair_value_dependent_static.mlir}"
+VALUE_DEP_PRODUCT_SRC="${VALUE_DEP_PRODUCT_SRC:-$EXAMPLE_DIR/affine_shape_product_scair_value_dependent.mlir}"
+VALUE_DEP_STATIC_SRC="${VALUE_DEP_STATIC_SRC:-$EXAMPLE_DIR/affine_shape_product_scair_value_dependent_static.mlir}"
 
 mkdir -p "$OUT_DIR"
 ENV_PATH="$(ensure_env_snapshot "$OUT_DIR")"
@@ -71,8 +71,8 @@ write_route_manifest() {
 | `stock_affine_baseline` | `mlir_runtime_product` | Ordinary runtime product tiled by upstream affine; keeps min/tail. |
 | `static_affine_reference` | `mlir_static_factor_reference` | Static stock-affine factor reference with no min/tail. |
 | `ordinary_tail` | `ordinary_scair_product_with_tail` | ScaIR ordinary index-product tiling; keeps min/tail. |
-| `dependent_exact_dynamic` | `value_dependent_exact_product` | Dependent exact tiling from explicit `d_tensor.nat.mul` product proof. |
-| `dependent_exact_runtime_checked` | `value_dependent_exact_product` | Alias for dependent exact route when input carries positive refinements/assertions. |
+| `dependent_exact_dynamic` | `value_dependent_exact_product` | Dependent exact tiling from explicit `arith.muli` product proof. |
+| `dependent_exact_runtime_checked` | `value_dependent_exact_product` | Alias for dependent exact route when input carries checked positive index facts. |
 | `dependent_exact_static_affine` | `value_dependent_static_affine_compatible` | Dependent exact tiling bridged to stock `affine.for`. |
 
 Important ScaIR pipelines:
@@ -84,19 +84,19 @@ ordinary_tail:
 
 dependent_exact_dynamic:
   canonicalize,cse,dce,
-  canonicalize-d-tensor-nat-products,
+  canonicalize-d-tensor-shape-products,
   dependent-product-loop-exact-tile,
   validate-d-affine-dynamic-steps
 
 dependent_exact_static_affine:
   canonicalize,cse,dce,
-  canonicalize-d-tensor-nat-products,
+  canonicalize-d-tensor-shape-products,
   dependent-product-loop-exact-tile,
   d-affine-to-affine-compatible,
   canonicalize,cse,dce
 ```
 
-Exact routes require explicit nat-product provenance. Ordinary `arith.muli`
+Exact routes require explicit shape-rooted index product provenance. Ordinary `arith.muli`
 routes are negative controls and should retain tail guards.
 MD
 
@@ -128,14 +128,14 @@ MD
     "script_route": "value_dependent_exact_product",
     "claim_role": "value_dependent_exact",
     "expected_tail": "none",
-    "product_representation": "d_tensor.nat.mul"
+    "product_representation": "arith.muli"
   },
   {
     "canonical_route": "dependent_exact_static_affine",
     "script_route": "value_dependent_static_affine_compatible",
     "claim_role": "value_dependent_static_affine_compatible",
     "expected_tail": "none",
-    "product_representation": "d_tensor.nat.mul",
+    "product_representation": "arith.muli",
     "positivity_source": "nat_const_positive"
   }
 ]
@@ -196,7 +196,7 @@ validate_runtime_product_with_min() {
     "runtime product route must tile the arith.muli product bound with the requested static step"
   require_ir_pattern "$path" " to min " \
     "runtime product route must keep a min tail bound"
-  reject_ir_pattern "$path" 'd_tensor\.nat\.mul|d_tensor\.shape\.to_index|d_affine\.for' \
+  reject_ir_pattern "$path" 'arith\.muli|d_tensor\.shape\.to_index|d_affine\.for' \
     "runtime product route must stay ordinary MLIR/Affine"
 }
 
@@ -207,7 +207,7 @@ validate_static_factor_no_min() {
     "static affine factor reference must tile with the requested static step"
   reject_ir_pattern "$path" ' to min |affine\.min|d_affine\.min|arith\.minsi|remainder| mod|cleanup' \
     "static affine factor reference must not need min/tail cleanup"
-  reject_ir_pattern "$path" 'arith\.muli|d_tensor\.nat\.mul|d_affine\.for' \
+  reject_ir_pattern "$path" 'arith\.muli|arith\.muli|d_affine\.for' \
     "static affine factor reference must isolate stock affine static factor reasoning"
 }
 
@@ -219,8 +219,8 @@ validate_ordinary_scair_with_min() {
 
 validate_value_dependent_no_min() {
   local path="$1"
-  require_ir_pattern "$path" 'd_tensor\.nat\.mul' \
-    "value-dependent route must preserve natmul provenance"
+  require_ir_pattern "$path" 'arith\.muli' \
+    "value-dependent route must preserve shape-product provenance"
   require_ir_pattern "$path" 'd_tensor\.shape\.to_index' \
     "value-dependent route must materialize the RHS factor as a dynamic step"
   require_ir_pattern "$path" 'd_affine\.for %[A-Za-z0-9_]+ = #[A-Za-z0-9_]+\(%[A-Za-z0-9_]+\) to #[A-Za-z0-9_]+\(%[A-Za-z0-9_]+\) step %[A-Za-z0-9_]+ : index' \
@@ -234,8 +234,8 @@ validate_value_dependent_no_min() {
 validate_value_dependent_static_affine_compatible() {
   local path="$1"
   local tile_size="$2"
-  require_ir_pattern "$path" 'd_tensor\.nat\.mul' \
-    "static value-dependent route must preserve natmul provenance"
+  require_ir_pattern "$path" 'arith\.muli' \
+    "static value-dependent route must preserve shape-product provenance"
   require_ir_pattern "$path" "affine_map<\\(d0\\)\\[\\] -> \\(d0 \\+ $tile_size\\)>|affine_map<\\(d0\\) -> \\(d0 \\+ $tile_size\\)>" \
     "static value-dependent route must encode the inner tile end as an affine constant offset"
   require_ir_pattern "$path" "affine\\.for %[A-Za-z0-9_]+ = #[A-Za-z0-9_]+\\(%[A-Za-z0-9_]+\\) to #[A-Za-z0-9_]+\\(%[A-Za-z0-9_]+\\) step $tile_size" \
@@ -394,12 +394,12 @@ for size in "${SIZE_ENTRIES[@]}"; do
   fi
 
   if route_enabled "value_dependent_exact_product"; then
-    build_scair_route "value_dependent_exact_product" "$VALUE_DEP_PRODUCT_SRC" "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps"
+    build_scair_route "value_dependent_exact_product" "$VALUE_DEP_PRODUCT_SRC" "canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps"
     validate_value_dependent_no_min "$OUT_DIR/value_dependent_exact_product.tiled.mlir"
     append_row "$METRICS_CSV" "$SUMMARY_MD" "value_dependent_exact_product" \
       "$OUT_DIR/value_dependent_exact_product.input.mlir" \
       "$OUT_DIR/value_dependent_exact_product.tiled.mlir" \
-      "benchmark_role=minimal_claim;claim_role=value_dependent_exact;product_representation=d_tensor.nat.mul;tile_loop=product_loop;tile_step=dynamic_factor;tail_bound=$(tail_bound_kind "$OUT_DIR/value_dependent_exact_product.tiled.mlir");exact_divisibility_proof=d_tensor.nat.mul;$size_notes"
+      "benchmark_role=minimal_claim;claim_role=value_dependent_exact;product_representation=arith.muli;tile_loop=product_loop;tile_step=dynamic_factor;tail_bound=$(tail_bound_kind "$OUT_DIR/value_dependent_exact_product.tiled.mlir");exact_divisibility_proof=arith.muli;$size_notes"
   fi
 
   if route_enabled "value_dependent_static_affine_compatible"; then
@@ -407,14 +407,14 @@ for size in "${SIZE_ENTRIES[@]}"; do
       echo "error: value_dependent_static_affine_compatible is intentionally fixed to nat.const 3; use K1=3 or disable that route" >&2
       exit 1
     fi
-    build_scair_route "value_dependent_static_affine_compatible" "$VALUE_DEP_STATIC_SRC" "canonicalize,cse,dce,canonicalize-d-tensor-nat-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible,canonicalize,cse,dce"
+    build_scair_route "value_dependent_static_affine_compatible" "$VALUE_DEP_STATIC_SRC" "canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible,canonicalize,cse,dce"
     validate_value_dependent_static_affine_compatible "$OUT_DIR/value_dependent_static_affine_compatible.tiled.mlir" "$k1"
     run_stock_mlir_checks "$OUT_DIR/value_dependent_static_affine_compatible" "$OUT_DIR/value_dependent_static_affine_compatible.tiled.mlir" "$k1"
     validate_stock_unroll_no_cleanup "$OUT_DIR/value_dependent_static_affine_compatible.stock_unroll.mlir"
     append_row "$METRICS_CSV" "$SUMMARY_MD" "value_dependent_static_affine_compatible" \
       "$OUT_DIR/value_dependent_static_affine_compatible.input.mlir" \
       "$OUT_DIR/value_dependent_static_affine_compatible.tiled.mlir" \
-      "benchmark_role=main_thesis_artifact;claim_role=value_dependent_static_affine_compatible;product_representation=d_tensor.nat.mul;tile_loop=product_loop;tile_step=static_$k1;tail_bound=$(tail_bound_kind "$OUT_DIR/value_dependent_static_affine_compatible.tiled.mlir");exact_divisibility_proof=d_tensor.nat.mul;stock_parse=ok;stock_verify=ok;stock_canonicalize=ok;stock_affine_loop_normalize=ok;stock_affine_loop_unroll_factor_$k1=ok;unroll_cleanup=none;$size_notes"
+      "benchmark_role=main_thesis_artifact;claim_role=value_dependent_static_affine_compatible;product_representation=arith.muli;tile_loop=product_loop;tile_step=static_$k1;tail_bound=$(tail_bound_kind "$OUT_DIR/value_dependent_static_affine_compatible.tiled.mlir");exact_divisibility_proof=arith.muli;stock_parse=ok;stock_verify=ok;stock_canonicalize=ok;stock_affine_loop_normalize=ok;stock_affine_loop_unroll_factor_$k1=ok;unroll_cleanup=none;$size_notes"
   fi
 done
 

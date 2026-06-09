@@ -7,9 +7,9 @@ import scair.dialects.d_affine
 import scair.dialects.func
 import scair.dialects.scf
 import scair.ir.*
+import scair.passes.ShapeIndexProvenance
 import scair.passes.control_flow_helpers.*
 import scair.passes.lowering_helpers.FunctionLoweringState
-import scair.passes.NatProvenance
 import scair.transformations.*
 
 import scala.collection.mutable
@@ -592,7 +592,7 @@ private final class Builder(val funcOp: func.Func):
       op: d_affine.For
   ): Unit =
     op.stepOperands.headOption.foreach { step =>
-      if !NatProvenance.isPositive(step) then
+      if !ShapeIndexProvenance.isPositive(step) then
         unsupportedLoop("dynamic step is not proven strictly positive")
     }
     if op.inits.isEmpty && op.res.isEmpty then

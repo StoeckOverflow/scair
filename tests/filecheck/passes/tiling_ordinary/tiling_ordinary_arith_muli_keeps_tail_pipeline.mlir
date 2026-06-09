@@ -1,4 +1,4 @@
-// RUN: scair-opt %s --allow-unregistered-dialect -p ordinary-affine-product-loop-tile-with-tail:3,dependent-tail-min-simplify,canonicalize,cse,dce | filecheck %s --implicit-check-not=d_tensor.nat.mul --implicit-check-not=d_affine.for
+// RUN: scair-opt %s --allow-unregistered-dialect -p ordinary-affine-product-loop-tile-with-tail:3,dependent-tail-min-simplify,canonicalize,cse,dce | filecheck %s --implicit-check-not=d_tensor. --implicit-check-not=d_affine.for
 
 builtin.module {
   func.func @ordinary_arith_muli_keeps_tail(%k0: index, %k1: index, %out: memref<?xf32>) {

@@ -1,4 +1,4 @@
-// Purpose: nat.param-focused coverage for parse/print+verify, DCE uses-in-types, and CSE non-merge by dim SSA identity.
+// Purpose: index-dimension coverage for parse/print+verify, DCE uses-in-types, and CSE non-merge by dim SSA identity.
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | filecheck %s -DFILE=%s --check-prefix=VERIFY
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file | scair-opt --allow-unregistered-dialect --verify-diagnostics --split-input-file
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize | filecheck %s -DFILE=%s --check-prefix=CANON
@@ -10,10 +10,10 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | filecheck %s -DFILE=%s --check-prefix=PIPE
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce | scair-opt --allow-unregistered-dialect --verify-diagnostics --split-input-file
 
-// Parse/print + verify with nat.param in type params (tensor + sugar forms).
+// Parse/print + verify with index values in type params (tensor + sugar forms).
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %v = "test.v"() : () -> !d_tensor.vector<%m, f32>
   %mat = "test.mat"() : () -> !d_tensor.matrix<%m, %n, f32>
   %t = "test.t"() : () -> !d_tensor.tensor<[%m, %n], f32>
@@ -22,8 +22,8 @@ builtin.module {
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// VERIFY:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY:   %0 = "test.index"() : () -> index
+// VERIFY:   %1 = "test.index"() : () -> index
 // VERIFY:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
 // VERIFY:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
 // VERIFY:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
@@ -31,8 +31,8 @@ builtin.module {
 // VERIFY: }
 
 // CANON: builtin.module {
-// CANON:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON:   %0 = "test.index"() : () -> index
+// CANON:   %1 = "test.index"() : () -> index
 // CANON:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
 // CANON:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
 // CANON:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
@@ -40,8 +40,8 @@ builtin.module {
 // CANON: }
 
 // CSE: builtin.module {
-// CSE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CSE:   %0 = "test.index"() : () -> index
+// CSE:   %1 = "test.index"() : () -> index
 // CSE:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
 // CSE:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
 // CSE:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
@@ -49,8 +49,8 @@ builtin.module {
 // CSE: }
 
 // DCE: builtin.module {
-// DCE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// DCE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// DCE:   %0 = "test.index"() : () -> index
+// DCE:   %1 = "test.index"() : () -> index
 // DCE:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
 // DCE:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
 // DCE:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
@@ -58,8 +58,8 @@ builtin.module {
 // DCE: }
 
 // PIPE: builtin.module {
-// PIPE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE:   %0 = "test.index"() : () -> index
+// PIPE:   %1 = "test.index"() : () -> index
 // PIPE:   %2 = "test.v"() : () -> !d_tensor.vector<%0, f32>
 // PIPE:   %3 = "test.mat"() : () -> !d_tensor.matrix<%0, %1, f32>
 // PIPE:   %4 = "test.t"() : () -> !d_tensor.tensor<[%0, %1], f32>
@@ -68,26 +68,25 @@ builtin.module {
 
 // -----
 
-// CSE must not merge nat.param producers (fresh identity).
+// CSE must not merge opaque index producers (fresh identity).
 builtin.module {
-  %p0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %p1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  "test.keep_params"(%p0, %p1) : (!d_tensor.nat, !d_tensor.nat) -> ()
+  %p0 = "test.index"() : () -> index
+  %p1 = "test.index"() : () -> index
+  "test.keep_params"(%p0, %p1) : (index, index) -> ()
 }
 
 // CSE: builtin.module {
-// CSE:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CSE:   "test.keep_params"(%0, %1) : (!d_tensor.nat, !d_tensor.nat) -> ()
+// CSE:   %0 = "test.index"() : () -> index
+// CSE:   %1 = "test.index"() : () -> index
+// CSE:   "test.keep_params"(%0, %1) : (index, index) -> ()
 // CSE: }
 
 // -----
 
-// Dead nat.param should be removed by DCE.
+// Dead index constants should be removed by DCE.
 builtin.module {
-  %p = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %p = "arith.constant"() <{value = 7 : index}> : () -> index
 }
 
 // DCE: builtin.module {
-// DCE: ^bb0:
 // DCE: }

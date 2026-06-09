@@ -6,8 +6,8 @@
 // CSE must RAUW values embedded in block argument types, not only operation
 // result types and operation attributes.
 builtin.module {
-  %n0 = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
-  %n1 = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
+  %n0 = "arith.constant"() <{value = 7 : index}> : () -> index
+  %n1 = "arith.constant"() <{value = 7 : index}> : () -> index
   "test.region"() ({
   ^bb0(%buf : !d_memref.memref<[%n1], f32>):
     "test.ret"() : () -> ()
@@ -15,8 +15,8 @@ builtin.module {
 }
 
 // CSE-LABEL: builtin.module {
-// CSE: %[[N:[0-9]+]] = "d_tensor.nat.const"() <{value = 7 : i32}> : () -> !d_tensor.nat
-// CSE-NOT: "d_tensor.nat.const"
+// CSE: %[[N:[0-9]+]] = "arith.constant"() <{value = 7 : index}> : () -> index
+// CSE-NOT: "arith.constant"() <{value = 7 : index}>
 // CSE: ^bb{{[0-9]+}}(%{{[0-9]+}}: !d_memref.memref<[%[[N]]], f32>):
 // CSE: }
 
@@ -24,8 +24,8 @@ builtin.module {
 
 // DCE must keep a value that is used only from a block argument type.
 builtin.module {
-  %used = "d_tensor.nat.const"() <{value = 9 : i32}> : () -> !d_tensor.nat
-  %dead = "d_tensor.nat.const"() <{value = 10 : i32}> : () -> !d_tensor.nat
+  %used = "arith.constant"() <{value = 9 : index}> : () -> index
+  %dead = "arith.constant"() <{value = 10 : index}> : () -> index
   "test.region"() ({
   ^bb0(%buf : !d_memref.memref<[%used], f32>):
     "test.ret"() : () -> ()
@@ -33,7 +33,7 @@ builtin.module {
 }
 
 // DCE-LABEL: builtin.module {
-// DCE: %[[USED:[0-9]+]] = "d_tensor.nat.const"() <{value = 9 : i32}> : () -> !d_tensor.nat
+// DCE: %[[USED:[0-9]+]] = "arith.constant"() <{value = 9 : index}> : () -> index
 // DCE-NOT: value = 10
 // DCE: ^bb{{[0-9]+}}(%{{[0-9]+}}: !d_memref.memref<[%[[USED]]], f32>):
 // DCE: }

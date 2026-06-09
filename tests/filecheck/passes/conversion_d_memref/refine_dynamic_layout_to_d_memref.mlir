@@ -17,15 +17,12 @@ builtin.module {
 // CHECK-LABEL: func.func @refine_baseline(%0: index, %1: index) -> f32 {
 // CHECK-NEXT:    %2 = "arith.constant"() <{value = 256 : index}> : () -> index
 // CHECK-NEXT:    %3 = "arith.muli"(%2, %0) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
-// CHECK-NEXT:    %4 = "d_tensor.index_to_nat"(%3) : (index) -> !d_tensor.nat
-// CHECK-NEXT:    %5 = d_memref.alloc : () -> !d_memref.memref<[%4], f32>
-// CHECK-NEXT:    %6 = "arith.constant"() <{value = 1024 : index}> : () -> index
-// CHECK-NEXT:    %7 = "arith.constant"() <{value = 0 : index}> : () -> index
-// CHECK-NEXT:    %8 = "d_tensor.nat.const"() <{value = 256 : i32}> : () -> !d_tensor.nat
-// CHECK-NEXT:    %9 = "d_tensor.nat.const"() <{value = 1024 : i32}> : () -> !d_tensor.nat
-// CHECK-NEXT:    %10 = d_memref.reinterpret_cast %5
-// CHECK-NEXT:    : !d_memref.memref<[%4], f32> to !d_memref.memref<[%8, %9], f32, offset: %7, strides: [%0, %1]>
-// CHECK-NEXT:    %11 = d_memref.load %10[%7, %7] : !d_memref.memref<[%8, %9], f32, offset: %7, strides: [%0, %1]> -> f32
-// CHECK-NEXT:    d_memref.dealloc %5 : !d_memref.memref<[%4], f32>
-// CHECK-NEXT:    func.return %11 : f32
+// CHECK-NEXT:    %4 = d_memref.alloc : () -> !d_memref.memref<[%3], f32>
+// CHECK-NEXT:    %5 = "arith.constant"() <{value = 1024 : index}> : () -> index
+// CHECK-NEXT:    %6 = "arith.constant"() <{value = 0 : index}> : () -> index
+// CHECK-NEXT:    %7 = d_memref.reinterpret_cast %4
+// CHECK-NEXT:    : !d_memref.memref<[%3], f32> to !d_memref.memref<[256 : index, 1024 : index], f32, offset: %6, strides: [%0, %1]>
+// CHECK-NEXT:    %8 = d_memref.load %7[%6, %6] : !d_memref.memref<[256 : index, 1024 : index], f32, offset: %6, strides: [%0, %1]> -> f32
+// CHECK-NEXT:    d_memref.dealloc %4 : !d_memref.memref<[%3], f32>
+// CHECK-NEXT:    func.return %8 : f32
 // CHECK-NEXT:  }

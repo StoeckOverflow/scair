@@ -3,10 +3,8 @@
 
 builtin.module {
   func.func @main() -> index {
-    %lb_nat = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-    %ub_nat = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
-    %lb = "d_tensor.shape.to_index"(%lb_nat) : (!d_tensor.nat) -> index
-    %ub = "d_tensor.shape.to_index"(%ub_nat) : (!d_tensor.nat) -> index
+    %lb = "arith.constant"() <{value = 0 : index}> : () -> index
+    %ub = "arith.constant"() <{value = 5 : index}> : () -> index
     %init = "arith.constant"() <{value = 0 : index}> : () -> index
 
     %sum = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 iter_args(%acc = %init : index) {
@@ -19,15 +17,13 @@ builtin.module {
 
 // IR-LABEL: builtin.module {
 // IR: func.func @main() -> index {
-// IR: %0 = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-// IR: %1 = "d_tensor.nat.const"() <{value = 5 : i32}> : () -> !d_tensor.nat
-// IR: %2 = "d_tensor.shape.to_index"(%0) : (!d_tensor.nat) -> index
-// IR: %3 = "d_tensor.shape.to_index"(%1) : (!d_tensor.nat) -> index
-// IR: %4 = "arith.constant"() <{value = 0 : index}> : () -> index
-// IR: %5 = d_affine.for %6 = #map(%2) to #map(%3) step 1 : i32 iter_args(%7 = %4 : index) {
-// IR: %8 = d_affine.apply #map1 (%6)[%7] : (index)[index] -> index
-// IR: d_affine.yield %8 : (index)
+// IR: %0 = "arith.constant"() <{value = 0 : index}> : () -> index
+// IR: %1 = "arith.constant"() <{value = 5 : index}> : () -> index
+// IR: %2 = "arith.constant"() <{value = 0 : index}> : () -> index
+// IR: %3 = d_affine.for %4 = #map(%0) to #map(%1) step 1 : i32 iter_args(%5 = %2 : index) {
+// IR: %6 = d_affine.apply #map1 (%4)[%5] : (index)[index] -> index
+// IR: d_affine.yield %6 : (index)
 // IR: }
-// IR: func.return %5 : index
+// IR: func.return %3 : index
 
 // EXEC: Result: 10

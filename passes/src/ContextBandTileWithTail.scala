@@ -2,7 +2,7 @@ package scair.passes.context_band_tiling
 
 import scair.MLContext
 import scair.ir.Operation
-import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
+import scair.passes.analysis.ShapeProductFacts.FactorSelectionPolicy
 import scair.passes.tiling.ValueDependentTiling
 import scair.transformations.ModulePass
 

@@ -3,6 +3,7 @@ package scair.passes.finalize_refined_d_memref_to_llvm
 import scair.MLContext
 import scair.dialects.builtin.*
 import scair.dialects.{d_tensor as DTensor}
+import scair.dialects.arith
 import scair.dialects.d_memref
 import scair.dialects.func
 import scair.dialects.llvm
@@ -38,14 +39,35 @@ private final class Builder(val funcOp: func.Func):
   private def convertCarrierType(attr: Attribute): Attribute =
     attr match
       case _: d_memref.DMemrefMemrefType => llvm.Ptr()
-      case _: DTensor.DTensorNatLikeType => llvmIndexType
       case _: IndexType                  => llvmIndexType
       case other                         => other
+
+  private def convertLLVMValueType(attr: Attribute): Attribute =
+    attr match
+      case _: IndexType => llvmIndexType
+      case other        => other
+
+  private def convertLLVMIntegerType(attr: Attribute): IntegerType | IndexType =
+    attr match
+      case _: IndexType       => llvmIndexType
+      case other: IntegerType => other
+      case other              => other.asInstanceOf[IntegerType | IndexType]
+
+  private def convertLLVMConstantAttr(attr: Attribute): Attribute =
+    attr match
+      case IntegerAttr(IntData(v), _: IndexType) =>
+        IntegerAttr(IntData(v), llvmIndexType)
+      case other => other
 
   private def cloneValueAttr(attr: ValueAttribute): ValueAttribute =
     ValueAttribute(attr.getVal())
 
   private def cloneDimParam(param: d_memref.DimParam): d_memref.DimParam =
+    param match
+      case v: ValueAttribute => cloneValueAttr(v)
+      case i: IntegerAttr    => i
+
+  private def cloneDTensorDimParam(param: DTensor.DimParam): DTensor.DimParam =
     param match
       case v: ValueAttribute => cloneValueAttr(v)
       case i: IntegerAttr    => i
@@ -86,18 +108,18 @@ private final class Builder(val funcOp: func.Func):
         )
       case DTensor.DTensorTensorType(params, elem) =>
         DTensor.DTensorTensorType(
-          params.map(cloneValueAttr),
+          params.map(cloneDTensorDimParam),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
         )
       case DTensor.DTensorVectorType(param, elem) =>
         DTensor.DTensorVectorType(
-          cloneValueAttr(param),
+          cloneDTensorDimParam(param),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
         )
       case DTensor.DTensorMatrixType(rows, cols, elem) =>
         DTensor.DTensorMatrixType(
-          cloneValueAttr(rows),
-          cloneValueAttr(cols),
+          cloneDTensorDimParam(rows),
+          cloneDTensorDimParam(cols),
           cloneAttr(elem).asInstanceOf[TypeAttribute],
         )
       case other =>
@@ -137,8 +159,6 @@ private final class Builder(val funcOp: func.Func):
           )
           emit(entry, alias)
           state.valueMap(oldArg) = alias.res
-        case _: DTensor.DTensorNatLikeType =>
-          state.valueMap(oldArg) = newArg
         case _ => ()
     }
 
@@ -307,8 +327,6 @@ private final class Builder(val funcOp: func.Func):
   private def lowerCall(call: func.Call, block: Block): func.Call =
     val loweredOperands = call._operands.map { operand =>
       operand.typ match
-        case _: DTensor.DTensorNatLikeType =>
-          materializeNatOrIndex(operand, block).asInstanceOf[Operand[Attribute]]
         case ValueRefType(_) =>
           materializeNatOrIndex(operand, block).asInstanceOf[Operand[Attribute]]
         case _ =>
@@ -332,6 +350,94 @@ private final class Builder(val funcOp: func.Func):
     then constCache.constIndex(1, newBlocks.head)
     funcOp.body.blocks.zip(newBlocks).foreach { case (oldBlock, newBlock) =>
       oldBlock.operations.foreach {
+        case c: arith.Constant =>
+          val lowered = llvm.Constant(
+            convertLLVMConstantAttr(c.value),
+            Result(convertLLVMValueType(c.result.typ)),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(c.result) = lowered.res
+          c.value match
+            case IntegerAttr(IntData(v), _: IntegerType | _: IndexType) if newBlock eq newBlocks.head =>
+              constCache.seed(lowered.res, v)
+            case _ => ()
+        case add: arith.AddI =>
+          val lowered = llvm.Add(
+            remap(add.lhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            remap(add.rhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            Result(convertLLVMIntegerType(add.result.typ)),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(add.result) = lowered.res
+        case mul: arith.MulI =>
+          val lowered = llvm.Mul(
+            remap(mul.lhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            remap(mul.rhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            Result(convertLLVMIntegerType(mul.result.typ)),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(mul.result) = lowered.res
+        case div: arith.DivUI =>
+          val lowered = llvm.UDiv(
+            remap(div.lhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            remap(div.rhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            Result(convertLLVMIntegerType(div.result.typ)),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(div.result) = lowered.res
+        case div: arith.DivSI =>
+          val lowered = llvm.SDiv(
+            remap(div.lhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            remap(div.rhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            Result(convertLLVMIntegerType(div.result.typ)),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(div.result) = lowered.res
+        case rem: arith.RemUI =>
+          val lowered = llvm.URem(
+            remap(rem.lhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            remap(rem.rhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            Result(convertLLVMIntegerType(rem.result.typ)),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(rem.result) = lowered.res
+        case rem: arith.RemSI =>
+          val lowered = llvm.SRem(
+            remap(rem.lhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            remap(rem.rhs).asInstanceOf[Operand[IntegerType | IndexType]],
+            Result(convertLLVMIntegerType(rem.result.typ)),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(rem.result) = lowered.res
+        case min: arith.MinSI =>
+          val lhs = remap(min.lhs).asInstanceOf[Operand[IntegerType | IndexType]]
+          val rhs = remap(min.rhs).asInstanceOf[Operand[IntegerType | IndexType]]
+          val cmp = llvm.ICmp(lhs, rhs, Result(I1), llvm.ICmpPredicate.slt)
+          val select = llvm.Select(
+            cmp.res,
+            lhs.asInstanceOf[Operand[Attribute]],
+            rhs.asInstanceOf[Operand[Attribute]],
+            Result(convertLLVMIntegerType(min.result.typ)),
+          )
+          emit(newBlock, cmp)
+          emit(newBlock, select)
+          state.valueMap(min.result) = select.res
+        case add: arith.AddF =>
+          val lowered = llvm.FAdd(
+            remap(add.lhs).asInstanceOf[Operand[FloatType]],
+            remap(add.rhs).asInstanceOf[Operand[FloatType]],
+            Result(add.result.typ),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(add.result) = lowered.res
+        case mul: arith.MulF =>
+          val lowered = llvm.FMul(
+            remap(mul.lhs).asInstanceOf[Operand[FloatType]],
+            remap(mul.rhs).asInstanceOf[Operand[FloatType]],
+            Result(mul.result.typ),
+          )
+          emit(newBlock, lowered)
+          state.valueMap(mul.result) = lowered.res
         case c: llvm.Constant =>
           c.value match
             case IntegerAttr(IntData(v), _: IntegerType | _: IndexType) if v == 1 =>
@@ -392,29 +498,6 @@ private final class Builder(val funcOp: func.Func):
           )
           emit(newBlock, lowered)
           state.valueMap(ptrtoint.out) = lowered.out
-        case op: DTensor.NatConst =>
-          val lowered = constIndex(op.value.value.value, newBlock)
-          state.valueMap(op.res) = lowered
-        case op: DTensor.IndexToNat =>
-          state.valueMap(op.res) = materializeNatOrIndex(op.index, newBlock)
-        case op: DTensor.ShapeToIndex =>
-          state.valueMap(op.res) = materializeNatOrIndex(op.nat, newBlock)
-        case op: DTensor.NatAdd =>
-          val lowered = llvm.Add(
-            asLLVMIndex(materializeNatOrIndex(op.lhs, newBlock)),
-            asLLVMIndex(materializeNatOrIndex(op.rhs, newBlock)),
-            Result(llvmIndexType),
-          )
-          emit(newBlock, lowered)
-          state.valueMap(op.res) = lowered.res
-        case op: DTensor.NatMul =>
-          val lowered = llvm.Mul(
-            asLLVMIndex(materializeNatOrIndex(op.lhs, newBlock)),
-            asLLVMIndex(materializeNatOrIndex(op.rhs, newBlock)),
-            Result(llvmIndexType),
-          )
-          emit(newBlock, lowered)
-          state.valueMap(op.res) = lowered.res
         case op: d_memref.Alloc      => state.valueMap(op.res) = lowerAlloc(op, newBlock)
         case op: d_memref.ReinterpretCast =>
           state.valueMap(op.res) = lowerReinterpret(op, newBlock)

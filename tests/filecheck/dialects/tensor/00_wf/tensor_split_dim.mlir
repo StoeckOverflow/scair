@@ -2,22 +2,22 @@
 
 // Valid: split one dimension with explicit output dimensions.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   %b = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = 0 : i32}>
-    : (!d_tensor.tensor<[%m], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%m], f32>, index, index)
       -> !d_tensor.tensor<[%mt, %tm], f32>
   "test.keep"(%b) : (!d_tensor.tensor<[%mt, %tm], f32>) -> ()
 }
 
 // CHECK: builtin.module {
-// CHECK-NEXT:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CHECK-NEXT:   %2 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CHECK-NEXT:   %0 = "test.index"() : () -> index
+// CHECK-NEXT:   %1 = "test.index"() : () -> index
+// CHECK-NEXT:   %2 = "test.index"() : () -> index
 // CHECK-NEXT:   %3 = "test.a"() : () -> !d_tensor.tensor<[%0], f32>
-// CHECK-NEXT:   %4 = "d_tensor.split_dim"(%3, %1, %2) <{dim = 0 : i32}> : (!d_tensor.tensor<[%0], f32>, !d_tensor.nat, !d_tensor.nat) -> !d_tensor.tensor<[%1, %2], f32>
+// CHECK-NEXT:   %4 = "d_tensor.split_dim"(%3, %1, %2) <{dim = 0 : i32}> : (!d_tensor.tensor<[%0], f32>, index, index) -> !d_tensor.tensor<[%1, %2], f32>
 // CHECK-NEXT:   "test.keep"(%4) : (!d_tensor.tensor<[%1, %2], f32>) -> ()
 // CHECK-NEXT: }
 
@@ -25,49 +25,49 @@ builtin.module {
 
 // Valid: split the first dimension of a 2D tensor.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %b = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = 0 : i32}>
-    : (!d_tensor.tensor<[%m, %n], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%m, %n], f32>, index, index)
       -> !d_tensor.tensor<[%mt, %tm, %n], f32>
   "test.keep"(%b) : (!d_tensor.tensor<[%mt, %tm, %n], f32>) -> ()
 }
 
 // CHECK: "d_tensor.split_dim"
-// CHECK-SAME: (!d_tensor.tensor<[%0, %3], f32>, !d_tensor.nat, !d_tensor.nat) -> !d_tensor.tensor<[%1, %2, %3], f32>
+// CHECK-SAME: (!d_tensor.tensor<[%0, %3], f32>, index, index) -> !d_tensor.tensor<[%1, %2, %3], f32>
 
 // -----
 
 // Valid: split the second dimension of a 2D tensor.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %nt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %nt = "test.index"() : () -> index
+  %tn = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %b = "d_tensor.split_dim"(%a, %nt, %tn) <{dim = 1 : i32}>
-    : (!d_tensor.tensor<[%m, %n], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%m, %n], f32>, index, index)
       -> !d_tensor.tensor<[%m, %nt, %tn], f32>
   "test.keep"(%b) : (!d_tensor.tensor<[%m, %nt, %tn], f32>) -> ()
 }
 
 // CHECK: "d_tensor.split_dim"
-// CHECK-SAME: (!d_tensor.tensor<[%0, %1], f32>, !d_tensor.nat, !d_tensor.nat) -> !d_tensor.tensor<[%0, %2, %3], f32>
+// CHECK-SAME: (!d_tensor.tensor<[%0, %1], f32>, index, index) -> !d_tensor.tensor<[%0, %2, %3], f32>
 
 // -----
 
 // Invalid: outer operand must match the first inserted result dimension.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %other = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %other = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   %bad = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = 0 : i32}>
-    : (!d_tensor.tensor<[%m], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%m], f32>, index, index)
       -> !d_tensor.tensor<[%other, %tm], f32>
 }
 
@@ -77,13 +77,13 @@ builtin.module {
 
 // Invalid: inner operand must match the second inserted result dimension.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %other = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %other = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   %bad = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = 0 : i32}>
-    : (!d_tensor.tensor<[%m], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%m], f32>, index, index)
       -> !d_tensor.tensor<[%mt, %other], f32>
 }
 
@@ -93,14 +93,14 @@ builtin.module {
 
 // Invalid: dimensions before the split axis must be preserved.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %other = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %nt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %other = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %nt = "test.index"() : () -> index
+  %tn = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.split_dim"(%a, %nt, %tn) <{dim = 1 : i32}>
-    : (!d_tensor.tensor<[%m, %n], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%m, %n], f32>, index, index)
       -> !d_tensor.tensor<[%other, %nt, %tn], f32>
 }
 
@@ -110,14 +110,14 @@ builtin.module {
 
 // Invalid: dimensions after the split axis must be preserved.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %other = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %other = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %bad = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = 0 : i32}>
-    : (!d_tensor.tensor<[%m, %n], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%m, %n], f32>, index, index)
       -> !d_tensor.tensor<[%mt, %tm, %other], f32>
 }
 
@@ -127,12 +127,12 @@ builtin.module {
 
 // Invalid: split dim out of bounds.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   %bad = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = 1 : i32}>
-    : (!d_tensor.tensor<[%m], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%m], f32>, index, index)
       -> !d_tensor.tensor<[%mt, %tm], f32>
 }
 
@@ -142,12 +142,12 @@ builtin.module {
 
 // Invalid: result rank must be input rank plus one.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   %bad = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = 0 : i32}>
-    : (!d_tensor.tensor<[%m], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%m], f32>, index, index)
       -> !d_tensor.tensor<[%mt, %tm, %m], f32>
 }
 
@@ -157,12 +157,12 @@ builtin.module {
 
 // Invalid: element type mismatch is rejected.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
   %bad = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = 0 : i32}>
-    : (!d_tensor.tensor<[%m], f32>, !d_tensor.nat, !d_tensor.nat)
+    : (!d_tensor.tensor<[%m], f32>, index, index)
       -> !d_tensor.tensor<[%mt, %tm], i32>
 }
 

@@ -259,51 +259,54 @@ builtin.module {
 // P2-NEXT:    %10 = "llvm.add"(%0, %9) : (i64, i64) -> i64
 // P2-NEXT:    %11 = "llvm.add"(%1, %9) : (i64, i64) -> i64
 // P2-NEXT:    %12 = "llvm.add"(%2, %9) : (i64, i64) -> i64
-// P2-NEXT:    %13 = "llvm.mlir.constant"() <{value = 1}> : () -> i64
-// P2-NEXT:    %14 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
-// P2-NEXT:    %15 = "llvm.mlir.constant"() <{value = 0.0 : f32}> : () -> f32
-// P2-NEXT:    "llvm.br"(%14)[^bb0] : (i64) -> ()
-// P2-NEXT:  ^bb0(%16: i64):
-// P2-NEXT:    %17 = llvm.icmp "slt" %16, %10 : i64
-// P2-NEXT:    "llvm.cond_br"(%17)[^bb1, ^bb2] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
-// P2:         %28 = "llvm.getelementptr"(%4, %27) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
-// P2-NEXT:    %29 = llvm.load %28 : !llvm.ptr -> f32
-// P2:         %43 = "llvm.getelementptr"(%8, %42) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
-// P2-NEXT:    "llvm.store"(%22, %43) : (f32, !llvm.ptr) -> ()
+// P2-NEXT:    %13 = "llvm.add"(%3, %9) : (i64, i64) -> i64
+// P2-NEXT:    %14 = "llvm.add"(%5, %9) : (i64, i64) -> i64
+// P2-NEXT:    %15 = "llvm.add"(%7, %9) : (i64, i64) -> i64
+// P2-NEXT:    %16 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// P2-NEXT:    %17 = "llvm.mlir.constant"() <{value = 1}> : () -> i64
+// P2-NEXT:    %18 = "llvm.mlir.constant"() <{value = 0.0 : f32}> : () -> f32
+// P2-NEXT:    "llvm.br"(%16)[^bb0] : (i64) -> ()
+// P2-NEXT:  ^bb0(%19: i64):
+// P2-NEXT:    %20 = llvm.icmp "slt" %19, %10 : i64
+// P2-NEXT:    "llvm.cond_br"(%20)[^bb1, ^bb2] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+// P2:         %31 = "llvm.getelementptr"(%4, %30) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
+// P2-NEXT:    %32 = llvm.load %31 : !llvm.ptr -> f32
+// P2:         %46 = "llvm.getelementptr"(%8, %45) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
+// P2-NEXT:    "llvm.store"(%25, %46) : (f32, !llvm.ptr) -> ()
 
 // P2-LABEL: func.func @main() -> i32 {
-// P2-NEXT:    %0 = "llvm.mlir.constant"() <{value = 1}> : () -> i64
+// P2-NEXT:    %0 = "llvm.mlir.constant"() <{value = 32}> : () -> i64
 // P2-NEXT:    %1 = "llvm.mlir.constant"() <{value = 32}> : () -> i64
 // P2-NEXT:    %2 = "llvm.mlir.constant"() <{value = 32}> : () -> i64
-// P2-NEXT:    %3 = "llvm.mlir.constant"() <{value = 32}> : () -> i64
-// P2-NEXT:    %4 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// P2-NEXT:    %3 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// P2-NEXT:    %4 = "llvm.mlir.constant"() <{value = 1}> : () -> i64
 // P2-NEXT:    %5 = "llvm.mlir.constant"() <{value = 0.0 : f32}> : () -> f32
 // P2-NEXT:    %6 = "llvm.mlir.constant"() <{value = 1.0 : f32}> : () -> f32
 // P2-NEXT:    %7 = "llvm.mlir.constant"() <{value = 0 : i32}> : () -> i32
-// P2-NEXT:    %8 = "llvm.mul"(%1, %3) : (i64, i64) -> i64
-// P2-NEXT:    %9 = "llvm.mul"(%3, %2) : (i64, i64) -> i64
-// P2-NEXT:    %10 = "llvm.mul"(%1, %2) : (i64, i64) -> i64
-// P2:         "func.call"(%1, %2, %3, %8, %14, %9, %18, %10, %22) <{callee = @matmul_dynamic}> : (i64, i64, i64, i64, !llvm.ptr, i64, !llvm.ptr, i64, !llvm.ptr) -> ()
-// P2-NEXT:    %47 = "func.call"(%1, %2, %10, %22) <{callee = @checksum_dynamic}> : (i64, i64, i64, !llvm.ptr) -> f32
+// P2-NEXT:    %8 = "llvm.mul"(%0, %2) : (i64, i64) -> i64
+// P2-NEXT:    %9 = "llvm.mul"(%2, %1) : (i64, i64) -> i64
+// P2-NEXT:    %10 = "llvm.mul"(%0, %1) : (i64, i64) -> i64
+// P2:         "func.call"(%0, %1, %2, %8, %14, %9, %18, %10, %22) <{callee = @matmul_dynamic}> : (i64, i64, i64, i64, !llvm.ptr, i64, !llvm.ptr, i64, !llvm.ptr) -> ()
+// P2-NEXT:    %47 = "func.call"(%0, %1, %10, %22) <{callee = @checksum_dynamic}> : (i64, i64, i64, !llvm.ptr) -> f32
 
 // P3-LABEL: func.func @main() -> i32 {
-// P3-NEXT:    %0 = "llvm.mlir.constant"() <{value = 1}> : () -> i64
+// P3-NEXT:    %0 = "llvm.mlir.constant"() <{value = 32}> : () -> i64
 // P3-NEXT:    %1 = "llvm.mlir.constant"() <{value = 32}> : () -> i64
 // P3-NEXT:    %2 = "llvm.mlir.constant"() <{value = 32}> : () -> i64
-// P3-NEXT:    %3 = "llvm.mlir.constant"() <{value = 32}> : () -> i64
-// P3-NEXT:    %4 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// P3-NEXT:    %3 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// P3-NEXT:    %4 = "llvm.mlir.constant"() <{value = 1}> : () -> i64
 // P3-NEXT:    %5 = "llvm.mlir.constant"() <{value = 0.0 : f32}> : () -> f32
 // P3-NEXT:    %6 = "llvm.mlir.constant"() <{value = 1.0 : f32}> : () -> f32
 // P3-NEXT:    %7 = "llvm.mlir.constant"() <{value = 0 : i32}> : () -> i32
-// P3-NEXT:    %8 = "llvm.mul"(%1, %3) : (i64, i64) -> i64
-// P3-NEXT:    %9 = "llvm.mul"(%3, %2) : (i64, i64) -> i64
-// P3-NEXT:    %10 = "llvm.mul"(%1, %2) : (i64, i64) -> i64
+// P3-NEXT:    %8 = "llvm.mul"(%0, %2) : (i64, i64) -> i64
+// P3-NEXT:    %9 = "llvm.mul"(%2, %1) : (i64, i64) -> i64
+// P3-NEXT:    %10 = "llvm.mul"(%0, %1) : (i64, i64) -> i64
 // P3-NEXT:    %11 = "llvm.mlir.zero"() : () -> !llvm.ptr
 // P3-NEXT:    %12 = "llvm.getelementptr"(%11, %8) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // P3-NEXT:    %13 = "llvm.ptrtoint"(%12) : (!llvm.ptr) -> i64
 // P3-NEXT:    %14 = llvm.call @malloc(%13) : (i64) -> !llvm.ptr
-// P3:         %65 = "llvm.fmul"(%58, %64) : (f32, f32) -> f32
-// P3-NEXT:    %66 = "llvm.fadd"(%51, %65) : (f32, f32) -> f32
+// P3:         %[[PROD:[0-9]+]] = "llvm.fmul"(%{{[0-9]+}}, %{{[0-9]+}}) : (f32, f32) -> f32
+// P3-NEXT:    %{{[0-9]+}} = "llvm.fadd"(%{{[0-9]+}}, %[[PROD]]) : (f32, f32) -> f32
 // P3:         llvm.call @free(%14) : (!llvm.ptr) -> ()
 // P3-NEXT:    llvm.call @free(%18) : (!llvm.ptr) -> ()
 // P3-NEXT:    llvm.call @free(%22) : (!llvm.ptr) -> ()

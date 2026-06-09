@@ -3,12 +3,11 @@ package scair.passes.tiling
 import scair.dialects.affine
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_affine
 import scair.ir.*
-import scair.passes.NatProvenance
-import scair.passes.analysis.NatProductFacts
-import scair.passes.analysis.NatProductFacts.FactorSelectionPolicy
+import scair.passes.ShapeIndexProvenance
+import scair.passes.analysis.ShapeProductFacts
+import scair.passes.analysis.ShapeProductFacts.FactorSelectionPolicy
 import scair.transformations.RewriteMethods
 
 import scala.collection.mutable
@@ -30,7 +29,7 @@ object ValueDependentTiling:
     case SeparableWhenNotExact
 
   enum ProofSource:
-    case NatMul
+    case ShapeProduct
     case OrdinaryProduct
     case AffineSet
     case RefinedAssert
@@ -89,27 +88,26 @@ object ValueDependentTiling:
         case source                                        => Some(source)
     def canEmitFullTileFitsGuard(domain: LoopDomain, spec: TileSpec): Option[ProofSource] = None
 
-  private final case class NatMulFactProvider(
+  private final case class ShapeProductFactProvider(
       factorPolicy: FactorSelectionPolicy
   ) extends TilingFactProvider:
     override def tileSpec(domain: LoopDomain): Option[TileSpec] =
       if domain.dialect != LoopDialect.DAffine then None
       else
-        NatProductFacts.selectFactor(domain.upperBound, factorPolicy).map { factor =>
-          val tileSize = toIndex(factor.value)
+        ShapeProductFacts.selectFactor(domain.upperBound, factorPolicy).map { factor =>
           TileSpec(
             fullUpperBound = domain.upperBound,
-            tileSize = tileSize.res,
-            prelude = Seq(tileSize),
-            proofSource = ProofSource.NatMul,
+            tileSize = factor.value,
+            prelude = Seq.empty,
+            proofSource = ProofSource.ShapeProduct,
           )
         }
 
     override def provePositive(domain: LoopDomain, value: Value[Attribute]): Option[ProofSource] =
-      if positive(value) then Some(ProofSource.NatMul) else None
+      if positive(value) then Some(ProofSource.ShapeProduct) else None
 
     override def proveExactDivisibility(domain: LoopDomain, spec: TileSpec): Option[ProofSource] =
-      if spec.proofSource == ProofSource.NatMul then Some(ProofSource.NatMul) else None
+      if spec.proofSource == ProofSource.ShapeProduct then Some(ProofSource.ShapeProduct) else None
 
   private object OrdinaryProductFactProvider extends TilingFactProvider:
     override def tileSpec(domain: LoopDomain): Option[TileSpec] =
@@ -145,7 +143,7 @@ object ValueDependentTiling:
     override def tileSpec(domain: LoopDomain): Option[TileSpec] = None
 
     override def provePositive(domain: LoopDomain, value: Value[Attribute]): Option[ProofSource] =
-      if NatProvenance.isPositive(value) then Some(ProofSource.RefinedAssert) else None
+      if ShapeIndexProvenance.isPositive(value) then Some(ProofSource.RefinedAssert) else None
 
   private object AffineSetFactProvider extends TilingFactProvider:
     override def tileSpec(domain: LoopDomain): Option[TileSpec] = None
@@ -209,7 +207,7 @@ object ValueDependentTiling:
         case TilingPolicy.GuardedOnly =>
           TilingDecision.Guarded
         case TilingPolicy.SeparableWhenNotExact =>
-          if proofSource == ProofSource.NatMul || proofSource == ProofSource.AffineSet || proofSource == ProofSource.RefinedAssert
+          if proofSource == ProofSource.ShapeProduct || proofSource == ProofSource.AffineSet || proofSource == ProofSource.RefinedAssert
           then TilingDecision.Exact
           else TilingDecision.Separable
     TilingPlan(decision, target, proofSource)
@@ -219,12 +217,6 @@ object ValueDependentTiling:
 
   private def idxConst(v: BigInt): arith.Constant =
     arith.Constant(IntegerAttr(IntData(v), IndexType()), Result(IndexType()))
-
-  private def toIndex(nat: Value[Attribute]): DTensor.ShapeToIndex =
-    DTensor.ShapeToIndex(
-      nat.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
-      Result(IndexType()),
-    )
 
   private def identityMap: AffineMapAttr =
     AffineMapAttr(
@@ -300,7 +292,9 @@ object ValueDependentTiling:
       map.affineMap.affineExprs == Seq(AffineDimExpr(map.affineMap.dimensions.head))
 
   private def positive(value: Value[Attribute]): Boolean =
-    NatProvenance.exactConst(value).exists(_ > 0) || NatProvenance.isPositive(value)
+    ShapeIndexProvenance.exactConst(value).exists(_ > 0) ||
+      ShapeIndexProvenance.exactConstInShapeExpr(value).exists(_ > 0) ||
+      ShapeIndexProvenance.isPositive(value)
 
   private def collectDAffineLoops(op: Operation, innermostFirst: Boolean): Seq[d_affine.For] =
     val loops = mutable.ArrayBuffer.empty[d_affine.For]
@@ -449,7 +443,7 @@ object ValueDependentTiling:
       loop.upperBoundOperands.size == 1 &&
       isIdentityProjection(loop.lowerBoundMap) &&
       isIdentityProjection(loop.upperBoundMap) &&
-      NatProvenance.exactConst(loop.lowerBoundOperands.head) == Some(0)
+      ShapeIndexProvenance.exactConstInShapeExpr(loop.lowerBoundOperands.head) == Some(0)
 
   private def eligibleAffineLoop(loop: affine.For, requireReductionLoop: Boolean): Boolean =
     loop.body.blocks.size == 1 &&
@@ -459,7 +453,7 @@ object ValueDependentTiling:
       loop.upperBoundOperands.size == 1 &&
       isIdentityProjection(loop.lowerBoundMap) &&
       isIdentityProjection(loop.upperBoundMap) &&
-      NatProvenance.exactConst(loop.lowerBoundOperands.head) == Some(0)
+      ShapeIndexProvenance.exactConstInShapeExpr(loop.lowerBoundOperands.head) == Some(0)
 
   private def targetMatches(loop: d_affine.For, target: TilingTarget): Boolean =
     target match
@@ -492,7 +486,7 @@ object ValueDependentTiling:
     else if !staticUnitDAffineLoop(loop) then None
     else if loop.lowerBoundOperands.size != 1 || loop.upperBoundOperands.size != 1 then None
     else if !isIdentityProjection(loop.lowerBoundMap) || !isIdentityProjection(loop.upperBoundMap) then None
-    else if NatProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then None
+    else if ShapeIndexProvenance.exactConstInShapeExpr(loop.lowerBoundOperands.head) != Some(0) then None
     else
       Some(
         LoopDomain(
@@ -516,7 +510,7 @@ object ValueDependentTiling:
     else if loop.step.value.value != 1 then None
     else if loop.lowerBoundOperands.size != 1 || loop.upperBoundOperands.size != 1 then None
     else if !isIdentityProjection(loop.lowerBoundMap) || !isIdentityProjection(loop.upperBoundMap) then None
-    else if NatProvenance.exactConst(loop.lowerBoundOperands.head) != Some(0) then None
+    else if ShapeIndexProvenance.exactConstInShapeExpr(loop.lowerBoundOperands.head) != Some(0) then None
     else
       Some(
         LoopDomain(
@@ -636,7 +630,7 @@ object ValueDependentTiling:
       val staticOne = IntegerAttr(IntData(1), stepAttrType)
       val outerStepConst =
         if useStaticStepForConst then
-          NatProvenance.exactConst(spec.tileSize)
+          ShapeIndexProvenance.exactConstInShapeExpr(spec.tileSize)
             .filter(_ > 0)
             .map(v => IntegerAttr(IntData(v), stepAttrType))
         else None
@@ -873,7 +867,7 @@ object ValueDependentTiling:
           val target = loopKindToTarget(loopKind)
           val specOpt =
             normalizeDAffineLoop(loop, target).flatMap(domain =>
-              firstTileSpec(domain, Seq(NatMulFactProvider(factorPolicy)))
+              firstTileSpec(domain, Seq(ShapeProductFactProvider(factorPolicy)))
             )
           specOpt.foreach { spec =>
             val decision =
@@ -925,7 +919,7 @@ object ValueDependentTiling:
         if loop.containerBlock.nonEmpty then
           val target = loopKindToTarget(loopKind)
           val providers = Seq(
-            NatMulFactProvider(factorPolicy),
+            ShapeProductFactProvider(factorPolicy),
             OrdinaryProductFactProvider,
             RefinedAssertFactProvider,
             AffineSetFactProvider,
@@ -1002,7 +996,7 @@ object ValueDependentTiling:
         if loop.containerBlock.nonEmpty then
           val specOpt =
             normalizeDAffineLoop(loop, TilingTarget.ContextBand).flatMap(domain =>
-              firstTileSpec(domain, Seq(NatMulFactProvider(factorPolicy)))
+              firstTileSpec(domain, Seq(ShapeProductFactProvider(factorPolicy)))
             )
           specOpt.foreach { spec =>
             val decision =

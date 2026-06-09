@@ -5,22 +5,22 @@ builtin.module {
   %bad = d_memref.alloc : () -> !d_memref.memref<[%x], f32>
 }
 
-// VERIFY: shape SSA parameter must have type !d_tensor.nat or !d_tensor.posnat, got f32
+// VERIFY: shape SSA parameter must have type index, got f32
 
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 4 : index}> : () -> index
   %layout = "test.float_layout"() : () -> f32
   %bad = d_memref.alloc : () -> !d_memref.memref<[%m], f32, offset: %layout, strides: [1]>
 }
 
-// VERIFY: layout SSA parameter must have type index, integer, !d_tensor.nat, !d_tensor.posnat, or !value<...>, got f32
+// VERIFY: layout SSA parameter must have type index, integer, or !value<...>, got f32
 
 // -----
 
 builtin.module {
-  %m = "d_tensor.nat.const"() <{value = 4 : i32}> : () -> !d_tensor.nat
+  %m = "arith.constant"() <{value = 4 : index}> : () -> index
   %bad = d_memref.alloc : () -> !d_memref.memref<[%m], f32, offset: 0, strides: [1, 1]>
 }
 

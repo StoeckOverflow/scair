@@ -4,7 +4,6 @@ import scair.MLContext
 import scair.dialects.affine
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_affine
 import scair.dialects.d_memref
 import scair.dialects.func
@@ -17,9 +16,6 @@ import scala.collection.mutable
 
 private def idxAttr(v: BigInt): IntegerAttr =
   IntegerAttr(IntData(v), IndexType())
-
-private def i32Attr(v: BigInt): IntegerAttr =
-  IntegerAttr(IntData(v), I32)
 
 private def asIndex(v: Value[Attribute]): Operand[IndexType] =
   v.asInstanceOf[Operand[IndexType]]
@@ -39,33 +35,21 @@ private def identityMap(map: AffineMapAttr, rank: Int): Boolean =
       case _ => false
     }
 
-private def staticNat(v: BigInt): (Seq[Operation], ValueAttribute) =
-  val c = DTensor.NatConst(i32Attr(v), Result(DTensor.DTensorNatType()))
-  (Seq(c), ValueAttribute(c.res))
-
-private def dynamicNat(v: Operand[IndexType]): (Seq[Operation], ValueAttribute) =
-  val cast = DTensor.IndexToNat(v, Result(DTensor.DTensorNatType()))
-  (Seq(cast), ValueAttribute(cast.res))
-
 private def refineBaseMemrefType(
     ty: RankedMemrefType,
     dynamicDims: Seq[Operand[IndexType]],
 ): (Seq[Operation], d_memref.DMemrefMemrefType) =
   var dynIdx = 0
-  val emitted = mutable.ArrayBuffer.empty[Operation]
-  val dims = ty.shape.attrValues.map { dim =>
+  val dims: Seq[d_memref.DimParam] = ty.shape.attrValues.map { dim =>
     if dim.data >= 0 then
-      val (ops, attr) = staticNat(dim.data)
-      emitted ++= ops
-      attr
+      IntegerAttr(IntData(dim.data), IndexType())
     else
-      val (ops, attr) = dynamicNat(dynamicDims(dynIdx))
+      val attr = ValueAttribute(dynamicDims(dynIdx))
       dynIdx += 1
-      emitted ++= ops
       attr
   }
   (
-    emitted.toSeq,
+    Seq.empty,
     d_memref.DMemrefMemrefType(dims, ty.elementType.asInstanceOf[TypeAttribute]),
   )
 
@@ -77,15 +61,12 @@ private def refineReinterpretType(
 ): (Seq[Operation], d_memref.DMemrefMemrefType) =
   val emitted = mutable.ArrayBuffer.empty[Operation]
   var sizeIdx = 0
-  val dims = ty.shape.attrValues.map { dim =>
+  val dims: Seq[d_memref.DimParam] = ty.shape.attrValues.map { dim =>
     if dim.data >= 0 then
-      val (ops, attr) = staticNat(dim.data)
-      emitted ++= ops
-      attr
+      IntegerAttr(IntData(dim.data), IndexType())
     else
-      val (ops, attr) = dynamicNat(sizes(sizeIdx))
+      val attr = ValueAttribute(sizes(sizeIdx))
       sizeIdx += 1
-      emitted ++= ops
       attr
   }
   val layout = ty.encoding.collect { case s: StridedLayoutAttr => s }.get
@@ -132,10 +113,10 @@ private def newFunctionArguments(
     oldArg.typ match
       case ranked: RankedMemrefType =>
         val dimArgs = ranked.shape.attrValues.indices.map(_ =>
-          BlockArgument(DTensor.DTensorNatType()).asInstanceOf[Value[Attribute]]
+          BlockArgument(IndexType()).asInstanceOf[Value[Attribute]]
         )
         newArgs ++= dimArgs
-        signatureInputs ++= Seq.fill(dimArgs.size)(DTensor.DTensorNatType())
+        signatureInputs ++= Seq.fill(dimArgs.size)(IndexType())
         val memArg =
           BlockArgument(refinedArgType(ranked, dimArgs)).asInstanceOf[Value[Attribute]]
         newArgs += memArg
@@ -162,35 +143,27 @@ private def materializeDimOperands(
           axisConst.result.asInstanceOf[Operand[IndexType]],
           Result(IndexType()),
         )
-        val nat = DTensor.IndexToNat(dim.result.asInstanceOf[Operand[IndexType]], Result(DTensor.DTensorNatType()))
         emitted += axisConst
         emitted += dim
-        emitted += nat
-        nat.res.asInstanceOf[Operand[Attribute]]
+        dim.result.asInstanceOf[Operand[Attribute]]
       }
     case ranked: d_memref.DMemrefMemrefType =>
       ranked.params.map { param =>
         param match
           case p: ValueAttribute =>
             p.getVal().typ match
-              case _: DTensor.DTensorNatLikeType =>
-                p.getVal().asInstanceOf[Operand[Attribute]]
               case _: IndexType =>
-                val nat = DTensor.IndexToNat(
-                  p.getVal().asInstanceOf[Operand[IndexType]],
-                  Result(DTensor.DTensorNatType()),
-                )
-                emitted += nat
-                nat.res.asInstanceOf[Operand[Attribute]]
+                p.getVal().asInstanceOf[Operand[Attribute]]
               case ValueRefType(ref) =>
                 ref.getVal().asInstanceOf[Operand[Attribute]]
+              case other =>
+                throw new IllegalArgumentException(
+                  s"expected index d_memref dimension, got ${d_memref.DMemrefTypeUtil.renderAttr(other)}"
+                )
           case IntegerAttr(IntData(v), _) =>
-            val nat = DTensor.NatConst(
-              i32Attr(v),
-              Result(DTensor.DTensorNatType()),
-            )
-            emitted += nat
-            nat.res.asInstanceOf[Operand[Attribute]]
+            val c = arith.Constant(idxAttr(v), Result(IndexType()))
+            emitted += c
+            c.result.asInstanceOf[Operand[Attribute]]
       }
     case _ => Seq.empty
 

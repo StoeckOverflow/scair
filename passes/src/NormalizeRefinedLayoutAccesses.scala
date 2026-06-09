@@ -3,7 +3,6 @@ package scair.passes.normalize_refined_layout_accesses
 import scair.MLContext
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.{d_tensor as DTensor}
 import scair.dialects.d_memref
 import scair.ir.*
 import scair.transformations.*
@@ -14,9 +13,9 @@ private def idxAttr(v: BigInt): IntegerAttr =
 private def asIndex(v: Value[Attribute]): Operand[IndexType] =
   v.asInstanceOf[Operand[IndexType]]
 
-// Layout parameters may be stored either as index-like integers or as d_tensor
-// nat values. This helper normalizes both cases to index SSA values so the
-// subsequent address arithmetic is purely arithmetic IR.
+// Layout parameters may be stored either as index SSA values or integer attrs.
+// This helper normalizes both cases to index SSA values so the subsequent
+// address arithmetic is purely arithmetic IR.
 private def materializeLayoutParam(param: d_memref.LayoutParam): (Vector[Operation], Value[Attribute]) =
   param match
     case i: IntegerAttr =>
@@ -25,11 +24,12 @@ private def materializeLayoutParam(param: d_memref.LayoutParam): (Vector[Operati
     case v: ValueAttribute =>
       v.getVal().typ match
         case _: IndexType => (Vector.empty, v.getVal())
-        case _: DTensor.DTensorNatLikeType =>
-          val cast = DTensor.ShapeToIndex(v.getVal().asInstanceOf[Operand[DTensor.DTensorNatLikeType]], Result(IndexType()))
-          (Vector(cast), cast.res)
         case ValueRefType(ref) =>
           materializeLayoutParam(ValueAttribute(ref.getVal()))
+        case other =>
+          throw new IllegalArgumentException(
+            s"expected index layout parameter, got ${d_memref.DMemrefTypeUtil.renderAttr(other)}"
+          )
 
 private def addIndex(lhs: Value[Attribute], rhs: Value[Attribute]): arith.AddI =
   arith.AddI(asIndex(lhs), asIndex(rhs), Result(IndexType()))

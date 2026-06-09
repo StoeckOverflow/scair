@@ -198,74 +198,74 @@ builtin.module {
 // OPT: %2 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
 // OPT: %3 = "llvm.add"(%0, %2) : (i64, i64) -> i64
 // OPT: %4 = "llvm.add"(%1, %2) : (i64, i64) -> i64
-// OPT: %5 = "llvm.mlir.constant"() <{value = 1}> : () -> i64
-// OPT: %6 = "llvm.mlir.constant"() <{value = 8}> : () -> i64
-// OPT: %7 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// OPT: %5 = "llvm.mlir.constant"() <{value = 8}> : () -> i64
+// OPT: %6 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// OPT: %7 = "llvm.mlir.constant"() <{value = 1}> : () -> i64
 // OPT: %8 = "llvm.mlir.constant"() <{value = 1.0 : f32}> : () -> f32
-// OPT: "llvm.br"(%7)[^bb0] : (i64) -> ()
+// OPT: "llvm.br"(%6)[^bb0] : (i64) -> ()
 // OPT: ^bb0(%14: i64):
-// OPT: %15 = llvm.icmp "slt" %14, %6 : i64
+// OPT: %15 = llvm.icmp "slt" %14, %5 : i64
 // OPT: "llvm.cond_br"(%15)[^bb1, ^bb2]
 // OPT: ^bb1:
-// OPT: "llvm.br"(%7)[^bb3] : (i64) -> ()
+// OPT: "llvm.br"(%6)[^bb3] : (i64) -> ()
 // OPT: ^bb3(%16: i64):
-// OPT: %17 = llvm.icmp "slt" %16, %6 : i64
+// OPT: %17 = llvm.icmp "slt" %16, %5 : i64
 // OPT: "llvm.cond_br"(%17)[^bb4, ^bb5]
 // OPT: ^bb4:
 // OPT: %18 = "llvm.mul"(%14, %3) : (i64, i64) -> i64
 // OPT: %19 = "llvm.mul"(%16, %4) : (i64, i64) -> i64
-// OPT: %20 = "llvm.add"(%7, %18) : (i64, i64) -> i64
+// OPT: %20 = "llvm.add"(%6, %18) : (i64, i64) -> i64
 // OPT: %21 = "llvm.add"(%20, %19) : (i64, i64) -> i64
 // OPT: %22 = "llvm.getelementptr"(%13, %21) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // OPT: "llvm.store"(%8, %22) : (f32, !llvm.ptr) -> ()
-// OPT: %23 = "llvm.add"(%16, %5) : (i64, i64) -> i64
+// OPT: %23 = "llvm.add"(%16, %7) : (i64, i64) -> i64
 // OPT: "llvm.br"(%23)[^bb3] : (i64) -> ()
 // OPT: ^bb5:
-// OPT: %24 = "llvm.add"(%14, %5) : (i64, i64) -> i64
+// OPT: %24 = "llvm.add"(%14, %7) : (i64, i64) -> i64
 // OPT: "llvm.br"(%24)[^bb0] : (i64) -> ()
 
 // OPT-LABEL: func.func @zero_then_reduction(%0: i64, %1: i64) -> f32 {
 // OPT: %2 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
 // OPT: %3 = "llvm.add"(%0, %2) : (i64, i64) -> i64
 // OPT: %4 = "llvm.add"(%1, %2) : (i64, i64) -> i64
-// OPT: %5 = "llvm.mlir.constant"() <{value = 1}> : () -> i64
-// OPT: %6 = "llvm.mlir.constant"() <{value = 8}> : () -> i64
-// OPT: %7 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// OPT: %5 = "llvm.mlir.constant"() <{value = 8}> : () -> i64
+// OPT: %6 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// OPT: %7 = "llvm.mlir.constant"() <{value = 1}> : () -> i64
 // OPT: %8 = "llvm.mlir.constant"() <{value = 0.0 : f32}> : () -> f32
 // OPT: %9 = "llvm.mlir.constant"() <{value = 1.0 : f32}> : () -> f32
-// OPT: "llvm.br"(%7)[^bb0] : (i64) -> ()
+// OPT: "llvm.br"(%6)[^bb0] : (i64) -> ()
 // OPT: ^bb0(%15: i64):
-// OPT: %16 = llvm.icmp "slt" %15, %6 : i64
+// OPT: %16 = llvm.icmp "slt" %15, %5 : i64
 // OPT: "llvm.cond_br"(%16)[^bb1, ^bb2]
 // OPT: ^bb1:
-// OPT: "llvm.br"(%7)[^bb3] : (i64) -> ()
+// OPT: "llvm.br"(%6)[^bb3] : (i64) -> ()
 // OPT: ^bb3(%17: i64):
-// OPT: %18 = llvm.icmp "slt" %17, %6 : i64
+// OPT: %18 = llvm.icmp "slt" %17, %5 : i64
 // OPT: "llvm.cond_br"(%18)[^bb5, ^bb6]
 // OPT: ^bb5:
 // OPT: %19 = "llvm.mul"(%15, %3) : (i64, i64) -> i64
 // OPT: %20 = "llvm.mul"(%17, %4) : (i64, i64) -> i64
-// OPT: %21 = "llvm.add"(%7, %19) : (i64, i64) -> i64
+// OPT: %21 = "llvm.add"(%6, %19) : (i64, i64) -> i64
 // OPT: %22 = "llvm.add"(%21, %20) : (i64, i64) -> i64
 // OPT: %23 = "llvm.getelementptr"(%14, %22) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // OPT: "llvm.store"(%9, %23) : (f32, !llvm.ptr) -> ()
-// OPT: %24 = "llvm.add"(%17, %5) : (i64, i64) -> i64
+// OPT: %24 = "llvm.add"(%17, %7) : (i64, i64) -> i64
 // OPT: "llvm.br"(%24)[^bb3] : (i64) -> ()
 // OPT: ^bb4(%26: i64, %27: f32):
-// OPT: %28 = llvm.icmp "slt" %26, %6 : i64
+// OPT: %28 = llvm.icmp "slt" %26, %5 : i64
 // OPT: "llvm.cond_br"(%28)[^bb7, ^bb8]
 // OPT: ^bb7:
-// OPT: "llvm.br"(%26, %7, %27)[^bb9] : (i64, i64, f32) -> ()
+// OPT: "llvm.br"(%26, %6, %27)[^bb9] : (i64, i64, f32) -> ()
 // OPT: ^bb9(%29: i64, %30: i64, %31: f32):
-// OPT: %32 = llvm.icmp "slt" %30, %6 : i64
+// OPT: %32 = llvm.icmp "slt" %30, %5 : i64
 // OPT: "llvm.cond_br"(%32)[^bb10, ^bb11]
 // OPT: ^bb10:
 // OPT: %33 = "llvm.mul"(%29, %3) : (i64, i64) -> i64
 // OPT: %34 = "llvm.mul"(%30, %4) : (i64, i64) -> i64
-// OPT: %35 = "llvm.add"(%7, %33) : (i64, i64) -> i64
+// OPT: %35 = "llvm.add"(%6, %33) : (i64, i64) -> i64
 // OPT: %36 = "llvm.add"(%35, %34) : (i64, i64) -> i64
 // OPT: %37 = "llvm.getelementptr"(%14, %36) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
 // OPT: %38 = llvm.load %37 : !llvm.ptr -> f32
 // OPT: %39 = "llvm.fadd"(%31, %38) : (f32, f32) -> f32
-// OPT: %40 = "llvm.add"(%30, %5) : (i64, i64) -> i64
+// OPT: %40 = "llvm.add"(%30, %7) : (i64, i64) -> i64
 // OPT: "llvm.br"(%29, %40, %39)[^bb9] : (i64, i64, f32) -> ()

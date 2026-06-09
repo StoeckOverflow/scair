@@ -1,7 +1,6 @@
 builtin.module {
   %k0 = "test.arg"() : () -> index
-  %k1_nat = "d_tensor.nat.param"() : () -> !d_tensor.posnat
-  %k1 = "d_tensor.shape.to_index"(%k1_nat) : (!d_tensor.posnat) -> index
+  %k1 = "test.arg"() : () -> index
   %k = "arith.muli"(%k0, %k1) : (index, index) -> index
   %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
   %init = "arith.constant"() <{value = 0 : index}> : () -> index

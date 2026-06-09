@@ -6,7 +6,7 @@
 builtin.module {
   func.func @baseline_if_dependent_result(
     %cond: i1,
-    %n: !d_tensor.nat,
+    %n: index,
     %a: !d_memref.memref<[%n], f32>,
     %b: !d_memref.memref<[%n], f32>
   ) -> !d_memref.memref<[%n], f32> {
@@ -20,7 +20,7 @@ builtin.module {
 
   func.func @refined_if_dependent_result(
     %cond: index,
-    %n: !d_tensor.nat,
+    %n: index,
     %a: !d_memref.memref<[%n], f32>,
     %b: !d_memref.memref<[%n], f32>
   ) -> !d_memref.memref<[%n], f32> {
@@ -34,7 +34,7 @@ builtin.module {
 }
 
 // BASE-LABEL: func.func @baseline_if_dependent_result(
-// BASE-SAME: %[[COND:[0-9]+]]: i1, %[[N:[0-9]+]]: !d_tensor.nat, %[[A:[0-9]+]]: !d_memref.memref<[%[[N]]], f32>, %[[B:[0-9]+]]: !d_memref.memref<[%[[N]]], f32>
+// BASE-SAME: %[[COND:[0-9]+]]: i1, %[[N:[0-9]+]]: index, %[[A:[0-9]+]]: !d_memref.memref<[%[[N]]], f32>, %[[B:[0-9]+]]: !d_memref.memref<[%[[N]]], f32>
 // BASE-SAME: -> !d_memref.memref<[%[[N]]], f32>
 // BASE: "llvm.cond_br"(%[[COND]])[^bb[[THEN:[0-9]+]], ^bb[[ELSE:[0-9]+]]]
 // BASE: ^bb[[THEN]]:
@@ -47,7 +47,7 @@ builtin.module {
 // BASE: "d_affine.if"
 
 // REFINED-LABEL: func.func @refined_if_dependent_result(
-// REFINED-SAME: %[[COND:[0-9]+]]: index, %[[N:[0-9]+]]: !d_tensor.nat, %[[A:[0-9]+]]: !d_memref.memref<[%[[N]]], f32>, %[[B:[0-9]+]]: !d_memref.memref<[%[[N]]], f32>
+// REFINED-SAME: %[[COND:[0-9]+]]: index, %[[N:[0-9]+]]: index, %[[A:[0-9]+]]: !d_memref.memref<[%[[N]]], f32>, %[[B:[0-9]+]]: !d_memref.memref<[%[[N]]], f32>
 // REFINED-SAME: -> !d_memref.memref<[%[[N]]], f32>
 // REFINED: %[[ZERO:[0-9]+]] = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
 // REFINED: %[[PRED:[0-9]+]] = llvm.icmp "sge" %[[COND]], %[[ZERO]] : index

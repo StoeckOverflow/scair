@@ -4,10 +4,9 @@
 // RUN: scair-opt %s --allow-unregistered-dialect -p dependent-product-loop-exact-tile,d-affine-to-affine-compatible | grep -vE '^(NOTE: Picked up JDK_JAVA_OPTIONS:|Picked up _JAVA_OPTIONS:|\[[0-9.]+s\]\[warning\]\[perf,memops\] Cannot use file /tmp/hsperfdata_)' | mlir-opt --allow-unregistered-dialect --pass-pipeline='builtin.module(func.func(affine-loop-unroll{unroll-factor=8}))' | filecheck %s --check-prefix=UNROLL
 
 builtin.module {
-  func.func @static_exact_tile_stock_affine(%k0_nat: !d_tensor.nat, %out: memref<?xf32>) {
-    %k1_nat = "d_tensor.nat.const"() <{value = 8 : i32}> : () -> !d_tensor.nat
-    %k_nat = "d_tensor.nat.mul"(%k0_nat, %k1_nat) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-    %ub = "d_tensor.shape.to_index"(%k_nat) : (!d_tensor.nat) -> index
+  func.func @static_exact_tile_stock_affine(%k0: index, %out: memref<?xf32>) {
+    %k1 = "arith.constant"() <{value = 8 : index}> : () -> index
+    %ub = "arith.muli"(%k0, %k1) : (index, index) -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
 

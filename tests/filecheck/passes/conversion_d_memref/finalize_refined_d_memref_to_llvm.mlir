@@ -7,26 +7,26 @@ builtin.module {
     %c0 = "llvm.mlir.constant"() <{value = 0 : index}> : () -> index
     %c256 = "llvm.mlir.constant"() <{value = 256 : index}> : () -> index
     %total = "llvm.mul"(%c256, %stride0) : (index, index) -> index
-    %flat_nat = "d_tensor.index_to_nat"(%total) : (index) -> !d_tensor.nat
-    %d0 = "d_tensor.nat.const"() <{value = 256 : i32}> : () -> !d_tensor.nat
-    %d1 = "d_tensor.nat.const"() <{value = 1024 : i32}> : () -> !d_tensor.nat
-    %d0_i = "d_tensor.shape.to_index"(%d0) : (!d_tensor.nat) -> index
-    %d1_i = "d_tensor.shape.to_index"(%d1) : (!d_tensor.nat) -> index
-    %flat = d_memref.alloc : () -> !d_memref.memref<[%flat_nat], f32>
-    %base, %off, %size0, %stride = "d_memref.extract_strided_metadata"(%flat) : (!d_memref.memref<[%flat_nat], f32>) -> (!d_memref.memref<[], f32>, index, index, index)
+    %flat = d_memref.alloc : () -> !d_memref.memref<[%total], f32>
+    %base, %off, %size0, %stride = "d_memref.extract_strided_metadata"(%flat) : (!d_memref.memref<[%total], f32>) -> (!d_memref.memref<[], f32>, index, index, index)
     %buf = d_memref.reinterpret_cast %base
-    : !d_memref.memref<[], f32> to !d_memref.memref<[%d0, %d1], f32, offset: %c0, strides: [%stride0, %stride1]>
-    %v = d_memref.load %buf[%c0, %c0] : !d_memref.memref<[%d0, %d1], f32, offset: %c0, strides: [%stride0, %stride1]> -> f32
-    d_memref.dealloc %flat : !d_memref.memref<[%flat_nat], f32>
+    : !d_memref.memref<[], f32> to !d_memref.memref<[%c256, %c1024], f32, offset: %c0, strides: [%stride0, %stride1]>
+    %v = d_memref.load %buf[%c0, %c0] : !d_memref.memref<[%c256, %c1024], f32, offset: %c0, strides: [%stride0, %stride1]> -> f32
+    d_memref.dealloc %flat : !d_memref.memref<[%total], f32>
     func.return %v : f32
   }
 }
 
 // CHECK-LABEL: func.func @finalize(%0: i64, %1: i64) -> f32 {
-// CHECK: %2 = "llvm.mlir.constant"() <{value = 0}> : () -> i64
-// CHECK: %9 = "llvm.mul"(%8, %3) : (i64, i64) -> i64
-// CHECK: %13 = "llvm.getelementptr"(%12, %9) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
-// CHECK: %14 = "llvm.ptrtoint"(%13) : (!llvm.ptr) -> i64
-// CHECK: llvm.call @malloc(%14) : (i64) -> !llvm.ptr
-// CHECK: llvm.call @free(%15) : (!llvm.ptr) -> ()
-// CHECK: "llvm.return"(%20) : (f32) -> ()
+// CHECK: %[[ZERO:[0-9]+]] = "llvm.mlir.constant"() <{value = 0}> : () -> i64
+// CHECK: %[[STRIDE0:[0-9]+]] = "llvm.add"(%0, %[[ZERO]]) : (i64, i64) -> i64
+// CHECK: %[[D0:[0-9]+]] = "llvm.mlir.constant"() <{value = 256}> : () -> i64
+// CHECK: %[[TOTAL:[0-9]+]] = "llvm.mul"(%[[D0]], %[[STRIDE0]]) : (i64, i64) -> i64
+// CHECK: %[[BASE:[0-9]+]] = "llvm.mlir.zero"() : () -> !llvm.ptr
+// CHECK: %[[BYTES_PTR:[0-9]+]] = "llvm.getelementptr"(%[[BASE]], %[[TOTAL]]) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
+// CHECK: %[[BYTES:[0-9]+]] = "llvm.ptrtoint"(%[[BYTES_PTR]]) : (!llvm.ptr) -> i64
+// CHECK: %[[PTR:[0-9]+]] = llvm.call @malloc(%[[BYTES]]) : (i64) -> !llvm.ptr
+// CHECK: %[[LOAD_PTR:[0-9]+]] = "llvm.getelementptr"(%[[PTR]], %{{[0-9]+}}) <{rawConstantIndices = array<i32: -2147483648>, elem_type = f32}> : (!llvm.ptr, i64) -> !llvm.ptr
+// CHECK: %[[VAL:[0-9]+]] = llvm.load %[[LOAD_PTR]] : !llvm.ptr -> f32
+// CHECK: llvm.call @free(%[[PTR]]) : (!llvm.ptr) -> ()
+// CHECK: "llvm.return"(%[[VAL]]) : (f32) -> ()

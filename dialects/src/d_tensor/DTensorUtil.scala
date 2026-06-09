@@ -7,54 +7,6 @@ import scair.utils.*
 
 object DTensorTypeUtil:
 
-  enum NatProductFactor:
-    case Const(value: BigInt)
-    case Atom(value: Value[Attribute])
-
-  final case class NatProductFactors(factors: Seq[NatProductFactor])
-
-  private def resolveNatBase(
-      v: Value[Attribute],
-      seen: Set[Value[Attribute]] = Set.empty,
-  ): OK[Value[Attribute]] =
-    if seen.contains(v) then
-      Err("shape SSA parameter contains a cyclic !value<...> reference")
-    else
-      v.typ match
-        case _: DTensorNatLikeType => OK(v)
-        case ValueRefType(ref) => resolveNatBase(ref.getVal(), seen + v)
-        case other             =>
-          Err(
-            s"shape SSA parameter must have type !d_tensor.nat or !d_tensor.posnat, got ${renderAttr(other)}"
-          )
-
-  def resolveNatValue(v: Value[Attribute]): OK[Value[Attribute]] =
-    resolveNatBase(v)
-
-  def resolveNatFromIndexValue(v: Value[Attribute]): OK[Value[Attribute]] =
-    v.typ match
-      case _: IndexType =>
-        v.owner match
-          case Some(ShapeToIndex(nat, _)) => resolveNatBase(nat)
-          case _                          =>
-            val ownerName = v.owner match
-              case Some(op: Operation) => op.name
-              case Some(_: Block)      => "<block-arg>"
-              case None                => "<unknown>"
-            Err(
-              s"index value does not carry d_tensor shape provenance; expected producer `d_tensor.shape.to_index`, got `$ownerName`"
-            )
-      case ValueRefType(ref) => resolveNatFromIndexValue(ref.getVal())
-      case other             =>
-        Err(
-          s"expected index value for shape provenance resolution, got ${renderAttr(other)}"
-        )
-
-  def resolveNatProvenance(v: Value[Attribute]): OK[Value[Attribute]] =
-    resolveNatValue(v) match
-      case ok @ OK(_) => ok
-      case _          => resolveNatFromIndexValue(v)
-
   def renderAttr(a: Attribute): String =
     val out = java.io.StringWriter()
     val printer = AssemblyPrinter(p = java.io.PrintWriter(out))
@@ -62,8 +14,39 @@ object DTensorTypeUtil:
     printer.flush()
     out.toString
 
-  def checkParam(param: ValueAttribute): OK[Unit] =
-    resolveNatBase(param.getVal()).map(_ => ())
+  def printDimParam(p: scair.print.Printer, param: DimParam): Unit =
+    param match
+      case v: ValueAttribute => p.print(v)
+      case i: IntegerAttr    => p.print(i)
+
+  private def resolveIndexBase(
+      v: Value[Attribute],
+      seen: Set[Value[Attribute]] = Set.empty,
+  ): OK[Value[Attribute]] =
+    if seen.contains(v) then
+      Err("shape SSA parameter contains a cyclic !value<...> reference")
+    else
+      v.typ match
+        case _: IndexType     => OK(v)
+        case ValueRefType(ref) => resolveIndexBase(ref.getVal(), seen + v)
+        case other =>
+          Err(
+            s"shape SSA parameter must have type index, got ${renderAttr(other)}"
+          )
+
+  def resolveIndexValue(v: Value[Attribute]): OK[Value[Attribute]] =
+    resolveIndexBase(v)
+
+  def checkParam(param: DimParam): OK[Unit] =
+    param match
+      case v: ValueAttribute => resolveIndexBase(v.getVal()).map(_ => ())
+      case IntegerAttr(_, _: IndexType)   => OK(())
+      case IntegerAttr(_, _: IntegerType) => OK(())
+
+  def valueDim(param: DimParam, context: String): OK[Value[Attribute]] =
+    param match
+      case v: ValueAttribute => resolveIndexBase(v.getVal()).map(_ => v.getVal())
+      case _                 => Err(s"$context: expected SSA dimension, got static dimension ${renderAttr(param)}")
 
   def elemOK(elem: TypeAttribute): Boolean =
     elem match
@@ -81,90 +64,18 @@ object DTensorTypeUtil:
         tt
 
   def sameDims(
-      lhs: Seq[ValueAttribute],
-      rhs: Seq[ValueAttribute],
+      lhs: Seq[DimParam],
+      rhs: Seq[DimParam],
   ): Boolean =
-    lhs.size == rhs.size && lhs.zip(rhs).forall((l, r) =>
-      (resolveNatBase(l.getVal()), resolveNatBase(r.getVal())) match
-        case (OK(lv), OK(rv)) => lv eq rv
-        case _                => false
-    )
-
-  private def natConstValue(v: Value[Attribute]): Option[BigInt] =
-    v.owner match
-      case Some(NatConst(IntegerAttr(IntData(k), _), _)) => Some(k)
-      case _                                             => None
-
-  private def appendConstProduct(
-      factors: Seq[NatProductFactor],
-      value: BigInt,
-  ): Seq[NatProductFactor] =
-    if value == 1 then factors
-    else
-      factors.lastOption match
-        case Some(NatProductFactor.Const(prev)) =>
-          factors.dropRight(1) :+ NatProductFactor.Const(prev * value)
-        case _ => factors :+ NatProductFactor.Const(value)
-
-  def orderedNatProductFactors(
-      v: Value[Attribute]
-  ): OK[NatProductFactors] =
-    resolveNatBase(v).flatMap(base =>
-      natConstValue(base) match
-        case Some(k) => OK(NatProductFactors(appendConstProduct(Seq.empty, k)))
-        case None =>
-          base.owner match
-            case Some(NatMul(lhs, rhs, _)) =>
-              orderedNatProductFactors(lhs).flatMap(lhsFactors =>
-                orderedNatProductFactors(rhs).map(rhsFactors =>
-                  NatProductFactors(
-                    (lhsFactors.factors ++ rhsFactors.factors).foldLeft(
-                      Seq.empty[NatProductFactor]
-                    ) {
-                      case (acc, NatProductFactor.Const(k)) =>
-                        appendConstProduct(acc, k)
-                      case (acc, factor) => acc :+ factor
-                    }
-                  )
-                )
-              )
-            case _ => OK(NatProductFactors(Seq(NatProductFactor.Atom(base))))
-    )
-
-  def sameOrderedNatProduct(
-      lhs: Value[Attribute],
-      rhs: Seq[Value[Attribute]],
-  ): OK[Boolean] =
-    val rhsFactors = rhs.foldLeft[OK[NatProductFactors]](
-      OK(NatProductFactors(Seq.empty))
-    ) { case (acc, dim) =>
-      acc.flatMap(factors =>
-        orderedNatProductFactors(dim).map(dimFactors =>
-          NatProductFactors(
-            (factors.factors ++ dimFactors.factors).foldLeft(
-              Seq.empty[NatProductFactor]
-            ) {
-              case (merged, NatProductFactor.Const(k)) =>
-                appendConstProduct(merged, k)
-              case (merged, factor) => merged :+ factor
-            }
-          )
-        )
-      )
+    lhs.size == rhs.size && lhs.zip(rhs).forall {
+      case (l: ValueAttribute, r: ValueAttribute) =>
+        (resolveIndexBase(l.getVal()), resolveIndexBase(r.getVal())) match
+          case (OK(lv), OK(rv)) => lv eq rv
+          case _                => false
+      case (l: IntegerAttr, r: IntegerAttr) =>
+        l.value == r.value
+      case _ => false
     }
-
-    orderedNatProductFactors(lhs).flatMap(lhsFactors =>
-      rhsFactors.map(rhsFactors =>
-        lhsFactors.factors.size == rhsFactors.factors.size &&
-          lhsFactors.factors.zip(rhsFactors.factors).forall {
-            case (NatProductFactor.Const(l), NatProductFactor.Const(r)) =>
-              l == r
-            case (NatProductFactor.Atom(l), NatProductFactor.Atom(r)) =>
-              l eq r
-            case _ => false
-          }
-      )
-    )
 
   def checkSameTensorShapeAndElem(
       lhs: DTensorTensorType,

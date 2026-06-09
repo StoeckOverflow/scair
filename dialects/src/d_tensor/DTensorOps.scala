@@ -6,72 +6,14 @@ import scair.dialects.builtin.*
 import scair.ir.*
 import scair.utils.*
 
-final case class NatParam(
-    res: Result[DTensorNatLikeType]
-) extends DerivedOperation["d_tensor.nat.param"] derives OpDefs
-
-final case class NatConst(
-    value: IntegerAttr,
-    res: Result[DTensorNatLikeType],
-) extends DerivedOperation["d_tensor.nat.const"]
+final case class AssumeExtent(
+    extent: Operand[IndexType]
+) extends DerivedOperation["d_tensor.assume_extent"]
     with NoMemoryEffect derives OpDefs:
 
   override def customVerify(): OK[Operation] =
-    if value.value.value < 0 then
-      Err(s"d_tensor.nat.const: expected non-negative literal, got $value")
-    else if res.typ.isInstanceOf[DTensorPosNatType] && value.value.value <= 0 then
-      Err(s"d_tensor.nat.const: expected positive literal for !d_tensor.posnat, got $value")
-    else OK(this)
-
-final case class NatAdd(
-    lhs: Operand[DTensorNatLikeType],
-    rhs: Operand[DTensorNatLikeType],
-    res: Result[DTensorNatLikeType],
-) extends DerivedOperation["d_tensor.nat.add"]
-    with NoMemoryEffect derives OpDefs:
-
-  override def customVerify(): OK[Operation] =
-    if res.typ.isInstanceOf[DTensorPosNatType] &&
-      !lhs.typ.isInstanceOf[DTensorPosNatType] &&
-      !rhs.typ.isInstanceOf[DTensorPosNatType]
-    then Err("d_tensor.nat.add: !d_tensor.posnat result requires at least one !d_tensor.posnat operand")
-    else OK(this)
-
-final case class NatMul(
-    lhs: Operand[DTensorNatLikeType],
-    rhs: Operand[DTensorNatLikeType],
-    res: Result[DTensorNatLikeType],
-) extends DerivedOperation["d_tensor.nat.mul"]
-    with NoMemoryEffect derives OpDefs:
-
-  override def customVerify(): OK[Operation] =
-    if res.typ.isInstanceOf[DTensorPosNatType] &&
-      (!lhs.typ.isInstanceOf[DTensorPosNatType] || !rhs.typ.isInstanceOf[DTensorPosNatType])
-    then Err("d_tensor.nat.mul: !d_tensor.posnat result requires two !d_tensor.posnat operands")
-    else OK(this)
-
-final case class ShapeToIndex(
-    nat: Operand[DTensorNatLikeType],
-    res: Result[IndexType],
-) extends DerivedOperation["d_tensor.shape.to_index"]
-    with NoMemoryEffect derives OpDefs
-
-final case class IndexToNat(
-    index: Operand[IndexType],
-    res: Result[DTensorNatType],
-) extends DerivedOperation["d_tensor.index_to_nat"]
-    with NoMemoryEffect derives OpDefs
-
-final case class NatRefinePositive(
-    nat: Operand[DTensorNatLikeType],
-    proof: Operand[IntegerType],
-    res: Result[DTensorPosNatType],
-) extends DerivedOperation["d_tensor.nat.refine_positive"]
-    with NoMemoryEffect derives OpDefs:
-
-  override def customVerify(): OK[Operation] =
-    if proof.typ == I1 then OK(this)
-    else Err(s"d_tensor.nat.refine_positive: expected i1 proof, got ${proof.typ}")
+    if extent.typ == IndexType() then OK(this)
+    else Err(s"d_tensor.assume_extent: expected index operand, got ${extent.typ}")
 
 final case class Empty(
     res: Result[DTensorTensorType]
@@ -103,7 +45,7 @@ final case class Dim(
     val rank = BigInt(t.typ.params.size)
     if idx < 0 || idx >= rank then
       Err(s"d_tensor.dim: axis $idx out of bounds for rank ${t.typ.params.size}")
-    else OK(t.typ.params(idx.toInt).getVal())
+    else DTensorTypeUtil.valueDim(t.typ.params(idx.toInt), "d_tensor.dim")
 
   override def customVerify(): OK[Operation] =
     val axisTyOk = axis.typ == I32
@@ -112,7 +54,7 @@ final case class Dim(
     else
       selectedDimValue.flatMap(sel =>
         if res.typ.ref.getVal() eq sel then
-          DTensorTypeUtil.resolveNatValue(res.typ.ref.getVal()).map(_ => this)
+          DTensorTypeUtil.resolveIndexValue(res.typ.ref.getVal()).map(_ => this)
         else
           Err(
             "d_tensor.dim: expected result !value<...> to reference the selected embedded dim"
@@ -176,7 +118,7 @@ final case class Cast(
 
 final case class ExpandShape(
     src: Operand[DTensorTensorType],
-    outputShape: Seq[Operand[DTensorNatLikeType]],
+    outputShape: Seq[Operand[IndexType]],
     reassociation: ArrayAttribute[Attribute],
     res: Result[DTensorTensorType],
 ) extends DerivedOperation["d_tensor.expand_shape"]
@@ -241,12 +183,14 @@ final case class ExpandShape(
       outputShape.zip(res.typ.params).zipWithIndex
         .foldLeft[OK[Unit]](OK(())) { case (acc, ((operand, dim), idx)) =>
           acc.flatMap(_ =>
-            (DTensorTypeUtil.resolveNatValue(operand), DTensorTypeUtil.resolveNatValue(dim.getVal())) match
-              case (OK(lhs), OK(rhs)) if lhs eq rhs => OK(())
-              case _ =>
-                Err(
-                  s"d_tensor.expand_shape: output shape operand $idx must be SSA-identical to result dimension $idx"
-                )
+            DTensorTypeUtil.valueDim(dim, "d_tensor.expand_shape").flatMap(dimValue =>
+              (DTensorTypeUtil.resolveIndexValue(operand), DTensorTypeUtil.resolveIndexValue(dimValue)) match
+                case (OK(lhs), OK(rhs)) if lhs eq rhs => OK(())
+                case _ =>
+                  Err(
+                    s"d_tensor.expand_shape: output shape operand $idx must be SSA-identical to result dimension $idx"
+                  )
+            )
           )
         }
 
@@ -351,20 +295,23 @@ final case class CollapseShape(
 
 final case class SplitDim(
     src: Operand[DTensorTensorType],
-    outer: Operand[DTensorNatLikeType],
-    inner: Operand[DTensorNatLikeType],
+    outer: Operand[IndexType],
+    inner: Operand[IndexType],
     dim: IntegerAttr,
     res: Result[DTensorTensorType],
 ) extends DerivedOperation["d_tensor.split_dim"]
     with NoMemoryEffect derives OpDefs:
 
-  private def sameDim(lhs: ValueAttribute, rhs: ValueAttribute): Boolean =
+  private def sameDim(lhs: DimParam, rhs: DimParam): Boolean =
     DTensorTypeUtil.sameDims(Seq(lhs), Seq(rhs))
 
-  private def sameNatValue(lhs: Value[Attribute], rhs: Value[Attribute]): Boolean =
-    (DTensorTypeUtil.resolveNatValue(lhs), DTensorTypeUtil.resolveNatValue(rhs)) match
-      case (OK(lv), OK(rv)) => lv eq rv
-      case _                => false
+  private def sameIndexValue(lhs: Value[Attribute], rhs: DimParam): Boolean =
+    DTensorTypeUtil.valueDim(rhs, "d_tensor.split_dim") match
+      case OK(rhsValue) =>
+        (DTensorTypeUtil.resolveIndexValue(lhs), DTensorTypeUtil.resolveIndexValue(rhsValue)) match
+          case (OK(lv), OK(rv)) => lv eq rv
+          case _                => false
+      case _ => false
 
   override def customVerify(): OK[Operation] =
     val srcRank = src.typ.params.size
@@ -393,9 +340,9 @@ final case class SplitDim(
           Err("d_tensor.split_dim: expected dimensions before split dim to be SSA-identical")
         else if !suffixOk then
           Err("d_tensor.split_dim: expected dimensions after split dim to be shifted and SSA-identical")
-        else if !sameNatValue(outer, res.typ.params(idx).getVal()) then
+        else if !sameIndexValue(outer, res.typ.params(idx)) then
           Err(s"d_tensor.split_dim: outer operand must be SSA-identical to result dimension $idx")
-        else if !sameNatValue(inner, res.typ.params(idx + 1).getVal()) then
+        else if !sameIndexValue(inner, res.typ.params(idx + 1)) then
           Err(s"d_tensor.split_dim: inner operand must be SSA-identical to result dimension ${idx + 1}")
         else OK(this)
 
@@ -406,7 +353,7 @@ final case class JoinDim(
 ) extends DerivedOperation["d_tensor.join_dim"]
     with NoMemoryEffect derives OpDefs:
 
-  private def sameDim(lhs: ValueAttribute, rhs: ValueAttribute): Boolean =
+  private def sameDim(lhs: DimParam, rhs: DimParam): Boolean =
     DTensorTypeUtil.sameDims(Seq(lhs), Seq(rhs))
 
   override def customVerify(): OK[Operation] =

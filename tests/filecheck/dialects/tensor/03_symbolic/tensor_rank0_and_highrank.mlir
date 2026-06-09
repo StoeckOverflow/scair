@@ -48,7 +48,7 @@ builtin.module {
 
 // Rank-0 dim query must fail (axis out of bounds).
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
   %e = "d_tensor.empty"() : () -> !d_tensor.tensor<[], f32>
   // expected-error @below {{d_tensor.dim: axis 0 out of bounds for rank 0}}
   %d = "d_tensor.dim"(%e) <{axis = 0 : i32}> : (!d_tensor.tensor<[], f32>) -> !value<%m>
@@ -60,8 +60,8 @@ builtin.module {
 
 // Valid high-rank (rank 5) with repeated symbolic dims.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %a = "d_tensor.empty"() : () -> !d_tensor.tensor<[%n, %n, %m, %n, %n], f32>
   %b = "d_tensor.empty"() : () -> !d_tensor.tensor<[%n, %n, %m, %n, %n], f32>
   %s = "d_tensor.add"(%a, %b)
@@ -72,8 +72,8 @@ builtin.module {
 }
 
 // VERIFY: builtin.module {
-// VERIFY:   %0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// VERIFY:   %1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY:   %0 = "test.index"() : () -> index
+// VERIFY:   %1 = "test.index"() : () -> index
 // VERIFY:   %2 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%1, %1, %0, %1, %1], f32>
 // VERIFY:   %3 = "d_tensor.empty"() : () -> !d_tensor.tensor<[%1, %1, %0, %1, %1], f32>
 // VERIFY:   %4 = "d_tensor.add"(%2, %3) : (!d_tensor.tensor<[%1, %1, %0, %1, %1], f32>, !d_tensor.tensor<[%1, %1, %0, %1, %1], f32>) -> !d_tensor.tensor<[%1, %1, %0, %1, %1], f32>
@@ -85,10 +85,10 @@ builtin.module {
 
 // Invalid high-rank add: semantically equal dims but SSA-distinct params.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %z = "d_tensor.nat.const"() <{value = 0 : i32}> : () -> !d_tensor.nat
-  %d0 = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-  %d1 = "d_tensor.nat.add"(%m, %z) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %z = "arith.constant"() <{value = 0 : index}> : () -> index
+  %d0 = "arith.addi"(%m, %z) : (index, index) -> index
+  %d1 = "arith.addi"(%m, %z) : (index, index) -> index
   %a = "d_tensor.empty"() : () -> !d_tensor.tensor<[%d0, %d0, %d0, %d0], f32>
   %b = "d_tensor.empty"() : () -> !d_tensor.tensor<[%d1, %d1, %d1, %d1], f32>
   // expected-error @below {{d_tensor.add: expected pairwise SSA-identical dims for lhs/rhs}}

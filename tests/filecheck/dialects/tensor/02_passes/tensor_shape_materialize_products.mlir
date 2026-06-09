@@ -3,11 +3,11 @@
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce,tensor-shape-canonicalize,canonicalize,cse,dce | filecheck %s -DFILE=%s --check-prefix=PIPE
 // RUN: scair-opt %s --allow-unregistered-dialect --verify-diagnostics --split-input-file -p tensor-shape-canonicalize,canonicalize,cse,dce,tensor-shape-canonicalize,canonicalize,cse,dce | scair-opt --allow-unregistered-dialect --verify-diagnostics --split-input-file
 
-// collapse_shape materializes the canonical ordered product dimension.
+// collapse_shape materializes its result dim as an index product.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %q = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %q = "test.index"() : () -> index
   %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n], f32>
   %flat = "d_tensor.collapse_shape"(%a)
     <{reassociation = [[0 : i32, 1 : i32]]}>
@@ -16,34 +16,35 @@ builtin.module {
 }
 
 // CANON-LABEL: builtin.module {
-// CANON-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[Q:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON-NEXT:   %[[M:[0-9]+]] = "test.index"() : () -> index
+// CANON-NEXT:   %[[N:[0-9]+]] = "test.index"() : () -> index
+// CANON-NEXT:   %[[Q:[0-9]+]] = "test.index"() : () -> index
 // CANON-NEXT:   %[[A:[0-9]+]] = "test.a"() : () -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
-// CANON-NEXT:   %[[MN:[0-9]+]] = "d_tensor.nat.mul"(%[[M]], %[[N]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// CANON-NEXT:   %[[MN:[0-9]+]] = "arith.muli"(%[[M]], %[[N]]) {{.*}} : (index, index) -> index
 // CANON-NEXT:   %[[FLAT:[0-9]+]] = "d_tensor.collapse_shape"(%[[A]]) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> !d_tensor.tensor<[%[[MN]]], f32>
 // CANON-NEXT:   "test.keep"(%[[FLAT]]) : (!d_tensor.tensor<[%[[MN]]], f32>) -> ()
 // CANON-NEXT: }
 
 // PIPE-LABEL: builtin.module {
-// PIPE-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE-NEXT:   %[[M:[0-9]+]] = "test.index"() : () -> index
+// PIPE-NEXT:   %[[N:[0-9]+]] = "test.index"() : () -> index
+// PIPE-NEXT:   %[[Q:[0-9]+]] = "test.index"() : () -> index
 // PIPE-NEXT:   %[[A:[0-9]+]] = "test.a"() : () -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
-// PIPE-NEXT:   %[[MN:[0-9]+]] = "d_tensor.nat.mul"(%[[M]], %[[N]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
+// PIPE-NEXT:   %[[MN:[0-9]+]] = "arith.muli"(%[[M]], %[[N]]) {{.*}} : (index, index) -> index
 // PIPE-NEXT:   %[[FLAT:[0-9]+]] = "d_tensor.collapse_shape"(%[[A]]) <{reassociation = {{\[\[0 : i32, 1 : i32\]\]}}}> : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> !d_tensor.tensor<[%[[MN]]], f32>
 // PIPE-NEXT:   "test.keep"(%[[FLAT]]) : (!d_tensor.tensor<[%[[MN]]], f32>) -> ()
 // PIPE-NEXT: }
 
 // -----
 
-// Multi-group collapse_shape materializes one ordered product per group.
+// Multi-group collapse_shape materializes one index product per reassociation group.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %nt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tn = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %q0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %q1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %nt = "test.index"() : () -> index
+  %tn = "test.index"() : () -> index
+  %q0 = "test.index"() : () -> index
+  %q1 = "test.index"() : () -> index
   %tiled = "test.tiled"() : () -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
   %untiled = "d_tensor.collapse_shape"(%tiled)
     <{reassociation = [[0 : i32, 1 : i32], [2 : i32, 3 : i32]]}>
@@ -52,39 +53,41 @@ builtin.module {
 }
 
 // CANON-LABEL: builtin.module {
-// CANON-NEXT:   %[[MT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[TM:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[NT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[TN:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[Q0:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[Q1:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON-NEXT:   %[[MT:[0-9]+]] = "test.index"() : () -> index
+// CANON-NEXT:   %[[TM:[0-9]+]] = "test.index"() : () -> index
+// CANON-NEXT:   %[[NT:[0-9]+]] = "test.index"() : () -> index
+// CANON-NEXT:   %[[TN:[0-9]+]] = "test.index"() : () -> index
+// CANON-NEXT:   %[[Q0:[0-9]+]] = "test.index"() : () -> index
+// CANON-NEXT:   %[[Q1:[0-9]+]] = "test.index"() : () -> index
 // CANON-NEXT:   %[[TILED:[0-9]+]] = "test.tiled"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>
-// CANON-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.mul"(%[[MT]], %[[TM]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// CANON-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.mul"(%[[NT]], %[[TN]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// CANON-NEXT:   %[[UNTILED:[0-9]+]] = "d_tensor.collapse_shape"(%[[TILED]]) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>) -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
-// CANON-NEXT:   "test.keep"(%[[UNTILED]]) : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> ()
+// CANON-NEXT:   %[[MTTM:[0-9]+]] = "arith.muli"(%[[MT]], %[[TM]]) {{.*}} : (index, index) -> index
+// CANON-NEXT:   %[[NTTN:[0-9]+]] = "arith.muli"(%[[NT]], %[[TN]]) {{.*}} : (index, index) -> index
+// CANON-NEXT:   %[[UNTILED:[0-9]+]] = "d_tensor.collapse_shape"(%[[TILED]]) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>) -> !d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>
+// CANON-NEXT:   "test.keep"(%[[UNTILED]]) : (!d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>) -> ()
 // CANON-NEXT: }
 
 // PIPE-LABEL: builtin.module {
-// PIPE-NEXT:   %[[MT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[TM:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[NT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[TN:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE-NEXT:   %[[MT:[0-9]+]] = "test.index"() : () -> index
+// PIPE-NEXT:   %[[TM:[0-9]+]] = "test.index"() : () -> index
+// PIPE-NEXT:   %[[NT:[0-9]+]] = "test.index"() : () -> index
+// PIPE-NEXT:   %[[TN:[0-9]+]] = "test.index"() : () -> index
+// PIPE-NEXT:   %[[Q0:[0-9]+]] = "test.index"() : () -> index
+// PIPE-NEXT:   %[[Q1:[0-9]+]] = "test.index"() : () -> index
 // PIPE-NEXT:   %[[TILED:[0-9]+]] = "test.tiled"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>
-// PIPE-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.mul"(%[[MT]], %[[TM]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// PIPE-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.mul"(%[[NT]], %[[TN]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// PIPE-NEXT:   %[[UNTILED:[0-9]+]] = "d_tensor.collapse_shape"(%[[TILED]]) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>) -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
-// PIPE-NEXT:   "test.keep"(%[[UNTILED]]) : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> ()
+// PIPE-NEXT:   %[[MTTM:[0-9]+]] = "arith.muli"(%[[MT]], %[[TM]]) {{.*}} : (index, index) -> index
+// PIPE-NEXT:   %[[NTTN:[0-9]+]] = "arith.muli"(%[[NT]], %[[TN]]) {{.*}} : (index, index) -> index
+// PIPE-NEXT:   %[[UNTILED:[0-9]+]] = "d_tensor.collapse_shape"(%[[TILED]]) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>) -> !d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>
+// PIPE-NEXT:   "test.keep"(%[[UNTILED]]) : (!d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>) -> ()
 // PIPE-NEXT: }
 
 // -----
 
-// join_dim materializes exactly the joined pair product.
+// join_dim materializes its joined dimension as an index product.
 builtin.module {
-  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %q = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %mt = "test.index"() : () -> index
+  %tm = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %q = "test.index"() : () -> index
   %b = "test.b"() : () -> !d_tensor.tensor<[%mt, %tm, %n], f32>
   %c = "d_tensor.join_dim"(%b) <{dim = 0 : i32}>
     : (!d_tensor.tensor<[%mt, %tm, %n], f32>) -> !d_tensor.tensor<[%q, %n], f32>
@@ -92,22 +95,23 @@ builtin.module {
 }
 
 // CANON-LABEL: builtin.module {
-// CANON-NEXT:   %[[MT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[TM:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// CANON-NEXT:   %[[Q:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// CANON-NEXT:   %[[MT:[0-9]+]] = "test.index"() : () -> index
+// CANON-NEXT:   %[[TM:[0-9]+]] = "test.index"() : () -> index
+// CANON-NEXT:   %[[N:[0-9]+]] = "test.index"() : () -> index
+// CANON-NEXT:   %[[Q:[0-9]+]] = "test.index"() : () -> index
 // CANON-NEXT:   %[[B:[0-9]+]] = "test.b"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[N]]], f32>
-// CANON-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.mul"(%[[MT]], %[[TM]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// CANON-NEXT:   %[[C:[0-9]+]] = "d_tensor.join_dim"(%[[B]]) <{dim = 0 : i32}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[N]]], f32>) -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
-// CANON-NEXT:   "test.keep"(%[[C]]) : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> ()
+// CANON-NEXT:   %[[MTTM:[0-9]+]] = "arith.muli"(%[[MT]], %[[TM]]) {{.*}} : (index, index) -> index
+// CANON-NEXT:   %[[C:[0-9]+]] = "d_tensor.join_dim"(%[[B]]) <{dim = 0 : i32}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[N]]], f32>) -> !d_tensor.tensor<[%[[MTTM]], %[[N]]], f32>
+// CANON-NEXT:   "test.keep"(%[[C]]) : (!d_tensor.tensor<[%[[MTTM]], %[[N]]], f32>) -> ()
 // CANON-NEXT: }
 
 // PIPE-LABEL: builtin.module {
-// PIPE-NEXT:   %[[MT:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[TM:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// PIPE-NEXT:   %[[N:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// PIPE-NEXT:   %[[MT:[0-9]+]] = "test.index"() : () -> index
+// PIPE-NEXT:   %[[TM:[0-9]+]] = "test.index"() : () -> index
+// PIPE-NEXT:   %[[N:[0-9]+]] = "test.index"() : () -> index
+// PIPE-NEXT:   %[[Q:[0-9]+]] = "test.index"() : () -> index
 // PIPE-NEXT:   %[[B:[0-9]+]] = "test.b"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[N]]], f32>
-// PIPE-NEXT:   %[[M:[0-9]+]] = "d_tensor.nat.mul"(%[[MT]], %[[TM]]) : (!d_tensor.nat, !d_tensor.nat) -> !d_tensor.nat
-// PIPE-NEXT:   %[[C:[0-9]+]] = "d_tensor.join_dim"(%[[B]]) <{dim = 0 : i32}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[N]]], f32>) -> !d_tensor.tensor<[%[[M]], %[[N]]], f32>
-// PIPE-NEXT:   "test.keep"(%[[C]]) : (!d_tensor.tensor<[%[[M]], %[[N]]], f32>) -> ()
+// PIPE-NEXT:   %[[MTTM:[0-9]+]] = "arith.muli"(%[[MT]], %[[TM]]) {{.*}} : (index, index) -> index
+// PIPE-NEXT:   %[[C:[0-9]+]] = "d_tensor.join_dim"(%[[B]]) <{dim = 0 : i32}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[N]]], f32>) -> !d_tensor.tensor<[%[[MTTM]], %[[N]]], f32>
+// PIPE-NEXT:   "test.keep"(%[[C]]) : (!d_tensor.tensor<[%[[MTTM]], %[[N]]], f32>) -> ()
 // PIPE-NEXT: }

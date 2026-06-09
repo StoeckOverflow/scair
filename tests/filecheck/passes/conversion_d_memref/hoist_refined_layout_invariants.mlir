@@ -6,18 +6,15 @@ builtin.module {
   func.func @hoist(%stride0 : index, %stride1 : index) -> f32 {
     %c256 = "arith.constant"() <{value = 256 : index}> : () -> index
     %total = "arith.muli"(%c256, %stride0) : (index, index) -> index
-    %flat_nat = "d_tensor.index_to_nat"(%total) : (index) -> !d_tensor.nat
-    %flat = d_memref.alloc : () -> !d_memref.memref<[%flat_nat], f32>
+    %flat = d_memref.alloc : () -> !d_memref.memref<[%total], f32>
     %c1024 = "arith.constant"() <{value = 1024 : index}> : () -> index
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
-    %d0 = "d_tensor.nat.const"() <{value = 256 : i32}> : () -> !d_tensor.nat
-    %d1 = "d_tensor.nat.const"() <{value = 1024 : i32}> : () -> !d_tensor.nat
     %buf = d_memref.reinterpret_cast %flat
-    : !d_memref.memref<[%flat_nat], f32> to !d_memref.memref<[%d0, %d1], f32, offset: %c0, strides: [%stride0, %stride1]>
+    : !d_memref.memref<[%total], f32> to !d_memref.memref<[%c256, %c1024], f32, offset: %c0, strides: [%stride0, %stride1]>
     %cst = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
     %result = d_affine.for %i = #map(%c0) to #map(%c256) step 1 : i32 iter_args(%acc = %cst : f32) {
       %inner = d_affine.for %j = #map(%c0) to #map(%c1024) step 1 : i32 iter_args(%acc2 = %acc : f32) {
-        %v = d_memref.load %buf[%i, %j] : !d_memref.memref<[%d0, %d1], f32, offset: %c0, strides: [%stride0, %stride1]> -> f32
+        %v = d_memref.load %buf[%i, %j] : !d_memref.memref<[%c256, %c1024], f32, offset: %c0, strides: [%stride0, %stride1]> -> f32
         %sum = "arith.addf"(%acc2, %v) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
         d_affine.yield %sum : (f32)
       }
@@ -30,26 +27,23 @@ builtin.module {
 // CHECK-LABEL: func.func @hoist(%0: index, %1: index) -> f32 {
 // CHECK-NEXT:    %2 = "arith.constant"() <{value = 256 : index}> : () -> index
 // CHECK-NEXT:    %3 = "arith.muli"(%2, %0) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
-// CHECK-NEXT:    %4 = "d_tensor.index_to_nat"(%3) : (index) -> !d_tensor.nat
-// CHECK-NEXT:    %5 = d_memref.alloc : () -> !d_memref.memref<[%4], f32>
-// CHECK-NEXT:    %6 = "arith.constant"() <{value = 1024 : index}> : () -> index
-// CHECK-NEXT:    %7 = "arith.constant"() <{value = 0 : index}> : () -> index
-// CHECK-NEXT:    %8 = "d_tensor.nat.const"() <{value = 256 : i32}> : () -> !d_tensor.nat
-// CHECK-NEXT:    %9 = "d_tensor.nat.const"() <{value = 1024 : i32}> : () -> !d_tensor.nat
-// CHECK-NEXT:    %10 = d_memref.reinterpret_cast %5
-// CHECK-NEXT:    : !d_memref.memref<[%4], f32> to !d_memref.memref<[%8, %9], f32, offset: %7, strides: [%0, %1]>
-// CHECK-NEXT:    %11 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-// CHECK-NEXT:    %12 = d_affine.for %13 = #map(%7) to #map(%2) step 1 : i32 iter_args(%14 = %11 : f32) {
-// CHECK-NEXT:      %15 = "arith.muli"(%13, %0) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
-// CHECK-NEXT:      %16 = "arith.addi"(%7, %15) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
-// CHECK-NEXT:      %17 = d_affine.for %18 = #map(%7) to #map(%6) step 1 : i32 iter_args(%19 = %14 : f32) {
-// CHECK-NEXT:        %20 = "arith.muli"(%18, %1) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
-// CHECK-NEXT:        %21 = "arith.addi"(%16, %20) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
-// CHECK-NEXT:        %22 = d_memref.load %5[%21] : !d_memref.memref<[%4], f32> -> f32
-// CHECK-NEXT:        %23 = "arith.addf"(%19, %22) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
-// CHECK-NEXT:        d_affine.yield %23 : (f32)
+// CHECK-NEXT:    %4 = d_memref.alloc : () -> !d_memref.memref<[%3], f32>
+// CHECK-NEXT:    %5 = "arith.constant"() <{value = 1024 : index}> : () -> index
+// CHECK-NEXT:    %6 = "arith.constant"() <{value = 0 : index}> : () -> index
+// CHECK-NEXT:    %7 = d_memref.reinterpret_cast %4
+// CHECK-NEXT:    : !d_memref.memref<[%3], f32> to !d_memref.memref<[%2, %5], f32, offset: %6, strides: [%0, %1]>
+// CHECK-NEXT:    %8 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
+// CHECK-NEXT:    %9 = d_affine.for %10 = #map(%6) to #map(%2) step 1 : i32 iter_args(%11 = %8 : f32) {
+// CHECK-NEXT:      %12 = "arith.muli"(%10, %0) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:      %13 = "arith.addi"(%6, %12) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:      %14 = d_affine.for %15 = #map(%6) to #map(%5) step 1 : i32 iter_args(%16 = %11 : f32) {
+// CHECK-NEXT:        %17 = "arith.muli"(%15, %1) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:        %18 = "arith.addi"(%13, %17) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+// CHECK-NEXT:        %19 = d_memref.load %4[%18] : !d_memref.memref<[%3], f32> -> f32
+// CHECK-NEXT:        %20 = "arith.addf"(%16, %19) <{fastmath = #arith.fastmath<none>}> : (f32, f32) -> f32
+// CHECK-NEXT:        d_affine.yield %20 : (f32)
 // CHECK-NEXT:      }
-// CHECK-NEXT:      d_affine.yield %17 : (f32)
+// CHECK-NEXT:      d_affine.yield %14 : (f32)
 // CHECK-NEXT:    }
-// CHECK-NEXT:    func.return %12 : f32
+// CHECK-NEXT:    func.return %9 : f32
 // CHECK-NEXT:  }

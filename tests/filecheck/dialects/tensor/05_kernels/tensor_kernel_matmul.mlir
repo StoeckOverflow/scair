@@ -3,9 +3,9 @@
 
 builtin.module {
   func.func @matmul_strided(
-    %n_nat : !d_tensor.nat,
-    %m_nat : !d_tensor.nat,
-    %k_nat : !d_tensor.nat,
+    %n_nat : index,
+    %m_nat : index,
+    %k_nat : index,
     %a_stride0 : index,
     %a_stride1 : index,
     %b_stride0 : index,
@@ -18,9 +18,9 @@ builtin.module {
   ) attributes {scair.emit_bare_interface = true} {
     %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
     %f0 = "arith.constant"() <{value = 0.0 : f32}> : () -> f32
-    %n = "d_tensor.shape.to_index"(%n_nat) : (!d_tensor.nat) -> index
-    %m = "d_tensor.shape.to_index"(%m_nat) : (!d_tensor.nat) -> index
-    %k = "d_tensor.shape.to_index"(%k_nat) : (!d_tensor.nat) -> index
+    %n = "test.index.identity"(%n_nat) : (index) -> index
+    %m = "test.index.identity"(%m_nat) : (index) -> index
+    %k = "test.index.identity"(%k_nat) : (index) -> index
 
     d_affine.for %i = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%n) step 1 : index {
       d_affine.for %j = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%m) step 1 : index {
@@ -41,9 +41,9 @@ builtin.module {
   }
 
   func.func @call_matmul_strided_good(
-    %n_nat : !d_tensor.nat,
-    %m_nat : !d_tensor.nat,
-    %k_nat : !d_tensor.nat,
+    %n_nat : index,
+    %m_nat : index,
+    %k_nat : index,
     %a_stride0 : index,
     %a_stride1 : index,
     %b_stride0 : index,
@@ -54,16 +54,16 @@ builtin.module {
     %B : !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
     %C : !d_memref.memref<[%n_nat, %m_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>
   ) {
-    %kernel = func.constant @matmul_strided : (!d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index,
+    %kernel = func.constant @matmul_strided : (index, index, index, index, index, index, index, index, index,
          !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%a_stride0, %a_stride1]>,
          !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
          !d_memref.memref<[%n_nat, %m_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>) -> ()
     "func.call_indirect"(%kernel, %n_nat, %m_nat, %k_nat, %a_stride0, %a_stride1, %b_stride0, %b_stride1, %c_stride0, %c_stride1, %A, %B, %C)
-      : ((!d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index,
+      : ((index, index, index, index, index, index, index, index, index,
           !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%a_stride0, %a_stride1]>,
           !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
           !d_memref.memref<[%n_nat, %m_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>) -> (),
-         !d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index,
+         index, index, index, index, index, index, index, index, index,
          !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%a_stride0, %a_stride1]>,
          !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
          !d_memref.memref<[%n_nat, %m_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>) -> ()
@@ -71,9 +71,9 @@ builtin.module {
   }
 
   func.func @call_matmul_strided_bad(
-    %n_nat : !d_tensor.nat,
-    %m_nat : !d_tensor.nat,
-    %k_nat : !d_tensor.nat,
+    %n_nat : index,
+    %m_nat : index,
+    %k_nat : index,
     %a_stride0 : index,
     %a_stride1 : index,
     %b_stride0 : index,
@@ -84,17 +84,17 @@ builtin.module {
     %B : !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
     %C_bad : !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>
   ) {
-    %kernel = func.constant @matmul_strided : (!d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index,
+    %kernel = func.constant @matmul_strided : (index, index, index, index, index, index, index, index, index,
          !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%a_stride0, %a_stride1]>,
          !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
          !d_memref.memref<[%n_nat, %m_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>) -> ()
     // expected-error @below {{func.call_indirect: argument types}}
     "func.call_indirect"(%kernel, %n_nat, %m_nat, %k_nat, %a_stride0, %a_stride1, %b_stride0, %b_stride1, %c_stride0, %c_stride1, %A, %B, %C_bad)
-      : ((!d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index,
+      : ((index, index, index, index, index, index, index, index, index,
           !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%a_stride0, %a_stride1]>,
           !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
           !d_memref.memref<[%n_nat, %m_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>) -> (),
-         !d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index,
+         index, index, index, index, index, index, index, index, index,
          !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%a_stride0, %a_stride1]>,
          !d_memref.memref<[%k_nat, %m_nat], f32, offset: 0, strides: [%b_stride0, %b_stride1]>,
          !d_memref.memref<[%n_nat, %k_nat], f32, offset: 0, strides: [%c_stride0, %c_stride1]>) -> ()
@@ -102,19 +102,19 @@ builtin.module {
   }
 }
 
-// VERIFY: "func.func"() <{sym_name = "matmul_strided", function_type = (!d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index, !d_memref.memref<[%[[N:[0-9]+]], %[[K:[0-9]+]]], f32, offset: 0, strides: [%[[AS0:[0-9]+]], %[[AS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[K]], %[[M:[0-9]+]]], f32, offset: 0, strides: [%[[BS0:[0-9]+]], %[[BS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[N]], %[[M]]], f32, offset: 0, strides: [%[[CS0:[0-9]+]], %[[CS1:[0-9]+]]]>) -> ()}>
-// VERIFY: "d_tensor.shape.to_index"(%[[N]]) : (!d_tensor.nat) -> index
-// VERIFY: "d_tensor.shape.to_index"(%[[M]]) : (!d_tensor.nat) -> index
-// VERIFY: "d_tensor.shape.to_index"(%[[K]]) : (!d_tensor.nat) -> index
+// VERIFY: "func.func"() <{sym_name = "matmul_strided", function_type = (index, index, index, index, index, index, index, index, index, !d_memref.memref<[%[[N:[0-9]+]], %[[K:[0-9]+]]], f32, offset: 0, strides: [%[[AS0:[0-9]+]], %[[AS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[K]], %[[M:[0-9]+]]], f32, offset: 0, strides: [%[[BS0:[0-9]+]], %[[BS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[N]], %[[M]]], f32, offset: 0, strides: [%[[CS0:[0-9]+]], %[[CS1:[0-9]+]]]>) -> ()}>
+// VERIFY: "test.index.identity"(%[[N]]) : (index) -> index
+// VERIFY: "test.index.identity"(%[[M]]) : (index) -> index
+// VERIFY: "test.index.identity"(%[[K]]) : (index) -> index
 // VERIFY: "d_memref.load"({{.*}}) : (!d_memref.memref<[%[[N]], %[[K]]], f32, offset: 0, strides: [%[[AS0]], %[[AS1]]]>, index, index) -> f32
 // VERIFY: "d_memref.load"({{.*}}) : (!d_memref.memref<[%[[K]], %[[M]]], f32, offset: 0, strides: [%[[BS0]], %[[BS1]]]>, index, index) -> f32
 // VERIFY: "d_memref.store"({{.*}}) : (f32, !d_memref.memref<[%[[N]], %[[M]]], f32, offset: 0, strides: [%[[CS0]], %[[CS1]]]>, index, index) -> ()
 // VERIFY: "func.func"() <{sym_name = "call_matmul_strided_good"
-// VERIFY: %[[GOOD_KERNEL:[0-9]+]] = "func.constant"() <{value = @matmul_strided}> : () -> (!d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index, !d_memref.memref<[%[[GOOD_N:[0-9]+]], %[[GOOD_K:[0-9]+]]], f32, offset: 0, strides: [%[[GOOD_AS0:[0-9]+]], %[[GOOD_AS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[GOOD_K]], %[[GOOD_M:[0-9]+]]], f32, offset: 0, strides: [%[[GOOD_BS0:[0-9]+]], %[[GOOD_BS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[GOOD_N]], %[[GOOD_M]]], f32, offset: 0, strides: [%[[GOOD_CS0:[0-9]+]], %[[GOOD_CS1:[0-9]+]]]>) -> ()
-// VERIFY: "func.call_indirect"(%[[GOOD_KERNEL]], %[[GOOD_N]], %[[GOOD_M]], %[[GOOD_K]], %[[GOOD_AS0]], %[[GOOD_AS1]], %[[GOOD_BS0]], %[[GOOD_BS1]], %[[GOOD_CS0]], %[[GOOD_CS1]], %0, %1, %2) : ((!d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index, !d_memref.memref<[%[[GOOD_N]], %[[GOOD_K]]], f32, offset: 0, strides: [%[[GOOD_AS0]], %[[GOOD_AS1]]]>{{,}} !d_memref.memref<[%[[GOOD_K]], %[[GOOD_M]]], f32, offset: 0, strides: [%[[GOOD_BS0]], %[[GOOD_BS1]]]>{{,}} !d_memref.memref<[%[[GOOD_N]], %[[GOOD_M]]], f32, offset: 0, strides: [%[[GOOD_CS0]], %[[GOOD_CS1]]]>) -> (), !d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index, !d_memref.memref<[%[[GOOD_N]], %[[GOOD_K]]], f32, offset: 0, strides: [%[[GOOD_AS0]], %[[GOOD_AS1]]]>{{,}} !d_memref.memref<[%[[GOOD_K]], %[[GOOD_M]]], f32, offset: 0, strides: [%[[GOOD_BS0]], %[[GOOD_BS1]]]>{{,}} !d_memref.memref<[%[[GOOD_N]], %[[GOOD_M]]], f32, offset: 0, strides: [%[[GOOD_CS0]], %[[GOOD_CS1]]]>) -> ()
+// VERIFY: %[[GOOD_KERNEL:[0-9]+]] = "func.constant"() <{value = @matmul_strided}> : () -> (index, index, index, index, index, index, index, index, index, !d_memref.memref<[%[[GOOD_N:[0-9]+]], %[[GOOD_K:[0-9]+]]], f32, offset: 0, strides: [%[[GOOD_AS0:[0-9]+]], %[[GOOD_AS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[GOOD_K]], %[[GOOD_M:[0-9]+]]], f32, offset: 0, strides: [%[[GOOD_BS0:[0-9]+]], %[[GOOD_BS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[GOOD_N]], %[[GOOD_M]]], f32, offset: 0, strides: [%[[GOOD_CS0:[0-9]+]], %[[GOOD_CS1:[0-9]+]]]>) -> ()
+// VERIFY: "func.call_indirect"(%[[GOOD_KERNEL]], %[[GOOD_N]], %[[GOOD_M]], %[[GOOD_K]], %[[GOOD_AS0]], %[[GOOD_AS1]], %[[GOOD_BS0]], %[[GOOD_BS1]], %[[GOOD_CS0]], %[[GOOD_CS1]], %0, %1, %2) : ((index, index, index, index, index, index, index, index, index, !d_memref.memref<[%[[GOOD_N]], %[[GOOD_K]]], f32, offset: 0, strides: [%[[GOOD_AS0]], %[[GOOD_AS1]]]>{{,}} !d_memref.memref<[%[[GOOD_K]], %[[GOOD_M]]], f32, offset: 0, strides: [%[[GOOD_BS0]], %[[GOOD_BS1]]]>{{,}} !d_memref.memref<[%[[GOOD_N]], %[[GOOD_M]]], f32, offset: 0, strides: [%[[GOOD_CS0]], %[[GOOD_CS1]]]>) -> (), index, index, index, index, index, index, index, index, index, !d_memref.memref<[%[[GOOD_N]], %[[GOOD_K]]], f32, offset: 0, strides: [%[[GOOD_AS0]], %[[GOOD_AS1]]]>{{,}} !d_memref.memref<[%[[GOOD_K]], %[[GOOD_M]]], f32, offset: 0, strides: [%[[GOOD_BS0]], %[[GOOD_BS1]]]>{{,}} !d_memref.memref<[%[[GOOD_N]], %[[GOOD_M]]], f32, offset: 0, strides: [%[[GOOD_CS0]], %[[GOOD_CS1]]]>) -> ()
 // VERIFY: "func.func"() <{sym_name = "call_matmul_strided_bad"
-// VERIFY: %[[BAD_KERNEL:[0-9]+]] = "func.constant"() <{value = @matmul_strided}> : () -> (!d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index, !d_memref.memref<[%[[BAD_N:[0-9]+]], %[[BAD_K:[0-9]+]]], f32, offset: 0, strides: [%[[BAD_AS0:[0-9]+]], %[[BAD_AS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[BAD_K]], %[[BAD_M:[0-9]+]]], f32, offset: 0, strides: [%[[BAD_BS0:[0-9]+]], %[[BAD_BS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[BAD_N]], %[[BAD_M]]], f32, offset: 0, strides: [%[[BAD_CS0:[0-9]+]], %[[BAD_CS1:[0-9]+]]]>) -> ()
-// VERIFY: "func.call_indirect"(%[[BAD_KERNEL]], %[[BAD_N]], %[[BAD_M]], %[[BAD_K]], %[[BAD_AS0]], %[[BAD_AS1]], %[[BAD_BS0]], %[[BAD_BS1]], %[[BAD_CS0]], %[[BAD_CS1]], %0, %1, %2) : ((!d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index, !d_memref.memref<[%[[BAD_N]], %[[BAD_K]]], f32, offset: 0, strides: [%[[BAD_AS0]], %[[BAD_AS1]]]>{{,}} !d_memref.memref<[%[[BAD_K]], %[[BAD_M]]], f32, offset: 0, strides: [%[[BAD_BS0]], %[[BAD_BS1]]]>{{,}} !d_memref.memref<[%[[BAD_N]], %[[BAD_M]]], f32, offset: 0, strides: [%[[BAD_CS0]], %[[BAD_CS1]]]>) -> (), !d_tensor.nat, !d_tensor.nat, !d_tensor.nat, index, index, index, index, index, index, !d_memref.memref<[%[[BAD_N]], %[[BAD_K]]], f32, offset: 0, strides: [%[[BAD_AS0]], %[[BAD_AS1]]]>{{,}} !d_memref.memref<[%[[BAD_K]], %[[BAD_M]]], f32, offset: 0, strides: [%[[BAD_BS0]], %[[BAD_BS1]]]>{{,}} !d_memref.memref<[%[[BAD_N]], %[[BAD_K]]], f32, offset: 0, strides: [%[[BAD_CS0]], %[[BAD_CS1]]]>) -> ()
+// VERIFY: %[[BAD_KERNEL:[0-9]+]] = "func.constant"() <{value = @matmul_strided}> : () -> (index, index, index, index, index, index, index, index, index, !d_memref.memref<[%[[BAD_N:[0-9]+]], %[[BAD_K:[0-9]+]]], f32, offset: 0, strides: [%[[BAD_AS0:[0-9]+]], %[[BAD_AS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[BAD_K]], %[[BAD_M:[0-9]+]]], f32, offset: 0, strides: [%[[BAD_BS0:[0-9]+]], %[[BAD_BS1:[0-9]+]]]>{{,}} !d_memref.memref<[%[[BAD_N]], %[[BAD_M]]], f32, offset: 0, strides: [%[[BAD_CS0:[0-9]+]], %[[BAD_CS1:[0-9]+]]]>) -> ()
+// VERIFY: "func.call_indirect"(%[[BAD_KERNEL]], %[[BAD_N]], %[[BAD_M]], %[[BAD_K]], %[[BAD_AS0]], %[[BAD_AS1]], %[[BAD_BS0]], %[[BAD_BS1]], %[[BAD_CS0]], %[[BAD_CS1]], %0, %1, %2) : ((index, index, index, index, index, index, index, index, index, !d_memref.memref<[%[[BAD_N]], %[[BAD_K]]], f32, offset: 0, strides: [%[[BAD_AS0]], %[[BAD_AS1]]]>{{,}} !d_memref.memref<[%[[BAD_K]], %[[BAD_M]]], f32, offset: 0, strides: [%[[BAD_BS0]], %[[BAD_BS1]]]>{{,}} !d_memref.memref<[%[[BAD_N]], %[[BAD_M]]], f32, offset: 0, strides: [%[[BAD_CS0]], %[[BAD_CS1]]]>) -> (), index, index, index, index, index, index, index, index, index, !d_memref.memref<[%[[BAD_N]], %[[BAD_K]]], f32, offset: 0, strides: [%[[BAD_AS0]], %[[BAD_AS1]]]>{{,}} !d_memref.memref<[%[[BAD_K]], %[[BAD_M]]], f32, offset: 0, strides: [%[[BAD_BS0]], %[[BAD_BS1]]]>{{,}} !d_memref.memref<[%[[BAD_N]], %[[BAD_K]]], f32, offset: 0, strides: [%[[BAD_CS0]], %[[BAD_CS1]]]>) -> ()
 // DIAG: func.call_indirect: argument types
 // DIAG-SAME: do not match callee input types
 
@@ -123,9 +123,9 @@ builtin.module {
 // Positive: direct tensor-dialect matmul function.
 builtin.module {
   func.func @tensor_matmul_function_ok(
-    %n_nat : !d_tensor.nat,
-    %m_nat : !d_tensor.nat,
-    %k_nat : !d_tensor.nat,
+    %n_nat : index,
+    %m_nat : index,
+    %k_nat : index,
     %A : !d_tensor.tensor<[%n_nat, %k_nat], f32>,
     %B : !d_tensor.tensor<[%k_nat, %m_nat], f32>
   ) {
@@ -138,9 +138,9 @@ builtin.module {
 }
 
 // VERIFY-LABEL: func.func @tensor_matmul_function_ok(
-// VERIFY-SAME: [[TN:%[0-9]+]]: !d_tensor.nat
-// VERIFY-SAME: [[TM:%[0-9]+]]: !d_tensor.nat
-// VERIFY-SAME: [[TK:%[0-9]+]]: !d_tensor.nat
+// VERIFY-SAME: [[TN:%[0-9]+]]: index
+// VERIFY-SAME: [[TM:%[0-9]+]]: index
+// VERIFY-SAME: [[TK:%[0-9]+]]: index
 // VERIFY-SAME: [[AARG:%[0-9]+]]: !d_tensor.tensor<{{\[}}[[TN]], [[TK]]], f32>
 // VERIFY-SAME: [[BARG:%[0-9]+]]: !d_tensor.tensor<{{\[}}[[TK]], [[TM]]], f32>
 // VERIFY: [[TC:%[0-9]+]] = "d_tensor.matmul"([[AARG]], [[BARG]]) : (!d_tensor.tensor<{{\[}}[[TN]], [[TK]]], f32>, !d_tensor.tensor<{{\[}}[[TK]], [[TM]]], f32>) -> !d_tensor.tensor<{{\[}}[[TN]], [[TM]]], f32>
@@ -151,9 +151,9 @@ builtin.module {
 // Negative: direct tensor-dialect matmul rejects mismatched reduction dimensions.
 builtin.module {
   func.func @tensor_matmul_function_bad_inner(
-    %n_nat : !d_tensor.nat,
-    %m_nat : !d_tensor.nat,
-    %k_nat : !d_tensor.nat,
+    %n_nat : index,
+    %m_nat : index,
+    %k_nat : index,
     %A : !d_tensor.tensor<[%n_nat, %k_nat], f32>,
     %B : !d_tensor.tensor<[%m_nat, %m_nat], f32>
   ) {

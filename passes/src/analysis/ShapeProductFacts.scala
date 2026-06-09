@@ -1,10 +1,11 @@
 package scair.passes.analysis
 
-import scair.dialects.{d_tensor as DTensor}
+import scair.dialects.arith
+import scair.dialects.builtin.*
 import scair.ir.*
-import scair.passes.NatProvenance
+import scair.passes.ShapeIndexProvenance
 
-object NatProductFacts:
+object ShapeProductFacts:
   enum FactorSelectionPolicy:
     case RightmostPositive
     case LeftmostPositive
@@ -22,17 +23,17 @@ object NatProductFacts:
 
   final case class Factor(value: Value[Attribute], constValue: Option[BigInt]):
     def isPositive: Boolean =
-      constValue.exists(_ > 0) || NatProvenance.isPositive(value)
+      constValue.exists(_ > 0) || ShapeIndexProvenance.isPositive(value)
 
     def key: FactorKey =
       constValue match
-        case Some(k) if value.owner.exists(_.isInstanceOf[DTensor.NatConst]) =>
+        case Some(k) if value.owner.exists(_.isInstanceOf[arith.Constant]) =>
           FactorKey.Const(k)
-        case _ => FactorKey.Atom(NatProvenance.resolveNat(value).getOrElse(value))
+        case _ => FactorKey.Atom(ShapeIndexProvenance.resolveIndex(value).getOrElse(value))
 
   final case class ProductFactors(factors: Seq[Factor]):
     private def sameExplicitFactor(lhs: Factor, rhs: Factor): Boolean =
-      NatProvenance.equivalentNatOrConst(lhs.value, rhs.value) ||
+      ShapeIndexProvenance.equivalentIndexOrConst(lhs.value, rhs.value) ||
         ((lhs.key, rhs.key) match
           case (FactorKey.Const(l), FactorKey.Const(r)) => l == r
           case (FactorKey.Atom(l), FactorKey.Atom(r))   => l eq r
@@ -40,10 +41,12 @@ object NatProductFacts:
         )
 
     def containsEquivalentFactor(tileSize: Value[Attribute]): Boolean =
-      factors.exists(f => NatProvenance.equivalentNatOrConst(f.value, tileSize))
+      val factor = Factor(tileSize, ShapeIndexProvenance.exactConstInShapeExpr(tileSize))
+      factors.exists(sameExplicitFactor(_, factor))
 
     def removeOneEquivalentFactor(tileSize: Value[Attribute]): Option[Seq[Factor]] =
-      val idx = factors.indexWhere(f => NatProvenance.equivalentNatOrConst(f.value, tileSize))
+      val factor = Factor(tileSize, ShapeIndexProvenance.exactConstInShapeExpr(tileSize))
+      val idx = factors.indexWhere(sameExplicitFactor(_, factor))
       if idx < 0 then None else Some(factors.patch(idx, Nil, 1))
 
     def containsAllExplicitFactors(factorProduct: ProductFactors): Boolean =
@@ -93,7 +96,7 @@ object NatProductFacts:
       }.exists(_.isEmpty)
 
   def flattenProduct(v: Value[Attribute]): Option[ProductFactors] =
-    NatProvenance.resolveNat(v).map(nat => ProductFactors(flattenNat(nat)))
+    ShapeIndexProvenance.resolveIndex(v).map(root => ProductFactors(flattenIndex(root)))
 
   def factorMultiset(v: Value[Attribute]): Option[ProductFactors] =
     flattenProduct(v)
@@ -105,7 +108,11 @@ object NatProductFacts:
     containsExplicitFactorProduct(product, factor)
 
   def containsExplicitFactorProduct(product: Value[Attribute], factor: Value[Attribute]): Boolean =
-    (factorMultiset(product), factorMultiset(factor)) match
+    val factorProduct =
+      factorMultiset(factor).orElse(
+        Some(ProductFactors(Seq(Factor(factor, ShapeIndexProvenance.exactConstInShapeExpr(factor)))))
+      )
+    (factorMultiset(product), factorProduct) match
       case (Some(full), Some(part)) => full.containsAllExplicitFactors(part)
       case _                       => false
 
@@ -149,24 +156,23 @@ object NatProductFacts:
         var prelude = Seq.empty[Operation]
         var acc = first.value
         rest.foreach { factor =>
-          val mul = DTensor.NatMul(
-            acc.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
-            factor.value.asInstanceOf[Operand[DTensor.DTensorNatLikeType]],
-            Result(DTensor.DTensorNatType()),
+          val mul = arith.MulI(
+            acc.asInstanceOf[Operand[arith.AnyIntegerType]],
+            factor.value.asInstanceOf[Operand[arith.AnyIntegerType]],
+            Result(IndexType()),
           )
           prelude = prelude :+ mul
-          acc = mul.res
+          acc = mul.result
         }
         Some((prelude, acc))
 
-  private def flattenNat(v: Value[Attribute]): Seq[Factor] =
-    val base = NatProvenance.resolveNat(v).getOrElse(v)
-    NatProvenance.exactConst(base) match
-      case Some(k) if base.owner.exists(_.isInstanceOf[DTensor.NatConst]) =>
-        Seq(Factor(base, Some(k)))
+  private def flattenIndex(v: Value[Attribute]): Seq[Factor] =
+    ShapeIndexProvenance.exactConstInShapeExpr(v) match
+      case Some(k) if v.owner.exists(_.isInstanceOf[arith.Constant]) =>
+        Seq(Factor(v, Some(k)))
       case _ =>
-        base.owner match
-          case Some(DTensor.NatMul(lhs, rhs, _)) =>
-            flattenNat(lhs) ++ flattenNat(rhs)
+        v.owner match
+          case Some(arith.MulI(lhs, rhs, _, _)) if v.typ == IndexType() =>
+            flattenIndex(lhs) ++ flattenIndex(rhs)
           case _ =>
-            Seq(Factor(base, NatProvenance.exactConst(base)))
+            Seq(Factor(v, ShapeIndexProvenance.exactConstInShapeExpr(v)))

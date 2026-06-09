@@ -3,9 +3,9 @@
 
 // Positive: MxK * KxN produces MxN with SSA-identical inner dims.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %k = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %lhs = "test.lhs"() : () -> !d_tensor.tensor<[%m, %k], f32>
   %rhs = "test.rhs"() : () -> !d_tensor.tensor<[%k, %n], f32>
   %res = "d_tensor.matmul"(%lhs, %rhs)
@@ -14,9 +14,9 @@ builtin.module {
 }
 
 // VERIFY-LABEL: builtin.module {
-// VERIFY: [[M:%[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// VERIFY: [[K:%[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
-// VERIFY: [[N:%[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.nat
+// VERIFY: [[M:%[0-9]+]] = "test.index"() : () -> index
+// VERIFY: [[K:%[0-9]+]] = "test.index"() : () -> index
+// VERIFY: [[N:%[0-9]+]] = "test.index"() : () -> index
 // VERIFY: [[LHS:%[0-9]+]] = "test.lhs"() : () -> !d_tensor.tensor<{{\[}}[[M]], [[K]]], f32>
 // VERIFY: [[RHS:%[0-9]+]] = "test.rhs"() : () -> !d_tensor.tensor<{{\[}}[[K]], [[N]]], f32>
 // VERIFY: [[RES:%[0-9]+]] = "d_tensor.matmul"([[LHS]], [[RHS]]) : (!d_tensor.tensor<{{\[}}[[M]], [[K]]], f32>, !d_tensor.tensor<{{\[}}[[K]], [[N]]], f32>) -> !d_tensor.tensor<{{\[}}[[M]], [[N]]], f32>
@@ -27,9 +27,9 @@ builtin.module {
 
 // Negative: operands must both be rank-2 tensors.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %k = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %lhs = "test.lhs"() : () -> !d_tensor.tensor<[%m], f32>
   %rhs = "test.rhs"() : () -> !d_tensor.tensor<[%k, %n], f32>
   // expected-error @below {{d_tensor.matmul: expected rank-2 operands}}
@@ -43,10 +43,10 @@ builtin.module {
 
 // Negative: lhs inner dim and rhs inner dim must be the same SSA value.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k1 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %k0 = "test.index"() : () -> index
+  %k1 = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %lhs = "test.lhs"() : () -> !d_tensor.tensor<[%m, %k0], f32>
   %rhs = "test.rhs"() : () -> !d_tensor.tensor<[%k1, %n], f32>
   // expected-error @below {{d_tensor.matmul: expected SSA-identical inner dims}}
@@ -60,10 +60,10 @@ builtin.module {
 
 // Negative: result dims must be lhs outer and rhs outer dims.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %x = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %k = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
+  %x = "test.index"() : () -> index
   %lhs = "test.lhs"() : () -> !d_tensor.tensor<[%m, %k], f32>
   %rhs = "test.rhs"() : () -> !d_tensor.tensor<[%k, %n], f32>
   // expected-error @below {{d_tensor.matmul: expected result dims to be outer dims}}
@@ -77,9 +77,9 @@ builtin.module {
 
 // Negative: lhs, rhs, and result element types must match.
 builtin.module {
-  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %m = "test.index"() : () -> index
+  %k = "test.index"() : () -> index
+  %n = "test.index"() : () -> index
   %lhs = "test.lhs"() : () -> !d_tensor.tensor<[%m, %k], f32>
   %rhs = "test.rhs"() : () -> !d_tensor.tensor<[%k, %n], i32>
   // expected-error @below {{d_tensor.matmul: expected equal element types for lhs/rhs/result}}

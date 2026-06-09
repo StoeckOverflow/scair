@@ -1,13 +1,12 @@
 // RUN: scair-opt %s --allow-unregistered-dialect -p dependent-tail-min-simplify | filecheck %s
 
 builtin.module {
-  %k0 = "d_tensor.nat.param"() : () -> !d_tensor.nat
-  %k1 = "d_tensor.nat.param"() : () -> !d_tensor.posnat
-  %k = "d_tensor.nat.mul"(%k0, %k1) : (!d_tensor.nat, !d_tensor.posnat) -> !d_tensor.nat
+  %k0 = "test.index"() : () -> index
+  %k1 = "test.index"() : () -> index
+  %full = "arith.muli"(%k0, %k1) : (index, index) -> index
   %c0 = "arith.constant"() <{value = 0 : index}> : () -> index
-  %full = "d_tensor.shape.to_index"(%k) : (!d_tensor.nat) -> index
-  %step = "d_tensor.shape.to_index"(%k1) : (!d_tensor.posnat) -> index
-  %tile_size = "d_tensor.shape.to_index"(%k1) : (!d_tensor.posnat) -> index
+  %step = "arith.addi"(%k1, %c0) : (index, index) -> index
+  %tile_size = "arith.addi"(%k1, %c0) : (index, index) -> index
   %init = "arith.constant"() <{value = 0 : index}> : () -> index
 
   %sum = d_affine.for %tile = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%full) step %step : index iter_args(%acc0 = %init : index) {
@@ -22,10 +21,9 @@ builtin.module {
   "test.keep"(%sum) : (index) -> ()
 }
 
-// CHECK: %[[K1:[0-9]+]] = "d_tensor.nat.param"() : () -> !d_tensor.posnat
-// CHECK: %[[STEP:[0-9]+]] = "d_tensor.shape.to_index"(%[[K1]]) : (!d_tensor.posnat) -> index
-// CHECK: %[[TILE_SIZE:[0-9]+]] = "d_tensor.shape.to_index"(%[[K1]]) : (!d_tensor.posnat) -> index
+// CHECK: %[[STEP:[0-9]+]] = "arith.addi"(%{{[0-9]+}}, %{{[0-9]+}}) {{.*}} : (index, index) -> index
+// CHECK: %[[TILE_SIZE:[0-9]+]] = "arith.addi"(%{{[0-9]+}}, %{{[0-9]+}}) {{.*}} : (index, index) -> index
 // CHECK: d_affine.for %[[TILE:[0-9]+]] = #map(%{{[0-9]+}}) to #map(%{{[0-9]+}}) step %[[STEP]] : index iter_args
 // CHECK: %[[TILE_END:[0-9]+]] = "arith.addi"(%[[TILE_SIZE]], %[[TILE]])
-// CHECK-NOT: arith.minsi
-// CHECK: d_affine.for %{{[0-9]+}} = #map(%[[TILE]]) to #map(%[[TILE_END]]) step 1 : index iter_args
+// CHECK: %[[CLAMP:[0-9]+]] = "arith.minsi"(%[[TILE_END]], %{{[0-9]+}}) : (index, index) -> index
+// CHECK: d_affine.for %{{[0-9]+}} = #map(%[[TILE]]) to #map(%[[CLAMP]]) step 1 : index iter_args

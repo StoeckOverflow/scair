@@ -1,7 +1,6 @@
 package scair.passes.dce
 
 import scair.MLContext
-import scair.dialects.d_tensor.NatParam
 import scair.dialects.tlam.{TLambda as SsaTLambda, VLambda as SsaVLambda}
 import scair.dialects.tlam_de_bruijn.{
   TLambda as DbiTLambda,
@@ -23,8 +22,6 @@ private def isLambda(op: Operation): Boolean =
 private val RemoveUnusedOperations = pattern {
   case _: IsTerminator => PatternAction.Abort
   case op if isLambda(op) && unusedResults(op) =>
-    PatternAction.Erase
-  case op: NatParam if unusedResults(op) =>
     PatternAction.Erase
   case op: NoMemoryEffect if unusedResults(op) =>
     PatternAction.Erase
