@@ -25,9 +25,9 @@ SCAIR_BASELINE_DRIVER_SRC="${SCAIR_BASELINE_DRIVER_SRC:-$EXAMPLE_DIR/driver_base
 SCAIR_VALUE_DEP_DRIVER_SRC="${SCAIR_VALUE_DEP_DRIVER_SRC:-$EXAMPLE_DIR/driver_scair.c}"
 OUT_DIR="${OUT_DIR:-$EXAMPLE_DIR/out}"
 
-MLIR_PIPELINE="--lower-affine --convert-scf-to-cf --expand-strided-metadata --finalize-memref-to-llvm --convert-arith-to-llvm --convert-index-to-llvm --convert-cf-to-llvm --convert-func-to-llvm --reconcile-unrealized-casts"
+MLIR_PIPELINE="--lower-affine --convert-scf-to-cf --expand-strided-metadata --finalize-memref-to-llvm --convert-arith-to-llvm --convert-index-to-llvm --convert-cf-to-llvm --convert-func-to-llvm --reconcile-unrealized-casts --canonicalize --cse"
 SCAIR_BASELINE_PIPELINE="lower-dynamic-memref-to-llvm-baseline,convert-func-to-llvm,convert-llvm-export-abi"
-SCAIR_VALUE_DEP_PIPELINE="lower-d-memref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi"
+SCAIR_VALUE_DEP_PIPELINE="lower-d-memref-to-llvm,convert-func-to-llvm,convert-llvm-export-abi,canonicalize,cse"
 
 mkdir -p "$OUT_DIR"
 ENV_PATH="$(ensure_env_snapshot "$OUT_DIR")"

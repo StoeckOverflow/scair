@@ -12,7 +12,7 @@ builtin.module {
   %spec = "tlam_dbi.tapply"(%poly) <{tyArg = i64}> : (!tlam_dbi.forall<!tlam_dbi.fun<!tlam_dbi.bvar<0>, !tlam_dbi.bvar<0>>>) -> (!tlam_dbi.fun<i64, i64>)
   %c41 = "arith.constant"() <{value = 41 : i64}> : () -> i64
   %r = "tlam_dbi.vapply"(%spec, %c41) : (!tlam_dbi.fun<i64, i64>, i64) -> i64
-  "tlam_dbi.vreturn"(%r) : (i64) -> ()
+  "func.call"(%r) <{callee = @print}> : (i64) -> ()
 }
 
 // CHECK: Result: 41

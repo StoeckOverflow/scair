@@ -2,6 +2,7 @@ package scair.dialects.llvm
 
 import fastparse.*
 import scair.clair.*
+import scair.dialects.llvm.canonicalization.given
 import scair.dialects.builtin.*
 import scair.enums.*
 import scair.ir.*

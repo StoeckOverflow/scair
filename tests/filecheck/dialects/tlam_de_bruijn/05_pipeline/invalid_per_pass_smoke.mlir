@@ -15,8 +15,8 @@ builtin.module {
     "test.op"() : () -> ()
   }) : () -> (!tlam_dbi.forall<!tlam_dbi.fun<i32, i32>>)
 }
-// VERIFY: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
-// BETA: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
-// MONO: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
-// ERASE: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
-// LOWER: tlambda: last op must be tlam_dbi.treturn, got 'test.op'
+// VERIFY: Operation 'tlam_dbi.treturn' marked as a terminator, but is not the last operation within its container block
+// BETA: Operation 'tlam_dbi.treturn' marked as a terminator, but is not the last operation within its container block
+// MONO: Operation 'tlam_dbi.treturn' marked as a terminator, but is not the last operation within its container block
+// ERASE: Operation 'tlam_dbi.treturn' marked as a terminator, but is not the last operation within its container block
+// LOWER: Operation 'tlam_dbi.treturn' marked as a terminator, but is not the last operation within its container block

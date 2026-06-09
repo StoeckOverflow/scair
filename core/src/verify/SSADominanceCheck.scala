@@ -174,8 +174,10 @@ object SSADominanceCheck extends VerifierCheck:
                 case _      => ()
             }
 
-            // Check dominance for type uses in types/attributes
-            checkOpTypeAndAttrUses(op, currentIso) match
+            // Check dominance for type uses in types/attributes.
+            // For isolated operations, the operation-owned signature,
+            // attributes, and properties are part of the isolated boundary.
+            checkOpTypeAndAttrUses(op, childIso) match
               case e: Err => break(e: OK[Unit])
               case _      => ()
           }

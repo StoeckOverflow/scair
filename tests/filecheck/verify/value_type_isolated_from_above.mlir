@@ -13,20 +13,20 @@ func.func @ok_isolated_local_witness() {
 
 // -----
 
-// An isolated function signature may use an earlier entry argument in a later
+// An isolated function sigsizeure may use an earlier entry argument in a later
 // argument type. The witness is explicitly passed through the isolation boundary.
-func.func @ok_isolated_signature_explicit_witness(%n : !d_tensor.size,
+func.func @ok_isolated_sigsizeure_explicit_witness(%n : !d_tensor.size,
                                                   %buf : !d_memref.memref<[%n], f32>) {
   func.return
 }
 
-// CHECK-LABEL: func.func @ok_isolated_signature_explicit_witness(
+// CHECK-LABEL: func.func @ok_isolated_sigsizeure_explicit_witness(
 // CHECK-SAME: %{{[0-9]+}}: !d_tensor.size
 // CHECK-SAME: %{{[0-9]+}}: !d_memref.memref<[%{{[0-9]+}}], f32>
 
 // -----
 
-// Non-isolated nested regions may capture dominating values through
+// Non-isolated nested regions may capture domisizeing values through
 // value-dependent type information.
 builtin.module {
   %n = "d_tensor.size.param"() : () -> !d_tensor.size
@@ -70,11 +70,35 @@ builtin.module {
 
 // -----
 
-// The referenced %n is an enclosing value, so the function signature would implicitly capture through
-// the isolated function body/signature.
+// The referenced %n is an enclosing value, so the function sigsizeure would implicitly capture through
+// the isolated function body/sigsizeure.
 builtin.module {
   %n = "d_tensor.size.param"() : () -> !d_tensor.size
-  func.func @bad_isolated_signature_outer_witness(%buf : !d_memref.memref<[%n], f32>) {
+  func.func @bad_isolated_sigsizeure_outer_witness(%buf : !d_memref.memref<[%n], f32>) {
+    func.return
+  }
+}
+
+// CHECK: ssa-dominance: value Value{{.*}} crosses IsolatedFromAbove boundary in value-dependent type reference
+
+// -----
+
+// Bodyless isolated declarations may not capture enclosing values through their
+// function type.
+builtin.module {
+  %n = "d_tensor.size.param"() : () -> !d_tensor.size
+  func.func private @bad_isolated_decl(!d_memref.memref<[%n], f32>)
+}
+
+// CHECK: ssa-dominance: value Value{{.*}} crosses IsolatedFromAbove boundary in value-dependent type reference
+
+// -----
+
+// Attributes attached directly to an isolated operation are also part of the
+// isolation boundary.
+builtin.module {
+  %n = "d_tensor.size.param"() : () -> !d_tensor.size
+  func.func @bad_isolated_op_attr() attributes {dep = !value<%n>} {
     func.return
   }
 }
