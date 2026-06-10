@@ -100,6 +100,36 @@ builtin.module {
 
 builtin.module {
   %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
+  %base, %offset = "d_memref.extract_strided_metadata"(%buf)
+    : (!d_memref.memref<[4], f32>) -> (!d_memref.memref<[], f32>, index)
+}
+
+// VERIFY: d_memref.extract_strided_metadata: expected 4 results for rank 1, got 2
+
+// -----
+
+builtin.module {
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
+  %base, %offset, %size0, %stride0 = "d_memref.extract_strided_metadata"(%buf)
+    : (!d_memref.memref<[4], f32>) -> (!d_memref.memref<[], i32>, index, index, index)
+}
+
+// VERIFY: d_memref.extract_strided_metadata: result 0 expected type !d_memref.memref<[], f32>, got !d_memref.memref<[], i32>
+
+// -----
+
+builtin.module {
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
+  %base, %offset, %size0, %stride0 = "d_memref.extract_strided_metadata"(%buf)
+    : (!d_memref.memref<[4], f32>) -> (!d_memref.memref<[], f32>, i32, index, index)
+}
+
+// VERIFY: d_memref.extract_strided_metadata: result 1 expected type index, got i32
+
+// -----
+
+builtin.module {
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
   %bad = d_memref.cast %buf : !d_memref.memref<[4], f32> -> !d_memref.memref<[4], i32>
 }
 
@@ -135,6 +165,65 @@ builtin.module {
 }
 
 // VERIFY: d_memref.subview: expected equal element types, got f32 and i32
+
+// -----
+
+builtin.module {
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
+  %idx = "arith.constant"() <{value = 0 : index}> : () -> index
+  %one = "arith.constant"() <{value = 1 : index}> : () -> index
+  %bad = d_memref.subview %buf[%idx][%one][%one] : !d_memref.memref<[4], f32> -> !d_memref.memref<[], f32>
+}
+
+// Restricted subset: rank-reducing d_memref.subview is not supported.
+// VERIFY: d_memref.subview: expected equal source/result rank, got 1 and 0
+
+// -----
+
+builtin.module {
+  %neg = "arith.constant"() <{value = -1 : index}> : () -> index
+  %zero = "arith.constant"() <{value = 0 : index}> : () -> index
+  %one = "arith.constant"() <{value = 1 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
+  %bad = d_memref.subview %buf[%neg][%zero][%one] : !d_memref.memref<[4], f32> -> !d_memref.memref<[0], f32>
+}
+
+// VERIFY: d_memref.subview: expected non-negative static offset at axis 0, got -1
+
+// -----
+
+builtin.module {
+  %zero = "arith.constant"() <{value = 0 : index}> : () -> index
+  %neg = "arith.constant"() <{value = -1 : index}> : () -> index
+  %one = "arith.constant"() <{value = 1 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
+  %bad = d_memref.subview %buf[%zero][%neg][%one] : !d_memref.memref<[4], f32> -> !d_memref.memref<[0], f32>
+}
+
+// VERIFY: d_memref.subview: expected non-negative static size at axis 0, got -1
+
+// -----
+
+builtin.module {
+  %zero = "arith.constant"() <{value = 0 : index}> : () -> index
+  %one = "arith.constant"() <{value = 1 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
+  %bad = d_memref.subview %buf[%zero][%one][%zero] : !d_memref.memref<[4], f32> -> !d_memref.memref<[1], f32>
+}
+
+// VERIFY: d_memref.subview: expected positive static stride at axis 0, got 0
+
+// -----
+
+builtin.module {
+  %five = "arith.constant"() <{value = 5 : index}> : () -> index
+  %four = "arith.constant"() <{value = 4 : index}> : () -> index
+  %one = "arith.constant"() <{value = 1 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[8], f32>
+  %bad = d_memref.subview %buf[%five][%four][%one] : !d_memref.memref<[8], f32> -> !d_memref.memref<[4], f32>
+}
+
+// VERIFY: d_memref.subview: static slice at axis 0 is out of bounds for dimension 8 (offset 5, size 4, stride 1)
 
 // -----
 

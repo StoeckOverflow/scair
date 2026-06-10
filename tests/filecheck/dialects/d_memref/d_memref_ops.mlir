@@ -77,6 +77,8 @@ builtin.module {
   %bad = d_memref.cast %buf : !d_memref.memref<[%m0], f32> -> !d_memref.memref<[%m1], f32>
 }
 
+// Exact-cast subset: d_memref.cast requires pairwise SSA-identical dims, not
+// merely equal static values or dynamic/static compatibility.
 // VERIFY: d_memref.cast: expected pairwise SSA-identical dims
 
 // -----
@@ -163,6 +165,7 @@ builtin.module {
   %bad = d_memref.cast %buf : !d_memref.memref<[%m], f32> -> !d_memref.memref<[4], f32>
 }
 
+// Exact-cast subset: SSA-backed and literal dimensions are not cast-compatible.
 // VERIFY: d_memref.cast: expected pairwise SSA-identical dims
 
 // -----
@@ -191,6 +194,21 @@ builtin.module {
 }
 
 // VERIFY: d_memref.subview %{{[0-9]+}}[%{{[0-9]+}}, %{{[0-9]+}}][%{{[0-9]+}}, %{{[0-9]+}}][%{{[0-9]+}}, %{{[0-9]+}}] : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> !d_memref.memref<[2, 3], f32, offset: 10, strides: [16, 1]>
+
+// -----
+
+builtin.module {
+  %dyn = "test.dynamic_index"() : () -> index
+  %one = "arith.constant"() <{value = 1 : index}> : () -> index
+  %two = "arith.constant"() <{value = 2 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
+  %sv = d_memref.subview %buf[%dyn][%two][%one]
+    : !d_memref.memref<[4], f32> -> !d_memref.memref<[2], f32>
+  "test.keep"(%sv) : (!d_memref.memref<[2], f32>) -> ()
+}
+
+// Dynamic subview bounds are intentionally unchecked by the verifier.
+// VERIFY: d_memref.subview %{{[0-9]+}}[%{{[0-9]+}}][%{{[0-9]+}}][%{{[0-9]+}}] : !d_memref.memref<[4], f32> -> !d_memref.memref<[2], f32>
 
 // -----
 
