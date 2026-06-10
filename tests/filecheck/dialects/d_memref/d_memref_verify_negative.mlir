@@ -144,3 +144,101 @@ builtin.module {
 }
 
 // VERIFY: d_memref.reinterpret_cast: expected equal element types, got f32 and i32
+
+// -----
+
+builtin.module {
+  %bad = d_memref.alloc : () -> !d_memref.memref<[-1], f32>
+}
+
+// VERIFY: d_memref: expected non-negative static dimension, got -1
+
+// -----
+
+builtin.module {
+  %bad = d_memref.alloc : () -> !d_memref.memref<[4], f32, offset: -1, strides: [1]>
+}
+
+// VERIFY: d_memref.memref: expected non-negative static offset, got -1
+
+// -----
+
+builtin.module {
+  %bad = d_memref.alloc : () -> !d_memref.memref<[4], f32, offset: 0, strides: [0]>
+}
+
+// VERIFY: d_memref.memref: expected positive static stride, got 0
+
+// -----
+
+builtin.module {
+  %bad = d_memref.alloc : () -> !d_memref.memref<[4], f32, offset: 0, strides: [-2]>
+}
+
+// VERIFY: d_memref.memref: expected positive static stride, got -2
+
+// -----
+
+builtin.module {
+  %o0 = "arith.constant"() <{value = 1 : index}> : () -> index
+  %o1 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %s0 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %s1 = "arith.constant"() <{value = 3 : index}> : () -> index
+  %st0 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %st1 = "arith.constant"() <{value = 1 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+  %bad = d_memref.subview %buf[%o0, %o1][%s0, %s1][%st0, %st1]
+    : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+      -> !d_memref.memref<[2, 3], f32, offset: 9, strides: [16, 1]>
+}
+
+// VERIFY: d_memref.subview: result offset mismatch; expected 10, got 9
+
+// -----
+
+builtin.module {
+  %off = "test.offset"() : () -> index
+  %stride = "test.stride"() : () -> index
+  %one = "arith.constant"() <{value = 1 : index}> : () -> index
+  %two = "arith.constant"() <{value = 2 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32, offset: %off, strides: [%stride]>
+  %bad = d_memref.subview %buf[%one][%two][%one]
+    : !d_memref.memref<[4], f32, offset: %off, strides: [%stride]>
+      -> !d_memref.memref<[2], f32, offset: %off, strides: [%stride]>
+}
+
+// VERIFY: d_memref.subview: explicit result layout is outside the restricted verified subset unless it is statically derivable or an identity dynamic slice
+
+// -----
+
+builtin.module {
+  %o0 = "arith.constant"() <{value = 1 : index}> : () -> index
+  %o1 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %s0 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %s1 = "arith.constant"() <{value = 3 : index}> : () -> index
+  %st0 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %st1 = "arith.constant"() <{value = 1 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+  %bad = d_memref.subview %buf[%o0, %o1][%s0, %s1][%st0, %st1]
+    : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+      -> !d_memref.memref<[2, 3], f32, offset: 10, strides: [15, 1]>
+}
+
+// VERIFY: d_memref.subview: result stride mismatch at axis 0; expected 16, got 15
+
+// -----
+
+builtin.module {
+  %off = "test.offset"() : () -> index
+  %other_off = "test.other_offset"() : () -> index
+  %stride = "test.stride"() : () -> index
+  %zero = "arith.constant"() <{value = 0 : index}> : () -> index
+  %one = "arith.constant"() <{value = 1 : index}> : () -> index
+  %two = "arith.constant"() <{value = 2 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32, offset: %off, strides: [%stride]>
+  %bad = d_memref.subview %buf[%zero][%two][%one]
+    : !d_memref.memref<[4], f32, offset: %off, strides: [%stride]>
+      -> !d_memref.memref<[2], f32, offset: %other_off, strides: [%stride]>
+}
+
+// VERIFY: d_memref.subview: explicit result layout is outside the restricted verified subset unless it is statically derivable or an identity dynamic slice

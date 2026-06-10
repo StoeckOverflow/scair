@@ -173,3 +173,38 @@ builtin.module {
 }
 
 // VERIFY: d_memref.dim_exact: expected selected embedded dim to be SSA-backed, got a literal dimension
+
+// -----
+
+builtin.module {
+  %o0 = "arith.constant"() <{value = 1 : index}> : () -> index
+  %o1 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %s0 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %s1 = "arith.constant"() <{value = 3 : index}> : () -> index
+  %st0 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %st1 = "arith.constant"() <{value = 1 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+  %sv = d_memref.subview %buf[%o0, %o1][%s0, %s1][%st0, %st1]
+    : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+      -> !d_memref.memref<[2, 3], f32, offset: 10, strides: [16, 1]>
+  "test.keep"(%sv) : (!d_memref.memref<[2, 3], f32, offset: 10, strides: [16, 1]>) -> ()
+}
+
+// VERIFY: d_memref.subview %{{[0-9]+}}[%{{[0-9]+}}, %{{[0-9]+}}][%{{[0-9]+}}, %{{[0-9]+}}][%{{[0-9]+}}, %{{[0-9]+}}] : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> !d_memref.memref<[2, 3], f32, offset: 10, strides: [16, 1]>
+
+// -----
+
+builtin.module {
+  %off = "test.offset"() : () -> index
+  %stride = "test.stride"() : () -> index
+  %zero = "arith.constant"() <{value = 0 : index}> : () -> index
+  %one = "arith.constant"() <{value = 1 : index}> : () -> index
+  %two = "arith.constant"() <{value = 2 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32, offset: %off, strides: [%stride]>
+  %sv = d_memref.subview %buf[%zero][%two][%one]
+    : !d_memref.memref<[4], f32, offset: %off, strides: [%stride]>
+      -> !d_memref.memref<[2], f32, offset: %off, strides: [%stride]>
+  "test.keep"(%sv) : (!d_memref.memref<[2], f32, offset: %off, strides: [%stride]>) -> ()
+}
+
+// VERIFY: d_memref.subview %{{[0-9]+}}[%{{[0-9]+}}][%{{[0-9]+}}][%{{[0-9]+}}] : !d_memref.memref<[4], f32, offset: %{{[0-9]+}}, strides: [%{{[0-9]+}}]> -> !d_memref.memref<[2], f32, offset: %{{[0-9]+}}, strides: [%{{[0-9]+}}]>

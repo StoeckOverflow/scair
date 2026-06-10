@@ -3,12 +3,155 @@ package scair.dialects.d_affine
 import fastparse.*
 import scair.print.Printer
 import scair.clair.*
+import scair.dialects.arith
 import scair.dialects.builtin.*
 import scair.dialects.d_memref
 import scair.ir.*
 import scair.parse.*
 import scair.parse.given
 import scair.utils.*
+
+private object DAffineVerifier:
+  private def expectedArity(map: AffineMapAttr): Int =
+    map.affineMap.dimensions.size + map.affineMap.symbols.size
+
+  // Symbol legality follows a conservative MLIR affine rule set: dims may be
+  // ordinary dominating index values, while symbols must not be affine IVs,
+  // loop-carried values, or values defined inside the active affine scope.
+  private def isAffineScope(op: Operation): Boolean =
+    op match
+      case _: For | _: If | _: Parallel => true
+      case _                            => false
+
+  private def enclosingAffineScopes(op: Operation): Seq[Operation] =
+    val scopes = collection.mutable.ArrayBuffer.empty[Operation]
+    var cur = op.containerBlock.flatMap(_.containerRegion).flatMap(_.containerOperation)
+    while cur.nonEmpty do
+      val parent = cur.get
+      if isAffineScope(parent) then scopes += parent
+      cur = parent.containerBlock.flatMap(_.containerRegion).flatMap(_.containerOperation)
+    scopes.toSeq
+
+  private def isConstant(value: Value[Attribute]): Boolean =
+    value.owner match
+      case Some(_: arith.Constant) => true
+      case Some(_: ConstantLike)   => true
+      case _                       => false
+
+  private def isAffineBodyArgument(value: Value[Attribute]): Boolean =
+    value.owner match
+      case Some(block: Block) =>
+        block.containerRegion.flatMap(_.containerOperation).exists {
+          case _: For | _: Parallel => true
+          case _                    => false
+        }
+      case _ => false
+
+  private def definingAffineScope(
+      value: Value[Attribute],
+      scopes: Seq[Operation],
+  ): Option[Operation] =
+    value.owner.flatMap(owner => scopes.find(_.isAncestor(owner)))
+
+  private def verifySymbolOperand(
+      op: Operation,
+      opName: String,
+      value: Operand[IndexType],
+      index: Int,
+  ): OK[Unit] =
+    val scopes = enclosingAffineScopes(op)
+    if isConstant(value) then OK(())
+    else if isAffineBodyArgument(value) then
+      Err(
+        s"$opName: illegal symbol operand at position $index; affine induction and loop-carried values must be dim operands"
+      )
+    else
+      definingAffineScope(value, scopes) match
+        case Some(scope) =>
+          Err(
+            s"$opName: illegal symbol operand at position $index; value is defined inside enclosing affine scope `${scope.name}`"
+          )
+        case None =>
+          OK(())
+
+  private def verifySymbolOperands(
+      op: Operation,
+      opName: String,
+      symbolOperands: Seq[Operand[IndexType]],
+  ): OK[Unit] =
+    symbolOperands.zipWithIndex.foldLeft[OK[Unit]](OK(())) {
+      case (acc, (operand, idx)) =>
+        acc.flatMap(_ => verifySymbolOperand(op, opName, operand, idx))
+    }
+
+  def verifySeparatedMapOperands(
+      op: Operation,
+      opName: String,
+      dimOperands: Seq[Operand[IndexType]],
+      symbolOperands: Seq[Operand[IndexType]],
+      map: AffineMapAttr,
+  ): OK[Unit] =
+    val dimCount = map.affineMap.dimensions.size
+    val symbolCount = map.affineMap.symbols.size
+    if dimOperands.size != dimCount then
+      Err(
+        s"$opName: expected $dimCount dim operands for map ${map.affineMap}, got ${dimOperands.size}"
+      )
+    else if symbolOperands.size != symbolCount then
+      Err(
+        s"$opName: expected $symbolCount symbol operands for map ${map.affineMap}, got ${symbolOperands.size}"
+      )
+    else
+      verifySymbolOperands(op, opName, symbolOperands)
+
+  def verifyMapOperandArity(
+      opName: String,
+      kind: String,
+      operands: Seq[Operand[IndexType]],
+      map: AffineMapAttr,
+  ): OK[Unit] =
+    val arity = expectedArity(map)
+    if operands.size != arity then
+      Err(
+        s"$opName: expected $arity $kind operands for map ${map.affineMap}, got ${operands.size}"
+      )
+    else OK(())
+
+  def verifyFlatMapOperands(
+      op: Operation,
+      opName: String,
+      operands: Seq[Operand[IndexType]],
+      map: AffineMapAttr,
+  ): OK[Unit] =
+    verifyFlatMapOperands(op, opName, "map", operands, map)
+
+  def verifyFlatMapOperands(
+      op: Operation,
+      opName: String,
+      kind: String,
+      operands: Seq[Operand[IndexType]],
+      map: AffineMapAttr,
+  ): OK[Unit] =
+    verifyMapOperandArity(opName, kind, operands, map).flatMap(_ =>
+      val dimCount = map.affineMap.dimensions.size
+      verifySymbolOperands(op, opName, operands.drop(dimCount))
+    )
+
+  def verifySetOperands(
+      op: Operation,
+      opName: String,
+      operands: Seq[Operand[IndexType]],
+      set: AffineSetAttr,
+  ): OK[Unit] =
+    val dimCount = set.affineSet.dimensions.size
+    val symbolCount = set.affineSet.symbols.size
+    val expected = dimCount + symbolCount
+    if operands.size != expected then
+      Err(
+        s"$opName: expected $expected condition operands for set ${set.affineSet}, got ${operands.size}"
+      )
+    else
+      verifySymbolOperands(op, opName, operands.drop(dimCount))
 
 final case class Apply(
     dimOperands: Seq[Operand[IndexType]],
@@ -21,19 +164,20 @@ final case class Apply(
   override def customVerify(): OK[Operation] =
     if res.typ != IndexType() then
       Err(s"d_affine.apply: expected result type index, got ${res.typ}")
-    else if dimOperands.size != map.affineMap.dimensions.size then
-      Err(
-        s"d_affine.apply: expected ${map.affineMap.dimensions.size} dim operands for map ${map.affineMap}, got ${dimOperands.size}"
-      )
-    else if symbolOperands.size != map.affineMap.symbols.size then
-      Err(
-        s"d_affine.apply: expected ${map.affineMap.symbols.size} symbol operands for map ${map.affineMap}, got ${symbolOperands.size}"
-      )
     else if map.affineMap.affineExprs.size != 1 then
       Err(
         s"d_affine.apply: only single-result affine maps are supported, got ${map.affineMap.affineExprs.size} results"
       )
-    else OK(this)
+    else
+      DAffineVerifier
+        .verifySeparatedMapOperands(
+          this,
+          "d_affine.apply",
+          dimOperands,
+          symbolOperands,
+          map,
+        )
+        .map(_ => this)
 
   override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", map, " (")
@@ -123,7 +267,20 @@ final case class For(
       Err(
         s"d_affine.for: expected ${expectedArity(upperBoundMap)} upper bound operands for map ${upperBoundMap.affineMap}, got ${upperBoundOperands.size}"
       )
-    else OK(())
+    else
+      DAffineVerifier.verifyFlatMapOperands(
+        this,
+        "d_affine.for",
+        lowerBoundOperands,
+        lowerBoundMap,
+      ).flatMap(_ =>
+        DAffineVerifier.verifyFlatMapOperands(
+          this,
+          "d_affine.for",
+          upperBoundOperands,
+          upperBoundMap,
+        )
+      )
 
   private def verifyInitResultContract(): OK[Unit] =
     if inits.size != res.size then
@@ -403,19 +560,20 @@ final case class Min(
   override def customVerify(): OK[Operation] =
     if res.typ != IndexType() then
       Err(s"d_affine.min: expected result type index, got ${res.typ}")
-    else if dimOperands.size != map.affineMap.dimensions.size then
-      Err(
-        s"d_affine.min: expected ${map.affineMap.dimensions.size} dim operands for map ${map.affineMap}, got ${dimOperands.size}"
-      )
-    else if symbolOperands.size != map.affineMap.symbols.size then
-      Err(
-        s"d_affine.min: expected ${map.affineMap.symbols.size} symbol operands for map ${map.affineMap}, got ${symbolOperands.size}"
-      )
     else if map.affineMap.affineExprs.isEmpty then
       Err(
         "d_affine.min: expected at least one affine expression"
       )
-    else OK(this)
+    else
+      DAffineVerifier
+        .verifySeparatedMapOperands(
+          this,
+          "d_affine.min",
+          dimOperands,
+          symbolOperands,
+          map,
+        )
+        .map(_ => this)
 
   override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", map, " (")
@@ -495,7 +653,10 @@ final case class Load(
       Err(
         s"d_affine.load: expected ${memref.typ.params.size} map results for memref rank ${memref.typ.params.size}, got ${map.affineMap.affineExprs.size}"
       )
-    else OK(this)
+    else
+      DAffineVerifier
+        .verifyFlatMapOperands(this, "d_affine.load", mapOperands, map)
+        .map(_ => this)
 
 final case class Store(
     value: Operand[TypeAttribute],
@@ -521,7 +682,10 @@ final case class Store(
       Err(
         s"d_affine.store: expected ${memref.typ.params.size} map results for memref rank ${memref.typ.params.size}, got ${map.affineMap.affineExprs.size}"
       )
-    else OK(this)
+    else
+      DAffineVerifier
+        .verifyFlatMapOperands(this, "d_affine.store", mapOperands, map)
+        .map(_ => this)
 
 final case class If(
     args: Seq[Operand[IndexType]],
@@ -563,10 +727,15 @@ final case class If(
           OK(())
 
   override def customVerify(): OK[Operation] =
-    verifyRegion("then", thenRegion).flatMap(_ =>
-      verifyRegion("else", elseRegion).map(_ => this)
+    DAffineVerifier.verifySetOperands(this, "d_affine.if", args, condition).flatMap(_ =>
+      verifyRegion("then", thenRegion).flatMap(_ =>
+        verifyRegion("else", elseRegion).map(_ => this)
+      )
     )
 
+// Restricted verified subset for the thesis implementation: one shared
+// dim/symbol operand list for lower and upper maps, static positive steps only,
+// one block of index IVs, and no reductions/results yet.
 final case class Parallel(
     mapOperands: Seq[Operand[IndexType]],
     steps: Option[ArrayAttribute[IntegerAttr]],
@@ -578,7 +747,156 @@ final case class Parallel(
     res: Seq[Result[Attribute]],
     body: Region,
 ) extends DerivedOperation["d_affine.parallel"]
-    with NoTerminator derives OpDefs
+    with NoTerminator derives OpDefs:
+
+  private def denseIntValues(
+      attr: DenseIntOrFPElementsAttr,
+      attrName: String,
+  ): OK[Seq[BigInt]] =
+    val data: Attribute = attr.data
+    data match
+      case arr: ArrayAttribute[?] =>
+        val values: Seq[Attribute] = arr.attrValues
+        values.zipWithIndex.foldLeft[OK[Seq[BigInt]]](OK(Seq.empty)) {
+          case (acc, (IntegerAttr(IntData(value), _), _)) =>
+            acc.map(_ :+ value)
+          case (_, (other, idx)) =>
+            Err(
+              s"d_affine.parallel: expected integer $attrName element at position $idx, got $other"
+            )
+        }
+      case other =>
+        Err(s"d_affine.parallel: expected dense array data for $attrName, got $other")
+
+  private def verifyGroups(
+      attr: DenseIntOrFPElementsAttr,
+      attrName: String,
+      resultCount: Int,
+  ): OK[Seq[BigInt]] =
+    denseIntValues(attr, attrName).flatMap(groups =>
+      if groups.isEmpty then
+        Err(s"d_affine.parallel: expected non-empty $attrName")
+      else if groups.exists(_ <= 0) then
+        Err(s"d_affine.parallel: expected positive $attrName entries")
+      else if groups.sum != BigInt(resultCount) then
+        Err(
+          s"d_affine.parallel: expected $attrName entries to sum to $resultCount map results, got ${groups.sum}"
+        )
+      else OK(groups)
+    )
+
+  private def verifyReductions(): OK[Unit] =
+    reductions match
+      case arr: ArrayAttribute[?] if arr.attrValues.isEmpty => OK(())
+      case _ =>
+        Err(
+          "d_affine.parallel: reductions/results are outside the verified subset. Only zero-result no-reduction parallel loops are supported"
+        )
+
+  private def verifySteps(loopCount: Int): OK[Unit] =
+    steps match
+      case None =>
+        Err("d_affine.parallel: expected explicit positive static steps")
+      case Some(arr) =>
+        val values: Seq[Attribute] = arr.attrValues
+        if values.size != loopCount then
+          Err(
+            s"d_affine.parallel: expected $loopCount steps, got ${values.size}"
+          )
+        else values.zipWithIndex.foldLeft[OK[Unit]](OK(())) {
+          case (acc, (IntegerAttr(IntData(value), _), idx)) =>
+            acc.flatMap(_ =>
+              if value > 0 then OK(())
+              else Err(s"d_affine.parallel: expected positive step at position $idx, got $value")
+            )
+          case (acc, (other, idx)) =>
+            acc.flatMap(_ =>
+              Err(
+                s"d_affine.parallel: expected integer step at position $idx, got $other"
+              )
+            )
+        }
+
+  private def verifyMapContract(loopCount: Int): OK[Unit] =
+    if lowerBoundsMap.affineMap.dimensions.size != upperBoundsMap.affineMap.dimensions.size ||
+        lowerBoundsMap.affineMap.symbols.size != upperBoundsMap.affineMap.symbols.size
+    then
+      Err(
+        "d_affine.parallel: expected lower/upper bound maps to use the same dim/symbol arity"
+      )
+    else
+      DAffineVerifier.verifyFlatMapOperands(
+        this,
+        "d_affine.parallel",
+        "lower bound map",
+        mapOperands,
+        lowerBoundsMap,
+      ).flatMap(_ =>
+        DAffineVerifier.verifyFlatMapOperands(
+          this,
+          "d_affine.parallel",
+          "upper bound map",
+          mapOperands,
+          upperBoundsMap,
+        )
+      ).flatMap(_ =>
+        if loopCount <= 0 then Err("d_affine.parallel: expected at least one loop dimension")
+        else OK(())
+      )
+
+  private def verifyBodyShape(loopCount: Int): OK[Unit] =
+    if body.blocks.size != 1 then
+      Err("d_affine.parallel: expected a single-block body")
+    else
+      val block = body.blocks.head
+      if block.arguments.size != loopCount then
+        Err(
+          s"d_affine.parallel: expected $loopCount induction variable block arguments, got ${block.arguments.size}"
+        )
+      else
+        block.arguments.zipWithIndex.foldLeft[OK[Unit]](OK(())) {
+          case (acc, (arg, idx)) =>
+            acc.flatMap(_ =>
+              arg.typ match
+                case _: IndexType => OK(())
+                case other =>
+                  Err(
+                    s"d_affine.parallel: expected induction variable $idx type index, got $other"
+                  )
+            )
+        }
+
+  override def customVerify(): OK[Operation] =
+    if res.nonEmpty then
+      Err(
+        "d_affine.parallel: reductions/results are outside the verified subset; only zero-result no-reduction parallel loops are supported"
+      )
+    else
+      verifyReductions().flatMap(_ =>
+        verifyGroups(
+          lowerBoundsGroups,
+          "lowerBoundsGroups",
+          lowerBoundsMap.affineMap.affineExprs.size,
+        )
+      ).flatMap(lowerGroups =>
+        verifyGroups(
+          upperBoundsGroups,
+          "upperBoundsGroups",
+          upperBoundsMap.affineMap.affineExprs.size,
+        ).flatMap(upperGroups =>
+          if lowerGroups.size != upperGroups.size then
+            Err(
+              s"d_affine.parallel: expected matching lower/upper group counts, got ${lowerGroups.size} and ${upperGroups.size}"
+            )
+          else
+            val loopCount = lowerGroups.size
+            verifyMapContract(loopCount).flatMap(_ =>
+              verifySteps(loopCount)
+            ).flatMap(_ =>
+              verifyBodyShape(loopCount).map(_ => this)
+            )
+        )
+      )
 
 val DAffineDialect = summonDialect[
   EmptyTuple,

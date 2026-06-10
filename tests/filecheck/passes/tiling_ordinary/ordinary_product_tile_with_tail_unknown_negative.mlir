@@ -8,7 +8,7 @@ builtin.module {
   %init = "arith.constant"() <{value = 0 : index}> : () -> index
 
   %sum = d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k) step 1 : index iter_args(%acc = %init : index) {
-    %next = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%p)[%acc] : (index)[index] -> index
+    %next = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%p, %acc)[] : (index, index)[] -> index
     d_affine.yield %next : (index)
   }
   "test.keep"(%sum) : (index) -> ()
@@ -20,6 +20,6 @@ builtin.module {
 // CHECK: %[[C0:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
 // CHECK: %[[INIT:[0-9]+]] = "arith.constant"() <{value = 0 : index}> : () -> index
 // CHECK: %[[SUM:[0-9]+]] = d_affine.for %[[P:[0-9]+]] = #map(%[[C0]]) to #map(%[[K]]) step 1 : index iter_args(%[[ACC:[0-9]+]] = %[[INIT]] : index) {
-// CHECK: %[[NEXT:[0-9]+]] = d_affine.apply #map1 (%[[P]])[%[[ACC]]] : (index)[index] -> index
+// CHECK: %[[NEXT:[0-9]+]] = d_affine.apply #map1 (%[[P]], %[[ACC]])[] : (index, index)[] -> index
 // CHECK: d_affine.yield %[[NEXT]] : (index)
 // CHECK: "test.keep"(%[[SUM]]) : (index) -> ()

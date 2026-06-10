@@ -20,6 +20,12 @@ object DMemrefTypeUtil:
 
   def renderAttr(a: Attribute): String = DTensorTypeUtil.renderAttr(a)
 
+  private def staticIntegerValue(param: ValueAttribute | IntegerAttr): Option[BigInt] =
+    param match
+      case IntegerAttr(IntData(value), _: IndexType | _: IntegerType) =>
+        Some(value)
+      case _ => None
+
   def renderDimParam(param: DimParam): String =
     param match
       case v: ValueAttribute => renderAttr(v)
@@ -38,8 +44,10 @@ object DMemrefTypeUtil:
   def checkParam(param: DimParam): OK[Unit] =
     param match
       case v: ValueAttribute => DTensorTypeUtil.checkParam(v)
-      case IntegerAttr(_, _: IndexType)   => OK(())
-      case IntegerAttr(_, _: IntegerType) => OK(())
+      case IntegerAttr(IntData(value), _: IndexType | _: IntegerType) =>
+        if value < 0 then
+          Err(s"d_memref: expected non-negative static dimension, got $value")
+        else OK(())
 
   def elemOK(elem: TypeAttribute): Boolean = DTensorTypeUtil.elemOK(elem)
 
@@ -72,6 +80,25 @@ object DMemrefTypeUtil:
             )
       case IntegerAttr(_, _: IndexType)   => OK(())
       case IntegerAttr(_, _: IntegerType) => OK(())
+
+  def checkOffsetParam(param: LayoutParam): OK[Unit] =
+    checkLayoutParam(param).flatMap(_ =>
+      staticIntegerValue(param) match
+        case Some(value) if value < 0 =>
+          Err(s"d_memref.memref: expected non-negative static offset, got $value")
+        case _ => OK(())
+    )
+
+  def checkStrideParam(param: LayoutParam): OK[Unit] =
+    checkLayoutParam(param).flatMap(_ =>
+      staticIntegerValue(param) match
+        case Some(value) if value <= 0 =>
+          Err(s"d_memref.memref: expected positive static stride, got $value")
+        case _ => OK(())
+    )
+
+  def staticLayoutValue(param: LayoutParam): Option[BigInt] =
+    staticIntegerValue(param)
 
   def sameLayoutParam(lhs: LayoutParam, rhs: LayoutParam): Boolean =
     (lhs, rhs) match
@@ -251,9 +278,9 @@ final case class DMemrefMemrefType(
               s"d_memref.memref: expected ${params.size} strides for rank ${params.size}, got ${ss.size}"
             )
           else
-            DMemrefTypeUtil.checkLayoutParam(off).flatMap(_ =>
+            DMemrefTypeUtil.checkOffsetParam(off).flatMap(_ =>
               ss.foldLeft[OK[Unit]](OK(()))((acc, s) =>
-                acc.flatMap(_ => DMemrefTypeUtil.checkLayoutParam(s))
+                acc.flatMap(_ => DMemrefTypeUtil.checkStrideParam(s))
               )
             )
         case _ =>
@@ -589,6 +616,119 @@ final case class Subview(
       case ((d, s), axis) if !sameDimAsSizeOperand(d, s) => axis
     }
 
+  private def constantIndexValue(value: Operand[IndexType]): Option[BigInt] =
+    value.owner match
+      case Some(arith.Constant(IntegerAttr(IntData(v), _: IndexType), _)) =>
+        Some(v)
+      case _ => None
+
+  private def allConstantIndexValues(values: Seq[Operand[IndexType]]): Option[Seq[BigInt]] =
+    val constants = values.map(constantIndexValue)
+    if constants.forall(_.isDefined) then Some(constants.flatten) else None
+
+  private def verifyExpectedStaticLayout(
+      expectedOffset: BigInt,
+      expectedStrides: Seq[BigInt],
+      resOffset: LayoutParam,
+      resStrides: Seq[LayoutParam],
+  ): OK[Unit] =
+    DMemrefTypeUtil.staticLayoutValue(resOffset) match
+      case Some(value) if value != expectedOffset =>
+        Err(
+          s"d_memref.subview: result offset mismatch; expected $expectedOffset, got $value"
+        )
+      case None =>
+        Err(
+          s"d_memref.subview: expected statically derivable result offset $expectedOffset"
+        )
+      case _ =>
+        expectedStrides.zip(resStrides).zipWithIndex.foldLeft[OK[Unit]](OK(())) {
+          case (acc, ((expected, actualParam), axis)) =>
+            acc.flatMap(_ =>
+              DMemrefTypeUtil.staticLayoutValue(actualParam) match
+                case Some(actual) if actual != expected =>
+                  Err(
+                    s"d_memref.subview: result stride mismatch at axis $axis; expected $expected, got $actual"
+                  )
+                case None =>
+                  Err(
+                    s"d_memref.subview: expected statically derivable result stride $expected at axis $axis"
+                  )
+                case _ => OK(())
+            )
+        }
+
+  // Restricted verified subset: an explicit subview result layout is verified
+  // only when it is statically derivable from the source layout and static
+  // subview operands, or when it is the exact same dynamic layout for an
+  // identity offset/stride slice. General symbolic layout arithmetic is left to
+  // explicit witnesses or later lowering validation.
+  private def verifySubviewLayout(): OK[Unit] =
+    (res.typ.offset, res.typ.strides) match
+      case (None, None) => OK(())
+      case (Some(resOffset), Some(resStrides)) =>
+        (src.typ.offset, src.typ.strides) match
+          case (None, None) =>
+            Err(
+              "d_memref.subview: explicit result layout requires explicit source layout. Use d_memref.reinterpret_cast for metadata-only layout changes"
+            )
+          case (Some(srcOffset), Some(srcStrides)) =>
+            if resStrides.size != srcStrides.size then
+              Err(
+                s"d_memref.subview: expected ${srcStrides.size} result strides, got ${resStrides.size}"
+              )
+            else
+              (allConstantIndexValues(offsets), allConstantIndexValues(strides)) match
+                case (Some(offsetVals), Some(strideVals))
+                    if offsetVals.forall(_ == 0) && strideVals.forall(_ == 1) &&
+                      DMemrefTypeUtil.sameLayout(
+                        Some(srcOffset),
+                        Some(srcStrides),
+                        Some(resOffset),
+                        Some(resStrides),
+                      ) =>
+                  OK(())
+                case (Some(offsetVals), Some(strideVals)) =>
+                  val staticSource =
+                    for
+                      off <- DMemrefTypeUtil.staticLayoutValue(srcOffset)
+                      ss <- Option(srcStrides.map(DMemrefTypeUtil.staticLayoutValue))
+                        .filter(_.forall(_.isDefined))
+                        .map(_.flatten)
+                    yield (off, ss)
+                  staticSource match
+                    case Some((srcOffValue, srcStrideValues)) =>
+                      val expectedOffset =
+                        srcOffValue + offsetVals.zip(srcStrideValues).map((off, stride) =>
+                          off * stride
+                        ).sum
+                      val expectedStrides =
+                        srcStrideValues.zip(strideVals).map((srcStride, subStride) =>
+                          srcStride * subStride
+                        )
+                      verifyExpectedStaticLayout(
+                        expectedOffset,
+                        expectedStrides,
+                        resOffset,
+                        resStrides,
+                      )
+                    case None =>
+                      Err(
+                        "d_memref.subview: explicit result layout is outside the restricted verified subset unless it is statically derivable or an identity dynamic slice; use d_memref.reinterpret_cast for metadata-only layout changes"
+                      )
+                case _ =>
+                  Err(
+                    "d_memref.subview: explicit result layout is outside the restricted verified subset unless it is statically derivable or an identity dynamic slice; use d_memref.reinterpret_cast for metadata-only layout changes"
+                  )
+          case _ =>
+            Err(
+              "d_memref.subview: explicit source layout must specify offset and strides together"
+            )
+      case _ =>
+        Err(
+          "d_memref.subview: explicit result layout must specify offset and strides together"
+        )
+
   override def customVerify(): OK[Operation] =
     val srcRank = src.typ.params.size
     val resRank = res.typ.params.size
@@ -611,7 +751,7 @@ final case class Subview(
             s"d_memref.subview: size provenance mismatch at axis $axis; expected result dim to match size operand via d_tensor.shape.to_index"
           )
         case None =>
-          OK(this)
+          verifySubviewLayout().map(_ => this)
 
   override def customPrint(printer: Printer): Unit =
     printer.print(name, " ", src, "[")

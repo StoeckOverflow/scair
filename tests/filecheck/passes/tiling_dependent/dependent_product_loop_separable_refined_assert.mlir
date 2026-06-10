@@ -21,7 +21,7 @@ builtin.module {
 // CHECK: %[[K_POS:[0-9]+]] = "d_tensor.nat.refine_positive"
 // CHECK: %[[K_IDX:[0-9]+]] = "d_tensor.shape.to_index"(%[[K_POS]]) : (!d_tensor.posnat) -> index
 // CHECK: d_affine.for %[[TILE:[0-9]+]] = #map(%{{[0-9]+}}) to #map(%{{[0-9]+}}) step %[[K_IDX]] : index iter_args
-// CHECK: "d_affine.if"(%[[TILE]], %{{[0-9]+}}, %[[K_IDX]]) <{condition = #set}> ({
+// CHECK: "d_affine.if"(%[[TILE]], %[[K_IDX]], %{{[0-9]+}}) <{condition = #set}> ({
 // CHECK: d_affine.yield
 // CHECK: }, {
 // CHECK: arith.minsi
