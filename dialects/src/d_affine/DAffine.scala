@@ -63,13 +63,13 @@ private object DAffineVerifier:
     if isConstant(value) then OK(())
     else if isAffineBodyArgument(value) then
       Err(
-        s"$opName: illegal symbol operand at position $index; affine induction and loop-carried values must be dim operands"
+        s"$opName: illegal symbol operand at position $index. Affine induction and loop-carried values must be dim operands"
       )
     else
       definingAffineScope(value, scopes) match
         case Some(scope) =>
           Err(
-            s"$opName: illegal symbol operand at position $index; value is defined inside enclosing affine scope `${scope.name}`"
+            s"$opName: illegal symbol operand at position $index. Value is defined inside enclosing affine scope `${scope.name}`"
           )
         case None =>
           OK(())
@@ -292,7 +292,7 @@ final case class For(
         case ((init, r), idx) if init.typ != r.typ => (idx, init.typ, r.typ)
       }.get
       Err(
-        s"d_affine.for: init/result type mismatch at position ${bad._1}; expected ${bad._2}, got ${bad._3}"
+        s"d_affine.for: init/result type mismatch at position ${bad._1}. Expected ${bad._2}, got ${bad._3}"
       )
     else OK(())
 
@@ -324,7 +324,7 @@ final case class For(
             mismatch match
               case Some((idx, expected, got)) =>
                 Err(
-                  s"d_affine.for: iter arg type mismatch at position $idx; expected $expected, got $got"
+                  s"d_affine.for: iter arg type mismatch at position $idx. Expected $expected, got $got"
                 )
               case None => OK(())
           case other =>
@@ -345,7 +345,7 @@ final case class For(
           mismatch match
             case Some((idx, expected, got)) =>
               Err(
-                s"d_affine.for: yield/result type mismatch at position $idx; expected $expected, got $got"
+                s"d_affine.for: yield/result type mismatch at position $idx. Expected $expected, got $got"
               )
             case None =>
               OK(())
@@ -493,7 +493,7 @@ final case class Yield(
           mismatch match
             case Some((idx, expected, got)) =>
               Err(
-                s"d_affine.yield: operand type mismatch at position $idx; expected $expected, got $got"
+                s"d_affine.yield: operand type mismatch at position $idx. Expected $expected, got $got"
               )
             case None =>
               OK(this)
@@ -509,7 +509,7 @@ final case class Yield(
           mismatch match
             case Some((idx, expected, got)) =>
               Err(
-                s"d_affine.yield: operand type mismatch at position $idx; expected $expected, got $got"
+                s"d_affine.yield: operand type mismatch at position $idx. Expected $expected, got $got"
               )
             case None =>
               OK(this)
@@ -701,30 +701,35 @@ final case class If(
       Err(s"d_affine.if: expected $name region to contain a single block")
     else
       val block = region.blocks.head
-      block.operations.lastOption match
-        case Some(y: Yield) =>
-          if y.args.size != res.size then
-            Err(
-              s"d_affine.if: expected $name d_affine.yield to have ${res.size} operands, got ${y.args.size}"
-            )
-          else
-            val mismatch = y.args.zip(res).zipWithIndex.collectFirst {
-              case ((arg, r), idx) if arg.typ != r.typ =>
-                (idx, r.typ, arg.typ)
-            }
-            mismatch match
-              case Some((idx, expected, got)) =>
-                Err(
-                  s"d_affine.if: $name yield/result type mismatch at position $idx; expected $expected, got $got"
-                )
-              case None =>
-                OK(())
-        case Some(other) if res.nonEmpty =>
-          Err(s"d_affine.if: expected $name region terminator d_affine.yield, got `${other.name}`")
-        case None if res.nonEmpty =>
-          Err(s"d_affine.if: expected non-empty $name region terminated by d_affine.yield")
-        case _ =>
-          OK(())
+      if block.arguments.nonEmpty then
+        Err(
+          s"d_affine.if: expected $name region to have no block arguments, got ${block.arguments.size}"
+        )
+      else
+        block.operations.lastOption match
+          case Some(y: Yield) =>
+            if y.args.size != res.size then
+              Err(
+                s"d_affine.if: expected $name d_affine.yield to have ${res.size} operands, got ${y.args.size}"
+              )
+            else
+              val mismatch = y.args.zip(res).zipWithIndex.collectFirst {
+                case ((arg, r), idx) if arg.typ != r.typ =>
+                  (idx, r.typ, arg.typ)
+              }
+              mismatch match
+                case Some((idx, expected, got)) =>
+                  Err(
+                    s"d_affine.if: $name yield/result type mismatch at position $idx. Expected $expected, got $got"
+                  )
+                case None =>
+                  OK(())
+          case Some(other) =>
+            Err(s"d_affine.if: expected $name region terminator d_affine.yield, got `${other.name}`")
+          case None if res.nonEmpty =>
+            Err(s"d_affine.if: expected non-empty $name region terminated by d_affine.yield")
+          case None =>
+            OK(())
 
   override def customVerify(): OK[Operation] =
     DAffineVerifier.verifySetOperands(this, "d_affine.if", args, condition).flatMap(_ =>
@@ -869,7 +874,7 @@ final case class Parallel(
   override def customVerify(): OK[Operation] =
     if res.nonEmpty then
       Err(
-        "d_affine.parallel: reductions/results are outside the verified subset; only zero-result no-reduction parallel loops are supported"
+        "d_affine.parallel: reductions/results are outside the verified subset. Only zero-result no-reduction parallel loops are supported"
       )
     else
       verifyReductions().flatMap(_ =>

@@ -32,6 +32,8 @@ builtin.module {
 
 // VERIFY: d_affine.for %{{.*}} = #{{.*}}(%{{.*}}) to #{{.*}}(%{{.*}}) step %{{.*}} : index {
 // VERIFY: d_affine.yield
+// This verifier intentionally accepts dynamic steps structurally
+// strict positivity/lowerability is validated by dedicated conversion check
 
 // -----
 
@@ -158,7 +160,7 @@ builtin.module {
   "test.keep"(%r) : (index) -> ()
 }
 
-// VERIFY: d_affine.yield: operand type mismatch at position 0; expected index, got i32
+// VERIFY: d_affine.yield: operand type mismatch at position 0. Expected index, got i32
 
 // -----
 
@@ -200,8 +202,11 @@ builtin.module {
   %i = "arith.constant"() <{value = 1 : index}> : () -> index
   "d_affine.if"(%i) <{condition = affine_set<(d0) : (d0 >= 0)>}> ({
   ^0:
+    "test.keep"(%i) : (index) -> ()
+    d_affine.yield
   }, {
   ^1:
+    d_affine.yield
   }) : (index) -> ()
 
   "d_affine.parallel"(%i) <{
@@ -217,6 +222,7 @@ builtin.module {
 }
 
 // VERIFY: "d_affine.if"
+// VERIFY: d_affine.yield
 // VERIFY: "d_affine.parallel"
 
 // -----

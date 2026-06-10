@@ -149,7 +149,7 @@ builtin.module {
   }) : (index, index, index) -> i32
 }
 
-// VERIFY: d_affine.for: init/result type mismatch at position 0; expected index, got i32
+// VERIFY: d_affine.for: init/result type mismatch at position 0. Expected index, got i32
 
 // -----
 
@@ -253,7 +253,37 @@ builtin.module {
   }) : (index) -> index
 }
 
-// VERIFY: d_affine.yield: operand type mismatch at position 0; expected index, got i32
+// VERIFY: d_affine.yield: operand type mismatch at position 0. Expected index, got i32
+
+// -----
+
+builtin.module {
+  %i = "arith.constant"() <{value = 1 : index}> : () -> index
+  "d_affine.if"(%i) <{condition = affine_set<(d0) : (d0 >= 0)>}> ({
+  ^then:
+    "test.no_terminator"() : () -> ()
+  }, {
+  ^else:
+    d_affine.yield
+  }) : (index) -> ()
+}
+
+// VERIFY: d_affine.if: expected then region terminator d_affine.yield, got `test.no_terminator`
+
+// -----
+
+builtin.module {
+  %i = "arith.constant"() <{value = 1 : index}> : () -> index
+  "d_affine.if"(%i) <{condition = affine_set<(d0) : (d0 >= 0)>}> ({
+  ^then(%arg: index):
+    d_affine.yield
+  }, {
+  ^else:
+    d_affine.yield
+  }) : (index) -> ()
+}
+
+// VERIFY: d_affine.if: expected then region to have no block arguments, got 1
 
 // -----
 
@@ -282,7 +312,7 @@ builtin.module {
   }
 }
 
-// VERIFY: d_affine.apply: illegal symbol operand at position 0; affine induction and loop-carried values must be dim operands
+// VERIFY: d_affine.apply: illegal symbol operand at position 0. Affine induction and loop-carried values must be dim operands
 
 // -----
 
@@ -297,7 +327,7 @@ builtin.module {
   }
 }
 
-// VERIFY: d_affine.min: illegal symbol operand at position 0; value is defined inside enclosing affine scope `d_affine.for`
+// VERIFY: d_affine.min: illegal symbol operand at position 0. Value is defined inside enclosing affine scope `d_affine.for`
 
 // -----
 
@@ -316,7 +346,7 @@ builtin.module {
   }
 }
 
-// VERIFY: d_affine.if: illegal symbol operand at position 0; affine induction and loop-carried values must be dim operands
+// VERIFY: d_affine.if: illegal symbol operand at position 0. Affine induction and loop-carried values must be dim operands
 
 // -----
 
@@ -332,7 +362,7 @@ builtin.module {
   }) : (index) -> ()
 }
 
-// VERIFY: d_affine.apply: illegal symbol operand at position 0; value is defined inside enclosing affine scope `d_affine.if`
+// VERIFY: d_affine.apply: illegal symbol operand at position 0. Value is defined inside enclosing affine scope `d_affine.if`
 
 // -----
 
@@ -532,4 +562,4 @@ builtin.module {
   }) : (index) -> ()
 }
 
-// VERIFY: d_affine.apply: illegal symbol operand at position 0; affine induction and loop-carried values must be dim operands
+// VERIFY: d_affine.apply: illegal symbol operand at position 0. Affine induction and loop-carried values must be dim operands
