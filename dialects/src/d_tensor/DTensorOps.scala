@@ -194,9 +194,12 @@ final case class ExpandShape(
           )
         }
 
-  /** Verifies the local shape contract for collapse: reassociation groups must
-    * cover source dimensions contiguously. Product-shaped result dimensions are
-    * handled by canonicalization.
+  /** Mirrors baseline MLIR structural verification for expand: reassociation
+    * groups must cover result dimensions contiguously and output operands must
+    * be SSA-identical to result dimensions. This is not strengthened
+    * verification via value-dependent types; product equality, divisibility,
+    * total element-count, symbolic simplification, and witness proofs are left
+    * to canonicalization or future passes.
     */
   override def customVerify(): OK[Operation] =
     val srcRank = src.typ.params.size
