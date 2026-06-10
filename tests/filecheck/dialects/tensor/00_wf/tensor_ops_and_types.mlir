@@ -211,7 +211,8 @@ builtin.module {
 
 // -----
 
-// Invalid d_tensor.cast changes dims.
+// Exact-cast subset: d_tensor.cast requires pairwise SSA-identical dims, not
+// merely equal static values or dynamic/static compatibility.
 builtin.module {
   %m0 = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
   %m1 = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
