@@ -34,6 +34,71 @@ builtin.module {
 
 // -----
 
+// Valid: rank-0 permutation.
+builtin.module {
+  %src = "test.src"() : () -> !d_tensor.tensor<[], f32>
+  %out = "d_tensor.permute_dims"(%src)
+    <{permutation = []}>
+    : (!d_tensor.tensor<[], f32>) -> !d_tensor.tensor<[], f32>
+  "test.keep"(%out) : (!d_tensor.tensor<[], f32>) -> ()
+}
+
+// CHECK: "d_tensor.permute_dims"
+// CHECK-SAME: permutation = {{\[\]}}
+// CHECK-SAME: (!d_tensor.tensor<[], f32>) -> !d_tensor.tensor<[], f32>
+
+// -----
+
+// Valid: rank-1 identity permutation.
+builtin.module {
+  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %src = "test.src"() : () -> !d_tensor.tensor<[%m], f32>
+  %out = "d_tensor.permute_dims"(%src)
+    <{permutation = [0 : i32]}>
+    : (!d_tensor.tensor<[%m], f32>) -> !d_tensor.tensor<[%m], f32>
+  "test.keep"(%out) : (!d_tensor.tensor<[%m], f32>) -> ()
+}
+
+// CHECK: "d_tensor.permute_dims"
+// CHECK-SAME: permutation = {{\[0 : i32\]}}
+// CHECK-SAME: (!d_tensor.tensor<[%0], f32>) -> !d_tensor.tensor<[%0], f32>
+
+// -----
+
+// Valid: 3D reverse permutation.
+builtin.module {
+  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %p = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %src = "test.src"() : () -> !d_tensor.tensor<[%m, %n, %p], f32>
+  %out = "d_tensor.permute_dims"(%src)
+    <{permutation = [2 : i32, 1 : i32, 0 : i32]}>
+    : (!d_tensor.tensor<[%m, %n, %p], f32>) -> !d_tensor.tensor<[%p, %n, %m], f32>
+  "test.keep"(%out) : (!d_tensor.tensor<[%p, %n, %m], f32>) -> ()
+}
+
+// CHECK: "d_tensor.permute_dims"
+// CHECK-SAME: permutation = {{\[2 : i32, 1 : i32, 0 : i32\]}}
+// CHECK-SAME: (!d_tensor.tensor<[%0, %1, %2], f32>) -> !d_tensor.tensor<[%2, %1, %0], f32>
+
+// -----
+
+// Valid: static nat.const dimensions still use the SSA-dimension path.
+builtin.module {
+  %m = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
+  %n = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+  %src = "test.src"() : () -> !d_tensor.tensor<[%m, %n], f32>
+  %out = "d_tensor.permute_dims"(%src)
+    <{permutation = [1 : i32, 0 : i32]}>
+    : (!d_tensor.tensor<[%m, %n], f32>) -> !d_tensor.tensor<[%n, %m], f32>
+  "test.keep"(%out) : (!d_tensor.tensor<[%n, %m], f32>) -> ()
+}
+
+// CHECK: "d_tensor.permute_dims"
+// CHECK-SAME: (!d_tensor.tensor<[%0, %1], f32>) -> !d_tensor.tensor<[%1, %0], f32>
+
+// -----
+
 // Valid: 4D tile-major permutation.
 builtin.module {
   %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
@@ -185,3 +250,16 @@ builtin.module {
 }
 
 // CHECK: d_tensor.permute_dims: expected equal element types
+
+// -----
+
+// Invalid: permutation entries must be i32 integer attributes.
+builtin.module {
+  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %src = "test.src"() : () -> !d_tensor.tensor<[%m], f32>
+  %bad = "d_tensor.permute_dims"(%src)
+    <{permutation = [0 : i64]}>
+    : (!d_tensor.tensor<[%m], f32>) -> !d_tensor.tensor<[%m], f32>
+}
+
+// CHECK: d_tensor.permute_dims: permutation index 0 must be an i32 integer attribute

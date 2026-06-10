@@ -250,8 +250,8 @@ final case class ExpandShape(
           )
         }
 
-  /** Verifies the local shape contract for collapse: reassociation groups must
-    * cover source dimensions contiguously. Product-shaped result dimensions are
+  /** Verifies the local shape contract for expand: reassociation groups must
+    * cover result dimensions contiguously. Product-shaped source dimensions are
     * handled by canonicalization.
     */
   override def customVerify(): OK[Operation] =

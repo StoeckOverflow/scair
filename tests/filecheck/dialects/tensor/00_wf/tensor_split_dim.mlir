@@ -59,6 +59,42 @@ builtin.module {
 
 // -----
 
+// Valid: split the middle dimension of a higher-rank tensor.
+builtin.module {
+  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %n = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %p = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %nt = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %tn = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %a = "test.a"() : () -> !d_tensor.tensor<[%m, %n, %p], f32>
+  %b = "d_tensor.split_dim"(%a, %nt, %tn) <{dim = 1 : i32}>
+    : (!d_tensor.tensor<[%m, %n, %p], f32>, !d_tensor.nat, !d_tensor.nat)
+      -> !d_tensor.tensor<[%m, %nt, %tn, %p], f32>
+  "test.keep"(%b) : (!d_tensor.tensor<[%m, %nt, %tn, %p], f32>) -> ()
+}
+
+// CHECK: "d_tensor.split_dim"
+// CHECK-SAME: (!d_tensor.tensor<[%0, %1, %2], f32>, !d_tensor.nat, !d_tensor.nat) -> !d_tensor.tensor<[%0, %3, %4, %2], f32>
+
+// -----
+
+// Valid: static nat.const dimensions still use the SSA-dimension path.
+builtin.module {
+  %m = "d_tensor.nat.const"() <{value = 6 : i32}> : () -> !d_tensor.nat
+  %mt = "d_tensor.nat.const"() <{value = 2 : i32}> : () -> !d_tensor.nat
+  %tm = "d_tensor.nat.const"() <{value = 3 : i32}> : () -> !d_tensor.nat
+  %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
+  %b = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = 0 : i32}>
+    : (!d_tensor.tensor<[%m], f32>, !d_tensor.nat, !d_tensor.nat)
+      -> !d_tensor.tensor<[%mt, %tm], f32>
+  "test.keep"(%b) : (!d_tensor.tensor<[%mt, %tm], f32>) -> ()
+}
+
+// CHECK: "d_tensor.split_dim"
+// CHECK-SAME: (!d_tensor.tensor<[%0], f32>, !d_tensor.nat, !d_tensor.nat) -> !d_tensor.tensor<[%1, %2], f32>
+
+// -----
+
 // Invalid: outer operand must match the first inserted result dimension.
 builtin.module {
   %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
@@ -167,3 +203,46 @@ builtin.module {
 }
 
 // CHECK: d_tensor.split_dim: expected equal element types
+
+// -----
+
+// Invalid: dim attribute must be i32.
+builtin.module {
+  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
+  %bad = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = 0 : i64}>
+    : (!d_tensor.tensor<[%m], f32>, !d_tensor.nat, !d_tensor.nat)
+      -> !d_tensor.tensor<[%mt, %tm], f32>
+}
+
+// CHECK: d_tensor.split_dim: expected i32 dim attribute
+
+// -----
+
+// Invalid: dim must be non-negative.
+builtin.module {
+  %m = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %mt = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %tm = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %a = "test.a"() : () -> !d_tensor.tensor<[%m], f32>
+  %bad = "d_tensor.split_dim"(%a, %mt, %tm) <{dim = -1 : i32}>
+    : (!d_tensor.tensor<[%m], f32>, !d_tensor.nat, !d_tensor.nat)
+      -> !d_tensor.tensor<[%mt, %tm], f32>
+}
+
+// CHECK: d_tensor.split_dim: dim -1 out of bounds for rank 1
+
+// -----
+
+// Invalid: rank-0 tensors have no dimension to split.
+builtin.module {
+  %outer = "d_tensor.nat.param"() : () -> !d_tensor.nat
+  %src = "test.src"() : () -> !d_tensor.tensor<[], f32>
+  %bad = "d_tensor.split_dim"(%src, %outer, %outer) <{dim = 0 : i32}>
+    : (!d_tensor.tensor<[], f32>, !d_tensor.nat, !d_tensor.nat)
+      -> !d_tensor.tensor<[%outer], f32>
+}
+
+// CHECK: d_tensor.split_dim: dim 0 out of bounds for rank 0
