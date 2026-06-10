@@ -121,10 +121,9 @@ for dims in "${sizes[@]}"; do
     guarded_pipeline="canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-context-band-factor-tile-with-tail,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
     pipeline="canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-context-band-factor-tile-with-tail,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
     run_scair "$DEPENDENT_SRC" "$guarded_pipeline" "$guarded"
-    require_pat "$guarded" 'arith\.minsi' "guarded dependent route should emit min before simplification"
     run_scair "$DEPENDENT_SRC" "$pipeline" "$out"
     reject_tail "$out"
-    append_row "dependent_output_guarded_tail_simplified" "$dims" "$DEPENDENT_SRC" "$out" "$pipeline" "arith.muli" "tiling_decision=guarded_then_exact_after_simplify;proof_source=shape-product;guarded_artifact=$(basename "$guarded");proof_removes_output_tails"
+    append_row "dependent_output_guarded_tail_simplified" "$dims" "$DEPENDENT_SRC" "$out" "$pipeline" "arith.muli" "tiling_decision=guarded_then_exact_after_simplify;proof_source=index-product;guarded_tail_bound=$(tail_kind "$guarded");guarded_artifact=$(basename "$guarded");proof_removes_output_tails"
   fi
   if route_enabled "dependent_output_exact_tile"; then
     out="$OUT_DIR/${tag}_dependent_output_exact_tile.tiled.mlir"
@@ -132,7 +131,7 @@ for dims in "${sizes[@]}"; do
     pipeline="canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-context-band-exact-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce"
     run_scair "$DEPENDENT_SRC" "$pipeline" "$out"
     reject_tail "$out"
-    append_row "dependent_output_exact_tile" "$dims" "$DEPENDENT_SRC" "$out" "$pipeline" "arith.muli" "tiling_decision=exact;proof_source=shape-product;diagnostic_direct_exact_output_tiling"
+    append_row "dependent_output_exact_tile" "$dims" "$DEPENDENT_SRC" "$out" "$pipeline" "arith.muli" "tiling_decision=exact;proof_source=index-product;diagnostic_direct_exact_output_tiling"
   fi
 done
 

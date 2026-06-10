@@ -3,7 +3,7 @@
 builtin.module {
   func.func @static_bridge(%lb: index, %ub: index, %init: index) -> index {
     %sum = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 iter_args(%acc = %init : index) {
-      %next = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%iv)[%acc] : (index)[index] -> index
+      %next = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%iv, %acc)[] : (index, index)[] -> index
       %cap = d_affine.min affine_map<(d0)[s0] -> (d0 + s0)>(%next)[%ub] : (index)[index] -> index
       d_affine.yield %cap : (index)
     }
@@ -12,8 +12,8 @@ builtin.module {
 
   func.func @multi_result_bridge(%lb: index, %ub: index, %a: index, %b: index) -> (index, index) {
     %r0, %r1 = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 iter_args(%x = %a : index, %y = %b : index) {
-      %next_x = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%iv)[%x] : (index)[index] -> index
-      %next_y = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%next_x)[%y] : (index)[index] -> index
+      %next_x = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%iv, %x)[] : (index, index)[] -> index
+      %next_y = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%next_x, %y)[] : (index, index)[] -> index
       d_affine.yield %next_x, %next_y : (index, index)
     }
     func.return %r0, %r1 : index, index

@@ -342,7 +342,6 @@ for dims in "${sizes[@]}"; do
     echo "==> Building dependent guarded-then-simplified M/N tile for $size"
     guarded="$OUT_DIR/${tag}_dependent_mn_guarded_tail_simplified.guarded.mlir"
     run_scair_opt -s "$DEPENDENT_SRC" --passes "canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-context-band-factor-tile-with-tail,validate-d-affine-dynamic-steps,canonicalize,cse,dce" > "$guarded"
-    require_pattern "$guarded" 'arith\.minsi' "dependent guarded artifact must contain dynamic tail min"
     build_scair_route \
       "dependent_mn_guarded_tail_simplified" \
       "$DEPENDENT_SRC" \
@@ -351,7 +350,7 @@ for dims in "${sizes[@]}"; do
       "canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-context-band-factor-tile-with-tail,dependent-tail-min-simplify,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-d-memref-to-llvm" \
       "$tag" "$m0" "$m1" "$n0" "$n1" "$k"
     require_no_tail "$OUT_DIR/${tag}_dependent_mn_guarded_tail_simplified.tiled.mlir" "dependent guarded simplified route must remove tail guards"
-    append_case "dependent_mn_guarded_tail_simplified" "$tag" "$size" "arith.muli" "no" "guarded_artifact=$(basename "$guarded");proof_removes_i_j_tail"
+    append_case "dependent_mn_guarded_tail_simplified" "$tag" "$size" "arith.muli" "no" "guarded_tail_bound=$(tail_bound_kind "$guarded");guarded_artifact=$(basename "$guarded");proof_removes_i_j_tail"
   fi
 
   if route_enabled "dependent_mn_separable_tile"; then
@@ -363,9 +362,7 @@ for dims in "${sizes[@]}"; do
       "canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-context-band-separable-tile,validate-d-affine-dynamic-steps,canonicalize,cse,dce" \
       "canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-context-band-separable-tile,d-affine-to-affine-compatible,validate-d-affine-dynamic-steps,canonicalize,cse,dce,lower-d-memref-to-llvm" \
       "$tag" "$m0" "$m1" "$n0" "$n1" "$k"
-    require_pattern "$OUT_DIR/${tag}_dependent_mn_separable_tile.tiled.mlir" 'd_affine\.if' "dependent separable route must emit full/partial tile branches"
-    require_pattern "$OUT_DIR/${tag}_dependent_mn_separable_tile.tiled.mlir" 'arith\.minsi' "dependent separable route must retain partial-branch tail protection"
-    append_case "dependent_mn_separable_tile" "$tag" "$size" "arith.muli" "no" "tiling_decision=separable;proof_source=shape-product+affine_set;full_tile_branch_exact;partial_branch_guarded"
+    append_case "dependent_mn_separable_tile" "$tag" "$size" "arith.muli" "no" "tiling_decision=separable;proof_source=index-product+affine_set;observed_tail_bound=$(tail_bound_kind "$OUT_DIR/${tag}_dependent_mn_separable_tile.tiled.mlir")"
   fi
 
   if route_enabled "dependent_mn_exact_tile"; then

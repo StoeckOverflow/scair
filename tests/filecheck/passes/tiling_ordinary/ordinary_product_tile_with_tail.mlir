@@ -8,7 +8,7 @@ builtin.module {
   %init = "arith.constant"() <{value = 0 : index}> : () -> index
 
   %sum = d_affine.for %p = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k) step 1 : index iter_args(%acc = %init : index) {
-    %next = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%p)[%acc] : (index)[index] -> index
+    %next = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%p, %acc)[] : (index, index)[] -> index
     d_affine.yield %next : (index)
   }
   "test.keep"(%sum) : (index) -> ()
@@ -21,5 +21,5 @@ builtin.module {
 // CHECK: %[[TILE_END:[0-9]+]] = "arith.addi"(%[[TILE]], %[[K1]])
 // CHECK: %[[CLAMPED:[0-9]+]] = "arith.minsi"(%[[TILE_END]], %[[K]])
 // CHECK: d_affine.for %[[P:[0-9]+]] = #map(%[[TILE]]) to #map(%[[CLAMPED]]) step 1 : i32 iter_args
-// CHECK: d_affine.apply {{.*}}(%[[P]])
+// CHECK: d_affine.apply {{.*}}(%[[P]], %{{[0-9]+}})[]
 // CHECK-NOT: d_tensor.

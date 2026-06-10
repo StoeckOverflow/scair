@@ -200,3 +200,203 @@ builtin.module {
 }
 
 // VERIFY: d_affine.yield: operand type mismatch at position 0; expected index, got i32
+
+// -----
+
+builtin.module {
+  %i = "arith.constant"() <{value = 7 : index}> : () -> index
+  %bad = d_affine.apply affine_map<(d0) -> (d0)>(%i, %i)[] : (index, index)[] -> index
+}
+
+// VERIFY: d_affine.apply: expected 1 dim operands for map (d0)[] -> (d0), got 2
+
+// -----
+
+builtin.module {
+  %i = "arith.constant"() <{value = 7 : index}> : () -> index
+  %bad = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%i)[%i, %i] : (index)[index, index] -> index
+}
+
+// VERIFY: d_affine.apply: expected 1 symbol operands for map (d0)[s0] -> (d0 + s0), got 2
+
+// -----
+
+builtin.module {
+  %i = "arith.constant"() <{value = 7 : index}> : () -> index
+  %bad = d_affine.min affine_map<(d0, d1) -> (d0 + d1)>(%i)[] : (index)[] -> index
+}
+
+// VERIFY: d_affine.min: expected 2 dim operands for map (d0, d1)[] -> (d0 + d1), got 1
+
+// -----
+
+builtin.module {
+  %i = "arith.constant"() <{value = 7 : index}> : () -> index
+  %bad = d_affine.min affine_map<(d0)[s0] -> (d0 + s0)>(%i)[%i, %i] : (index)[index, index] -> index
+}
+
+// VERIFY: d_affine.min: expected 1 symbol operands for map (d0)[s0] -> (d0 + s0), got 2
+
+// -----
+
+builtin.module {
+  %i = "arith.constant"() <{value = 1 : index}> : () -> index
+  "d_affine.if"(%i) <{condition = affine_set<(d0) : (d0 >= 0)>}> ({
+  ^then:
+    "test.no_terminator"() : () -> ()
+  }, {
+  ^else:
+    d_affine.yield
+  }) : (index) -> ()
+}
+
+// VERIFY: d_affine.if: expected then region terminator d_affine.yield, got `test.no_terminator`
+
+// -----
+
+builtin.module {
+  %i = "arith.constant"() <{value = 1 : index}> : () -> index
+  "d_affine.if"(%i) <{condition = affine_set<(d0) : (d0 >= 0)>}> ({
+  ^then(%arg: index):
+    d_affine.yield
+  }, {
+  ^else:
+    d_affine.yield
+  }) : (index) -> ()
+}
+
+// VERIFY: d_affine.if: expected then region to have no block arguments, got 1
+
+// -----
+
+builtin.module {
+  %i = "arith.constant"() <{value = 1 : index}> : () -> index
+  "d_affine.if"(%i) <{condition = affine_set<(d0)[s0] : (d0 - s0 >= 0)>}> ({
+  ^then:
+    d_affine.yield
+  }, {
+  ^else:
+    d_affine.yield
+  }) : (index) -> ()
+}
+
+// VERIFY: d_affine.if: expected 2 condition operands for set (d0)[s0]: (d0 - s0 >= 0), got 1
+
+// -----
+
+builtin.module {
+  %lb = "arith.constant"() <{value = 0 : index}> : () -> index
+  %ub = "arith.constant"() <{value = 4 : index}> : () -> index
+  d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 {
+    %bad = d_affine.apply affine_map<()[s0] -> (s0)>()[%iv] : ()[index] -> index
+    "test.keep"(%bad) : (index) -> ()
+    d_affine.yield
+  }
+}
+
+// VERIFY: d_affine.apply: illegal symbol operand at position 0. Affine induction and loop-carried values must be dim operands
+
+// -----
+
+builtin.module {
+  %lb = "arith.constant"() <{value = 0 : index}> : () -> index
+  %ub = "arith.constant"() <{value = 4 : index}> : () -> index
+  d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 {
+    %inner = "test.index"() : () -> index
+    %bad = d_affine.min affine_map<()[s0] -> (s0)>()[%inner] : ()[index] -> index
+    "test.keep"(%bad) : (index) -> ()
+    d_affine.yield
+  }
+}
+
+// VERIFY: d_affine.min: illegal symbol operand at position 0. Value is defined inside enclosing affine scope `d_affine.for`
+
+// -----
+
+builtin.module {
+  %ub = "arith.constant"() <{value = 8 : index}> : () -> index
+  "d_affine.parallel"(%ub, %ub) <{
+    lowerBoundsMap = affine_map<()[s0] -> (0)>,
+    lowerBoundsGroups = dense<1> : vector<1xi32>,
+    upperBoundsMap = affine_map<()[s0] -> (s0)>,
+    upperBoundsGroups = dense<1> : vector<1xi32>,
+    steps = [1 : i64],
+    reductions = []
+  }> ({
+  ^body(%p: index):
+  }) : (index, index) -> ()
+}
+
+// VERIFY: d_affine.parallel: expected 1 lower bound map operands for map ()[s0] -> (0), got 2
+
+// -----
+
+builtin.module {
+  %ub = "arith.constant"() <{value = 8 : index}> : () -> index
+  "d_affine.parallel"(%ub) <{
+    lowerBoundsMap = affine_map<()[s0] -> (0)>,
+    lowerBoundsGroups = dense<1> : vector<1xi32>,
+    upperBoundsMap = affine_map<()[s0] -> (s0)>,
+    upperBoundsGroups = dense<1> : vector<1xi32>,
+    steps = [0 : i64],
+    reductions = []
+  }> ({
+  ^body(%p: index):
+  }) : (index) -> ()
+}
+
+// VERIFY: d_affine.parallel: expected positive step at position 0, got 0
+
+// -----
+
+builtin.module {
+  %ub = "arith.constant"() <{value = 8 : index}> : () -> index
+  "d_affine.parallel"(%ub) <{
+    lowerBoundsMap = affine_map<()[s0] -> (0)>,
+    lowerBoundsGroups = dense<1> : vector<1xi32>,
+    upperBoundsMap = affine_map<()[s0] -> (s0)>,
+    upperBoundsGroups = dense<1> : vector<1xi32>,
+    steps = [1 : i64],
+    reductions = []
+  }> ({
+  ^body:
+  }) : (index) -> ()
+}
+
+// VERIFY: d_affine.parallel: expected 1 induction variable block arguments, got 0
+
+// -----
+
+builtin.module {
+  %ub = "arith.constant"() <{value = 8 : index}> : () -> index
+  "d_affine.parallel"(%ub) <{
+    lowerBoundsMap = affine_map<()[s0] -> (0)>,
+    lowerBoundsGroups = dense<2> : vector<1xi32>,
+    upperBoundsMap = affine_map<()[s0] -> (s0)>,
+    upperBoundsGroups = dense<1> : vector<1xi32>,
+    steps = [1 : i64],
+    reductions = []
+  }> ({
+  ^body(%p: index):
+  }) : (index) -> ()
+}
+
+// VERIFY: d_affine.parallel: expected lowerBoundsGroups entries to sum to 1 map results, got 2
+
+// -----
+
+builtin.module {
+  %ub = "arith.constant"() <{value = 8 : index}> : () -> index
+  %bad = "d_affine.parallel"(%ub) <{
+    lowerBoundsMap = affine_map<()[s0] -> (0)>,
+    lowerBoundsGroups = dense<1> : vector<1xi32>,
+    upperBoundsMap = affine_map<()[s0] -> (s0)>,
+    upperBoundsGroups = dense<1> : vector<1xi32>,
+    steps = [1 : i64],
+    reductions = []
+  }> ({
+  ^body(%p: index):
+  }) : (index) -> index
+}
+
+// VERIFY: d_affine.parallel: reductions/results are outside the verified subset

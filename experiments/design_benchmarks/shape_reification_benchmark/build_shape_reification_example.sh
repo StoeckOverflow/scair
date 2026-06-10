@@ -72,7 +72,7 @@ metric_row() {
   local memref_dim
   local d_tensor_dim
   local d_memref_dim
-  local shape_to_index
+  local direct_index
   local shape_ops
   local casts
   local arith_index
@@ -81,12 +81,12 @@ metric_row() {
   memref_dim="$(count_pattern "$path" '(^|[^A-Za-z0-9_])memref\.dim')"
   d_tensor_dim="$(count_pattern "$path" 'd_tensor\.dim')"
   d_memref_dim="$(count_pattern "$path" 'd_memref\.dim')"
-  shape_to_index="$(count_pattern "$path" 'd_tensor\.shape\.to_index')"
+  direct_index="0"
   shape_ops="$(count_pattern "$path" '(^|[^A-Za-z0-9_\.])shape\.[A-Za-z_]+')"
   casts="$(count_pattern "$path" 'builtin\.unrealized_conversion_cast')"
   arith_index="$(arith_index_arithmetic_count "$path")"
   alloc_shape="$(allocation_shape_op_count "$path")"
-  local shape_management_ops=$((tensor_dim + memref_dim + d_tensor_dim + d_memref_dim + shape_to_index + shape_ops + casts + arith_index + alloc_shape))
+  local shape_management_ops=$((tensor_dim + memref_dim + d_tensor_dim + d_memref_dim + direct_index + shape_ops + casts + arith_index + alloc_shape))
   local delta="NA"
   if [[ "$input_ops" != "NA" ]]; then
     delta=$((input_ops - ops))
@@ -101,8 +101,8 @@ metric_row() {
     printf '%s,' "$memref_dim"
     printf '%s,' "$d_tensor_dim"
     printf '%s,' "$d_memref_dim"
-    printf '%s,' "$shape_to_index"
-    printf '%s,' "$(count_pattern "$path" 'd_tensor\.nat\.[A-Za-z_]+')"
+    printf '%s,' "$direct_index"
+    printf '%s,' "$(count_pattern "$path" 'arith\.(add|mul)i')"
     printf '%s,' "$shape_ops"
     printf '%s,' "$casts"
     printf '%s,' "$(count_pattern "$path" 'arith\.constant.*index|arith\.constant_index')"
@@ -135,7 +135,7 @@ require_exe "$SCAIR_OPT"
 require_exe "$MLIR_OPT"
 
 cat > "$METRICS" <<'CSV'
-variant,stage,toolchain,status,artifact,tensor_dim_count,memref_dim_count,d_tensor_dim_count,d_memref_dim_count,d_tensor_shape_to_index_count,d_tensor_nat_op_count,shape_op_count,unrealized_cast_count,arith_constant_index_count,arith_index_arithmetic_count,allocation_shape_op_count,shape_management_op_count,total_op_count,mlir_loc,removed_op_delta,total_op_ratio_vs_ordinary_same_shape_final,notes
+variant,stage,toolchain,status,artifact,tensor_dim_count,memref_dim_count,d_tensor_dim_count,d_memref_dim_count,direct_index_dim_count,shape_index_arith_op_count,shape_op_count,unrealized_cast_count,arith_constant_index_count,arith_index_arithmetic_count,allocation_shape_op_count,shape_management_op_count,total_op_count,mlir_loc,removed_op_delta,total_op_ratio_vs_ordinary_same_shape_final,notes
 CSV
 
 process_ordinary() {
@@ -194,8 +194,8 @@ process_dependent
   echo
   echo "| Variant | Stage | tensor.dim | d_tensor.dim | direct index | index arith | shape mgmt ops | total ops | LOC | Removed delta | Ratio | Notes |"
   echo "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"
-  tail -n +2 "$METRICS" | while IFS=, read -r variant stage toolchain status artifact tensor_dim memref_dim d_tensor_dim d_memref_dim shape_to_index nat_ops shape_ops casts arith_const arith_index alloc_shape shape_mgmt ops loc delta ratio notes; do
-    echo "| \`$variant\` | \`$stage\` | $tensor_dim | $d_tensor_dim | $shape_to_index | $arith_index | $shape_mgmt | $ops | $loc | $delta | $ratio | $notes |"
+  tail -n +2 "$METRICS" | while IFS=, read -r variant stage toolchain status artifact tensor_dim memref_dim d_tensor_dim d_memref_dim direct_index index_arith_ops shape_ops casts arith_const arith_index alloc_shape shape_mgmt ops loc delta ratio notes; do
+    echo "| \`$variant\` | \`$stage\` | $tensor_dim | $d_tensor_dim | $direct_index | $arith_index | $shape_mgmt | $ops | $loc | $delta | $ratio | $notes |"
   done
   echo
   echo "Key comparison:"

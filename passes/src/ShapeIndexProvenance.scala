@@ -1,8 +1,9 @@
 package scair.passes
 
+import scair.analysis.DominanceInfo
 import scair.dialects.arith
 import scair.dialects.builtin.*
-import scair.dialects.{d_affine, d_memref, d_tensor as DTensor}
+import scair.dialects.{cf, d_affine, d_memref, d_tensor as DTensor}
 import scair.ir.*
 
 import scala.collection.mutable
@@ -56,6 +57,56 @@ object ShapeIndexProvenance:
             op.stepOperands.exists(_ eq v)
         case _ => false
     )
+
+  private def rootOperation(op: Operation): Option[Operation] =
+    var cur: IRNode = op
+    var rootOp: Operation = op
+    while cur.parent.nonEmpty do
+      cur = cur.parent.get
+      cur match
+        case nextOp: Operation => rootOp = nextOp
+        case _                 =>
+    Some(rootOp)
+
+  private def positiveAssertedValue(cmp: arith.CmpI): Option[Value[Attribute]] =
+    def isZero(v: Value[Attribute]): Boolean =
+      exactConstAny(v).contains(0)
+
+    cmp.predicate match
+      case arith.CmpIPredicate.sgt =>
+        Option.when(isZero(cmp.rhs))(cmp.lhs.asInstanceOf[Value[Attribute]])
+      case arith.CmpIPredicate.slt =>
+        Option.when(isZero(cmp.lhs))(cmp.rhs.asInstanceOf[Value[Attribute]])
+      case _ => None
+
+  private def isProofUse(use: Use): Boolean =
+    use.operation match
+      case _: arith.CmpI => true
+      case _: cf.Assert  => true
+      case _             => false
+
+  private def hasDominatingPositiveAssert(v: Value[Attribute]): Boolean =
+    val base = valueRefTarget(v)
+    if base.typ != IndexType() then false
+    else
+      val assertions =
+        base.uses.toSeq.flatMap {
+          case Use(cmp: arith.CmpI, _) if positiveAssertedValue(cmp).contains(base) =>
+            cmp.results.headOption.toSeq.flatMap(_.uses.toSeq).flatMap {
+              case Use(assertOp: cf.Assert, _) => Some(assertOp)
+              case _                           => None
+            }
+          case _ => Seq.empty
+        }
+
+      assertions.exists { assertOp =>
+        rootOperation(assertOp).exists { root =>
+          val dom = DominanceInfo(root)
+          base.uses.forall(use =>
+            isProofUse(use) || dom.opDominates(assertOp, use.operation)
+          )
+        }
+      }
 
   def isShapeRoot(v: Value[Attribute]): Boolean =
     v.typeUses.exists(typeUseIsShapeRoot) || hasAssumeExtentUse(v) || hasDAffineShapeUse(v)
@@ -118,4 +169,4 @@ object ShapeIndexProvenance:
     exactConstAny(v)
 
   def isPositive(v: Value[Attribute]): Boolean =
-    exactConst(v).exists(_ > 0)
+    exactConst(v).exists(_ > 0) || hasDominatingPositiveAssert(v)

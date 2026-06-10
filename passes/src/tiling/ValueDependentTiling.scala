@@ -270,15 +270,15 @@ object ValueDependentTiling:
   private def fullTileFitsSet: AffineSetAttr =
     AffineSetAttr(
       AffineSet(
-        dimensions = Seq("d0"),
-        symbols = Seq("s0", "s1"),
+        dimensions = Seq("d0", "d1"),
+        symbols = Seq("s0"),
         affineConstraints = Seq(
           AffineConstraintExpr(
             AffineConstraintKind.LessEqual,
             AffineBinaryOpExpr(
               AffineBinaryOp.Add,
               AffineDimExpr("d0"),
-              AffineSymExpr("s1"),
+              AffineDimExpr("d1"),
             ),
             AffineSymExpr("s0"),
           )
@@ -733,7 +733,7 @@ object ValueDependentTiling:
                 )
               )
               val ifOp = d_affine.If(
-                Seq(asIndex(tileIv), asIndex(spec.fullUpperBound), asIndex(spec.tileSize)),
+                Seq(asIndex(tileIv), asIndex(spec.tileSize), asIndex(spec.fullUpperBound)),
                 fullTileFitsSet,
                 thenRegion,
                 elseRegion,

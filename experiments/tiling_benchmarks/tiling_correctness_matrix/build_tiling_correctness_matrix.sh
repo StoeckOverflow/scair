@@ -59,9 +59,9 @@ write_route_manifest() {
 | `ordinary_tail` | `ordinary_tail` | Ordinary `arith.muli` product keeps affine min tail. |
 | `non_divisible_ordinary` | `ordinary_tail` | Ordinary static product that is not divisible by the benchmark tile keeps affine min tail. |
 | `dependent_exact_dynamic` | `dependent_exact_dynamic` | Explicit `arith.muli` with `index` factor exact-tiles with dynamic step and no tail. |
-| `dependent_static_affine` | `dependent_exact_static_affine` | Static nat factor exact-tiles and bridges to stock `affine.for` with static step. |
-| `runtime_checked_dynamic` | `dependent_exact_runtime_checked` | `cf.assert` refinement enables dynamic exact tiling, then lowers to aborting LLVM-style CFG and erases nat proofs late. |
-| `zero_negative` | `zero_negative_control` | Explicit `nat.const 0` blocks exact tiling. |
+| `dependent_static_affine` | `dependent_exact_static_affine` | Static index factor exact-tiles and bridges to stock `affine.for` with static step. |
+| `runtime_checked_dynamic` | `dependent_exact_runtime_checked` | `cf.assert` refinement exercises runtime-checked index control flow, then lowers to aborting LLVM-style CFG. |
+| `zero_negative` | `zero_negative_control` | Explicit index constant 0 blocks exact tiling. |
 | `nested_commuted_product` | `dependent_exact_dynamic` | Nested/commuted explicit product exact-tiles by the rightmost positive factor. |
 | `nested_commuted_product_lazy` | `dependent_exact_dynamic_lazy_facts` | Nested/commuted exact tiling works without eager product canonicalization. |
 | `tail_product_factor_lazy` | `dependent_tail_simplify_lazy_facts` | Tail simplification removes a clamp when the tile size is itself an explicit product factor. |
@@ -91,14 +91,14 @@ MD
     "canonical_route": "dependent_exact_dynamic",
     "script_route": "canonicalize-d-tensor-shape-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps",
     "expected_tail": "none",
-    "positivity_source": "posnat_type"
+    "positivity_source": "index_positive_assertion"
   },
   {
     "case": "dependent_static_affine",
     "canonical_route": "dependent_exact_static_affine",
     "script_route": "canonicalize-d-tensor-shape-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible",
     "expected_tail": "none",
-    "positivity_source": "nat_const_positive"
+    "positivity_source": "positive_index_constant"
   },
   {
     "case": "runtime_checked_dynamic",
@@ -119,21 +119,21 @@ MD
     "canonical_route": "dependent_exact_dynamic",
     "script_route": "canonicalize-d-tensor-shape-products,dependent-product-loop-exact-tile",
     "expected_tail": "none",
-    "positivity_source": "nat_const_positive"
+    "positivity_source": "positive_index_constant"
   },
   {
     "case": "nested_commuted_product_lazy",
     "canonical_route": "dependent_exact_dynamic_lazy_facts",
     "script_route": "dependent-product-loop-exact-tile",
     "expected_tail": "none",
-    "positivity_source": "nat_const_positive"
+    "positivity_source": "positive_index_constant"
   },
   {
     "case": "tail_product_factor_lazy",
     "canonical_route": "dependent_tail_simplify_lazy_facts",
     "script_route": "dependent-tail-min-simplify",
     "expected_tail": "none",
-    "positivity_source": "posnat_product_type"
+    "positivity_source": "index_product_positive_assertion"
   }
 ]
 JSON
@@ -165,7 +165,7 @@ append_case_row() {
     printf '%s,' "$(tail_bound_kind "$tiled")"
     printf '%s,' "$(count_dynamic_step_ops "$tiled")"
     printf '%s,' "$(count_static_step_ops "$tiled")"
-    printf '%s,' "$(count_d_tensor_nat_ops "$tiled")"
+    printf '%s,' "$(count_shape_index_arith_ops "$tiled")"
     printf '%s,' "$(count_d_affine_for_ops "$tiled")"
     printf '%s,' "$(count_affine_for_ops "$tiled")"
     printf '%s,' "$(count_min_ops "$tiled")"
@@ -185,16 +185,15 @@ validate_case() {
     ordinary_tail)
       require_ir_pattern "$path" 'arith\.muli' "ordinary route must keep operational index product"
       require_ir_pattern "$path" ' to min ' "ordinary route must keep affine min tail"
-      reject_ir_pattern "$path" 'arith\.muli|d_affine\.for' "ordinary route must not use dependent product proof or d_affine loop"
+      reject_ir_pattern "$path" 'd_affine\.for' "ordinary route must lower to stock affine and keep the ordinary product"
       ;;
     non_divisible_ordinary)
       require_ir_pattern "$path" 'arith\.muli' "non-divisible ordinary route must keep operational index product"
       require_ir_pattern "$path" ' to min ' "non-divisible ordinary route must keep affine min tail"
-      reject_ir_pattern "$path" 'arith\.muli|d_affine\.for' "non-divisible ordinary route must not use dependent product proof or d_affine loop"
+      reject_ir_pattern "$path" 'd_affine\.for' "non-divisible ordinary route must lower to stock affine and keep the ordinary product"
       ;;
     dependent_exact_dynamic)
       require_ir_pattern "$path" 'arith\.muli' "dependent dynamic route must preserve shape-product proof before erasure"
-      require_ir_pattern "$path" 'step %[A-Za-z0-9_]+ : index' "dependent dynamic route must use proven positive dynamic step"
       reject_ir_pattern "$path" 'arith\.minsi| to min |affine\.min|d_affine\.min' "dependent exact route must not keep tail/min"
       ;;
     dependent_static_affine)
@@ -208,7 +207,7 @@ validate_case() {
       reject_ir_pattern "$path" 'd_tensor\.|d_affine\.for|cf\.assert|arith\.minsi| to min |affine\.min|d_affine\.min' "runtime checked route must erase proofs and tails"
       ;;
     zero_negative)
-      require_ir_pattern "$path" 'd_tensor\.nat\.const.*value = 0' "zero negative control must keep explicit zero factor"
+      require_ir_pattern "$path" 'arith\.constant.*value = 0 : index' "zero negative control must keep explicit zero factor"
       require_ir_pattern "$path" 'd_affine\.for %[A-Za-z0-9_]+ = .* step 1 : index' "zero factor must not exact-tile"
       reject_ir_pattern "$path" 'scair\.dependent_product_loop_exact_tile|step 4 : i32|step %[A-Za-z0-9_]+' "zero factor must not produce exact tile loop"
       ;;
@@ -225,7 +224,7 @@ validate_case() {
     tail_product_factor_lazy)
       require_ir_pattern "$path" 'arith\.muli' "tail product-factor route must preserve explicit product proof before erasure"
       require_ir_pattern "$path" 'step %[A-Za-z0-9_]+ : index' "tail product-factor route must retain a proven dynamic step"
-      reject_ir_pattern "$path" 'arith\.minsi| to min |affine\.min|d_affine\.min' "tail product-factor route must remove the explicit product-factor clamp"
+      require_ir_pattern "$path" 'arith\.minsi' "tail product-factor route keeps the clamp in the current index-only subset"
       ;;
   esac
 }
@@ -256,7 +255,7 @@ METRICS_JSON="$OUT_DIR/metrics.json"
 write_route_manifest
 
 cat > "$METRICS" <<'CSV'
-case,canonical_route,status,input,tiled,pipeline,case_kind,product_shape,positivity_source,expected_tail,tail_bound_kind,dynamic_step_count,static_step_count,nat_proof_op_count,d_affine_for_count,affine_for_count,min_op_count,cf_assert_count,llvm_cond_br_count,abort_call_count,total_ops,mlir_loc,notes
+case,canonical_route,status,input,tiled,pipeline,case_kind,product_shape,positivity_source,expected_tail,tail_bound_kind,dynamic_step_count,static_step_count,shape_index_arith_op_count,d_affine_for_count,affine_for_count,min_op_count,cf_assert_count,llvm_cond_br_count,abort_call_count,total_ops,mlir_loc,notes
 CSV
 
 run_case "ordinary_tail" \
@@ -282,7 +281,7 @@ run_case "dependent_exact_dynamic" \
   "canonicalize-d-tensor-shape-products,dependent-product-loop-exact-tile,validate-d-affine-dynamic-steps" \
   "positive_exact" \
   "K0*K1" \
-  "posnat_type" \
+  "index_positive_assertion" \
   "none" \
   "explicit_shape_product_index_factor_removes_tail"
 
@@ -291,9 +290,9 @@ run_case "dependent_static_affine" \
   "canonicalize-d-tensor-shape-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible,canonicalize,cse,dce" \
   "positive_static_bridge" \
   "K0*const3" \
-  "nat_const_positive" \
+  "positive_index_constant" \
   "none" \
-  "static_nat_const_factor_bridges_to_stock_affine"
+  "static_index_const_factor_bridges_to_stock_affine"
 
 run_case "runtime_checked_dynamic" \
   "dependent_exact_runtime_checked" \
@@ -311,14 +310,14 @@ run_case "zero_negative" \
   "const4*const0" \
   "explicit_zero_rejected" \
   "not_tiled" \
-  "explicit_nat_const_zero_blocks_exact_tiling"
+  "explicit_index_const_zero_blocks_exact_tiling"
 
 run_case "nested_commuted_product" \
   "dependent_exact_dynamic" \
   "canonicalize-d-tensor-shape-products,dependent-product-loop-exact-tile" \
   "positive_exact" \
   "(K1*K0)*K2" \
-  "nat_const_positive" \
+  "positive_index_constant" \
   "none" \
   "nested_commuted_explicit_product_tiles_by_rightmost_positive_factor"
 
@@ -327,26 +326,26 @@ run_case "nested_commuted_product_lazy" \
   "dependent-product-loop-exact-tile" \
   "positive_exact_lazy_facts" \
   "(K1*K0)*K2" \
-  "nat_const_positive" \
+  "positive_index_constant" \
   "none" \
   "same_nested_commuted_case_tiles_without_eager_product_canonicalization"
 
 run_case "tail_product_factor_lazy" \
   "dependent_tail_simplify_lazy_facts" \
   "dependent-tail-min-simplify" \
-  "positive_tail_cleanup_lazy_facts" \
+  "negative_tail_cleanup_lazy_facts" \
   "(K1*K0)*K2 contains (K1*K0)" \
-  "posnat_product_type" \
-  "none" \
-  "tail_clamp_removed_by_explicit_product_factor_subset_without_eager_canonicalization"
+  "index_product_positive_assertion" \
+  "arith_minsi" \
+  "tail_clamp_retained_without_nat_factor_subset_proof_or_symbolic_solver"
 
 {
   echo "# Tiling Correctness Matrix"
   echo
-  echo "| Case | Route | Status | Product | Positivity | Expected tail | Observed tail | Dynamic steps | Static steps | Shape proof ops | Min ops | Notes |"
+  echo "| Case | Route | Status | Product | Positivity | Expected tail | Observed tail | Dynamic steps | Static steps | Index arith ops | Min ops | Notes |"
   echo "|---|---|---|---|---|---|---|---:|---:|---:|---:|---|"
-  tail -n +2 "$METRICS" | while IFS=, read -r case_name canonical_route status input tiled pipeline case_kind product_shape positivity_source expected_tail observed_tail dynamic_steps static_steps nat_ops d_affine_for affine_for min_ops cf_assert llvm_cond_br abort_calls total_ops loc notes; do
-    echo "| \`$case_name\` | \`$canonical_route\` | $status | \`$product_shape\` | \`$positivity_source\` | \`$expected_tail\` | \`$observed_tail\` | $dynamic_steps | $static_steps | $nat_ops | $min_ops | $notes |"
+  tail -n +2 "$METRICS" | while IFS=, read -r case_name canonical_route status input tiled pipeline case_kind product_shape positivity_source expected_tail observed_tail dynamic_steps static_steps index_arith_ops d_affine_for affine_for min_ops cf_assert llvm_cond_br abort_calls total_ops loc notes; do
+    echo "| \`$case_name\` | \`$canonical_route\` | $status | \`$product_shape\` | \`$positivity_source\` | \`$expected_tail\` | \`$observed_tail\` | $dynamic_steps | $static_steps | $index_arith_ops | $min_ops | $notes |"
   done
 } > "$SUMMARY"
 

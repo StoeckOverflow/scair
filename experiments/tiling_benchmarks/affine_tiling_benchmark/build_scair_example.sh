@@ -71,8 +71,7 @@ write_route_manifest() {
 | `stock_affine_baseline` | `mlir_runtime_product` | Ordinary runtime product tiled by upstream affine; keeps min/tail. |
 | `static_affine_reference` | `mlir_static_factor_reference` | Static stock-affine factor reference with no min/tail. |
 | `ordinary_tail` | `ordinary_scair_product_with_tail` | ScaIR ordinary index-product tiling; keeps min/tail. |
-| `dependent_exact_dynamic` | `value_dependent_exact_product` | Dependent exact tiling from explicit `arith.muli` product proof. |
-| `dependent_exact_runtime_checked` | `value_dependent_exact_product` | Alias for dependent exact route when input carries checked positive index facts. |
+| `dependent_exact_dynamic` | `value_dependent_exact_product` | Dependent exact tiling from explicit `arith.muli` product proof with a runtime-checked positive index factor. |
 | `dependent_exact_static_affine` | `value_dependent_static_affine_compatible` | Dependent exact tiling bridged to stock `affine.for`. |
 
 Important ScaIR pipelines:
@@ -128,7 +127,8 @@ MD
     "script_route": "value_dependent_exact_product",
     "claim_role": "value_dependent_exact",
     "expected_tail": "none",
-    "product_representation": "arith.muli"
+    "product_representation": "arith.muli",
+    "positivity_source": "index_positive_assertion"
   },
   {
     "canonical_route": "dependent_exact_static_affine",
@@ -136,7 +136,7 @@ MD
     "claim_role": "value_dependent_static_affine_compatible",
     "expected_tail": "none",
     "product_representation": "arith.muli",
-    "positivity_source": "nat_const_positive"
+    "positivity_source": "positive_index_constant"
   }
 ]
 JSON
@@ -196,7 +196,7 @@ validate_runtime_product_with_min() {
     "runtime product route must tile the arith.muli product bound with the requested static step"
   require_ir_pattern "$path" " to min " \
     "runtime product route must keep a min tail bound"
-  reject_ir_pattern "$path" 'arith\.muli|d_tensor\.shape\.to_index|d_affine\.for' \
+  reject_ir_pattern "$path" 'd_tensor[.]shape[.]to_index|d_affine\.for' \
     "runtime product route must stay ordinary MLIR/Affine"
 }
 
@@ -221,12 +221,10 @@ validate_value_dependent_no_min() {
   local path="$1"
   require_ir_pattern "$path" 'arith\.muli' \
     "value-dependent route must preserve shape-product provenance"
-  require_ir_pattern "$path" 'd_tensor\.shape\.to_index' \
-    "value-dependent route must materialize the RHS factor as a dynamic step"
-  require_ir_pattern "$path" 'd_affine\.for %[A-Za-z0-9_]+ = #[A-Za-z0-9_]+\(%[A-Za-z0-9_]+\) to #[A-Za-z0-9_]+\(%[A-Za-z0-9_]+\) step %[A-Za-z0-9_]+ : index' \
+  require_ir_pattern "$path" 'cf\.assert' \
+    "value-dependent route must carry the positive dynamic index assertion"
+  require_ir_pattern "$path" 'd_affine\.for %[A-Za-z0-9_]+ = #[A-Za-z0-9_]+\(%[A-Za-z0-9_]+\) to #[A-Za-z0-9_]+\(%[A-Za-z0-9_]+\) step %[A-Za-z0-9_]+' \
     "value-dependent route must tile the product loop with a factor-derived dynamic step"
-  reject_ir_pattern "$path" 'arith\.muli .* : \(index, index\) -> index|arith\.muli .* : index' \
-    "value-dependent route must not fall back to ordinary index multiplication"
   reject_ir_pattern "$path" 'arith\.minsi| to min |affine\.min|d_affine\.min|remainder| mod|cleanup' \
     "value-dependent route must not use min/tail cleanup"
 }
@@ -399,12 +397,12 @@ for size in "${SIZE_ENTRIES[@]}"; do
     append_row "$METRICS_CSV" "$SUMMARY_MD" "value_dependent_exact_product" \
       "$OUT_DIR/value_dependent_exact_product.input.mlir" \
       "$OUT_DIR/value_dependent_exact_product.tiled.mlir" \
-      "benchmark_role=minimal_claim;claim_role=value_dependent_exact;product_representation=arith.muli;tile_loop=product_loop;tile_step=dynamic_factor;tail_bound=$(tail_bound_kind "$OUT_DIR/value_dependent_exact_product.tiled.mlir");exact_divisibility_proof=arith.muli;$size_notes"
+      "benchmark_role=minimal_claim;claim_role=value_dependent_exact_dynamic;product_representation=arith.muli;positivity_source=index_positive_assertion;tile_loop=product_loop;tile_step=dynamic_factor;tail_bound=$(tail_bound_kind "$OUT_DIR/value_dependent_exact_product.tiled.mlir");exact_divisibility_proof=arith.muli;$size_notes"
   fi
 
   if route_enabled "value_dependent_static_affine_compatible"; then
     if [[ "$k1" != "3" ]]; then
-      echo "error: value_dependent_static_affine_compatible is intentionally fixed to nat.const 3; use K1=3 or disable that route" >&2
+      echo "error: value_dependent_static_affine_compatible is intentionally fixed to index constant 3; use K1=3 or disable that route" >&2
       exit 1
     fi
     build_scair_route "value_dependent_static_affine_compatible" "$VALUE_DEP_STATIC_SRC" "canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-product-loop-exact-tile,d-affine-to-affine-compatible,canonicalize,cse,dce"

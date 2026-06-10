@@ -434,8 +434,8 @@ count_llvm_calls() {
   echo "${count:-0}"
 }
 
-count_d_tensor_nat_ops() {
-  count_matches 'd_tensor\.nat\.[A-Za-z_]+' "$1"
+count_shape_index_arith_ops() {
+  count_matches 'arith\.(add|mul)i' "$1"
 }
 
 count_d_affine_for_ops() {

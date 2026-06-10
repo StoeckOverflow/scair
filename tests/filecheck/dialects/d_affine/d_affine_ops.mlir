@@ -197,7 +197,7 @@ builtin.module {
     steps = [1 : i64],
     reductions = []
   }> ({
-  ^2:
+  ^2(%p: index):
   }) : (index) -> ()
 }
 

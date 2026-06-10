@@ -13,7 +13,7 @@ builtin.module {
     %sum = d_affine.for %tile = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%full) step %step : index iter_args(%acc0 = %init : index) {
       %clamped = "affine.min"(%tile, %tile_size, %full) <{map = affine_map<(d0, d1, d2) -> (d0 + d1, d2)>}> : (index, index, index) -> index
       %inner = d_affine.for %p = affine_map<(d0) -> (d0)>(%tile) to affine_map<(d0) -> (d0)>(%clamped) step 1 : index iter_args(%acc1 = %acc0 : index) {
-        %next = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%p)[%acc1] : (index)[index] -> index
+        %next = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%p, %acc1)[] : (index, index)[] -> index
         d_affine.yield %next : (index)
       }
       d_affine.yield %inner : (index)
@@ -34,7 +34,7 @@ builtin.module {
     %sum = d_affine.for %tile = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%full) step %step : index iter_args(%acc0 = %init : index) {
       %clamped = d_affine.min affine_map<(d0)[s0, s1] -> (d0 + s0, s1)>(%tile)[%tile_size, %full] : (index)[index, index] -> index
       %inner = d_affine.for %p = affine_map<(d0) -> (d0)>(%tile) to affine_map<(d0) -> (d0)>(%clamped) step 1 : index iter_args(%acc1 = %acc0 : index) {
-        %next = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%p)[%acc1] : (index)[index] -> index
+        %next = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%p, %acc1)[] : (index, index)[] -> index
         d_affine.yield %next : (index)
       }
       d_affine.yield %inner : (index)
@@ -53,10 +53,10 @@ builtin.module {
     %init = "arith.constant"() <{value = 0 : index}> : () -> index
 
     %sum = d_affine.for %tile = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%full) step %step : index iter_args(%acc0 = %init : index) {
-      %tile_end = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%tile)[%tile_size] : (index)[index] -> index
+      %tile_end = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%tile, %tile_size)[] : (index, index)[] -> index
       %clamped = "arith.minsi"(%tile_end, %full) : (index, index) -> index
       %inner = d_affine.for %p = affine_map<(d0) -> (d0)>(%tile) to affine_map<(d0) -> (d0)>(%clamped) step 1 : index iter_args(%acc1 = %acc0 : index) {
-        %next = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%p)[%acc1] : (index)[index] -> index
+        %next = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%p, %acc1)[] : (index, index)[] -> index
         d_affine.yield %next : (index)
       }
       d_affine.yield %inner : (index)
@@ -78,7 +78,7 @@ builtin.module {
       %tile_end = "arith.addi"(%tile, %tile_size) : (index, index) -> index
       %clamped = "arith.minsi"(%tile_end, %full) : (index, index) -> index
       %inner = d_affine.for %p = affine_map<(d0) -> (d0)>(%tile) to affine_map<(d0) -> (d0)>(%clamped) step 1 : index iter_args(%acc1 = %acc0 : index) {
-        %next = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%p)[%acc1] : (index)[index] -> index
+        %next = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%p, %acc1)[] : (index, index)[] -> index
         d_affine.yield %next : (index)
       }
       d_affine.yield %inner : (index)
@@ -92,22 +92,22 @@ builtin.module {
 // CHECK: %[[SUM:[0-9]+]] = d_affine.for %[[TILE:[0-9]+]] =
 // CHECK: %[[TILE_END:[0-9]+]] = "affine.apply"(%[[TILE]], %{{[0-9]+}}, %{{[0-9]+}})
 // CHECK: d_affine.for %[[P:[0-9]+]] = #map(%[[TILE]]) to #map(%[[TILE_END]]) step 1 : index iter_args
-// CHECK: d_affine.apply #map{{[0-9]*}} (%[[P]])
+// CHECK: d_affine.apply #map{{[0-9]*}} (%[[P]], %{{[0-9]+}})[]
 
 // CHECK-LABEL: func.func @d_affine_min_form
 // CHECK: %[[SUM:[0-9]+]] = d_affine.for %[[TILE:[0-9]+]] =
-// CHECK: %[[TILE_END:[0-9]+]] = d_affine.apply #map{{[0-9]*}} (%[[TILE]])
+// CHECK: %[[TILE_END:[0-9]+]] = d_affine.apply #map{{[0-9]*}} (%[[TILE]])[%{{[0-9]+}}, %{{[0-9]+}}]
 // CHECK: d_affine.for %[[P:[0-9]+]] = #map(%[[TILE]]) to #map(%[[TILE_END]]) step 1 : index iter_args
-// CHECK: d_affine.apply #map{{[0-9]*}} (%[[P]])
+// CHECK: d_affine.apply #map{{[0-9]*}} (%[[P]], %{{[0-9]+}})[]
 
 // CHECK-LABEL: func.func @d_affine_apply_tile_end_form
 // CHECK: %[[SUM:[0-9]+]] = d_affine.for %[[TILE:[0-9]+]] =
-// CHECK: %[[TILE_END:[0-9]+]] = d_affine.apply #map{{[0-9]*}} (%[[TILE]])
+// CHECK: %[[TILE_END:[0-9]+]] = d_affine.apply #map{{[0-9]*}} (%[[TILE]], %{{[0-9]+}})[]
 // CHECK: d_affine.for %[[P:[0-9]+]] = #map(%[[TILE]]) to #map(%[[TILE_END]]) step 1 : index iter_args
-// CHECK: d_affine.apply #map{{[0-9]*}} (%[[P]])
+// CHECK: d_affine.apply #map{{[0-9]*}} (%[[P]], %{{[0-9]+}})[]
 
 // CHECK-LABEL: func.func @product_factor_form
 // CHECK: %[[SUM:[0-9]+]] = d_affine.for %[[TILE:[0-9]+]] =
 // CHECK: %[[TILE_END:[0-9]+]] = "arith.addi"(%[[TILE]], %{{[0-9]+}})
 // CHECK: d_affine.for %[[P:[0-9]+]] = #map(%[[TILE]]) to #map(%[[TILE_END]]) step 1 : index iter_args
-// CHECK: d_affine.apply #map{{[0-9]*}} (%[[P]])
+// CHECK: d_affine.apply #map{{[0-9]*}} (%[[P]], %{{[0-9]+}})[]

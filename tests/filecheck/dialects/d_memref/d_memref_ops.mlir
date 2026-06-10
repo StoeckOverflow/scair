@@ -167,3 +167,32 @@ builtin.module {
 }
 
 // VERIFY: d_memref.dim_exact: expected selected embedded dim to be SSA-backed, got a literal dimension
+
+// -----
+
+builtin.module {
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4], f32>
+  %base, %offset, %size0, %stride0 = "d_memref.extract_strided_metadata"(%buf)
+    : (!d_memref.memref<[4], f32>) -> (!d_memref.memref<[], f32>, index, index, index)
+  "test.keep"(%base, %offset, %size0, %stride0) : (!d_memref.memref<[], f32>, index, index, index) -> ()
+}
+
+// VERIFY: "d_memref.extract_strided_metadata"
+
+// -----
+
+builtin.module {
+  %o0 = "arith.constant"() <{value = 1 : index}> : () -> index
+  %o1 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %s0 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %s1 = "arith.constant"() <{value = 3 : index}> : () -> index
+  %st0 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %st1 = "arith.constant"() <{value = 1 : index}> : () -> index
+  %buf = d_memref.alloc : () -> !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+  %sv = d_memref.subview %buf[%o0, %o1][%s0, %s1][%st0, %st1]
+    : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]>
+      -> !d_memref.memref<[2, 3], f32, offset: 10, strides: [16, 1]>
+  "test.keep"(%sv) : (!d_memref.memref<[2, 3], f32, offset: 10, strides: [16, 1]>) -> ()
+}
+
+// VERIFY: d_memref.subview %{{[0-9]+}}[%{{[0-9]+}}, %{{[0-9]+}}][%{{[0-9]+}}, %{{[0-9]+}}][%{{[0-9]+}}, %{{[0-9]+}}] : !d_memref.memref<[4, 8], f32, offset: 0, strides: [8, 1]> -> !d_memref.memref<[2, 3], f32, offset: 10, strides: [16, 1]>

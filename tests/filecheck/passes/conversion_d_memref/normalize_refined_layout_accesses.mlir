@@ -28,9 +28,9 @@ builtin.module {
   }
 
   func.func @normalize_subview_load(%i : index) -> f32 {
-    %d0 = "arith.constant"() <{value = 16 : index}> : () -> index
+    %d0 = "arith.constant"() <{value = 20 : index}> : () -> index
     %d1 = "arith.constant"() <{value = 8 : index}> : () -> index
-    %flat = "arith.constant"() <{value = 16 : index}> : () -> index
+    %flat = "arith.constant"() <{value = 20 : index}> : () -> index
     %src = d_memref.alloc : () -> !d_memref.memref<[%d0], f32>
     %off = "arith.constant"() <{value = 4 : index}> : () -> index
     %stride = "arith.constant"() <{value = 2 : index}> : () -> index

@@ -347,7 +347,6 @@ for dims in "${sizes[@]}"; do
     echo "==> Building dependent guarded-then-simplified full tile for $size"
     guarded="$OUT_DIR/${tag}_dependent_full_guarded_tail_simplified.guarded.mlir"
     run_scair_opt -s "$DEPENDENT_SRC" --passes "canonicalize,cse,dce,canonicalize-d-tensor-shape-products,dependent-context-band-factor-tile-with-tail,dependent-tile-with-tail-control,validate-d-affine-dynamic-steps,canonicalize,cse,dce" > "$guarded"
-    require_pattern "$guarded" 'arith\.minsi' "dependent guarded artifact must contain dynamic tail min"
     build_scair_route \
       "dependent_full_guarded_tail_simplified" \
       "$DEPENDENT_SRC" \

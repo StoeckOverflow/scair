@@ -17,6 +17,8 @@ builtin.module {
 
 // CHECK: "cf.assert"
 // CHECK: %[[UB:[0-9]+]] = "arith.muli"
-// CHECK: d_affine.for %[[P:[0-9]+]] = #map(%{{[0-9]+}}) to #map(%[[UB]]) step 1 : index iter_args
+// CHECK: d_affine.for %[[TILE:[0-9]+]] = #map(%{{[0-9]+}}) to #map(%[[UB]]) step %{{[0-9]+}} : index iter_args
+// CHECK: "arith.addi"(%[[TILE]], %{{[0-9]+}})
+// CHECK: d_affine.for %[[P:[0-9]+]] = #map{{[0-9]*}}(%[[TILE]]) to #map{{[0-9]*}}(%{{[0-9]+}}) step 1 : i32 iter_args
 // CHECK-NOT: d_affine.if
 // CHECK-NOT: arith.minsi

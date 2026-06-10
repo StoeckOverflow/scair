@@ -157,7 +157,7 @@ require_exe "$SCAIR_OPT"
 write_route_manifest "$OUT_DIR/route_manifest.md"
 
 cat > "$METRICS" <<'CSV'
-variant,stage,toolchain,status,artifact,affine_min_count,arith_minsi_count,d_affine_min_count,tail_guard_count,dynamic_step_count,static_step_count,d_tensor_nat_mul_count,d_tensor_shape_to_index_count,d_affine_for_count,affine_for_count,total_op_count,mlir_loc,removed_op_delta,notes
+variant,stage,toolchain,status,artifact,affine_min_count,arith_minsi_count,d_affine_min_count,tail_guard_count,dynamic_step_count,static_step_count,shape_index_arith_op_count,direct_index_dim_count,d_affine_for_count,affine_for_count,total_op_count,mlir_loc,removed_op_delta,notes
 CSV
 
 dependent_simplified="$OUT_DIR/dependent_guarded_tile_tail_min_simplified.mlir"
@@ -179,7 +179,7 @@ else
 fi
 
 metric_row "ordinary_d_affine_guarded_tile" "after_cleanup_no_simplifier" "scair" "ok" "$ordinary_cleanup" "NA" "ordinary_arith_muli_product_tail_min_retained_without_dependent_product_proof"
-metric_row "dependent_guarded_tile_simplified" "after_tail_min_simplify_cleanup" "scair" "ok" "$dependent_simplified" "NA" "d_tensor_nat_mul_rhs_proves_tile_end_within_full_bound"
+metric_row "dependent_guarded_tile_simplified" "after_tail_min_simplify_cleanup" "scair" "ok" "$dependent_simplified" "NA" "index_arith_product_rhs_proves_tile_end_within_full_bound"
 
 {
   echo "# Tail/Min Simplifier Benchmark Summary"
@@ -188,8 +188,8 @@ metric_row "dependent_guarded_tile_simplified" "after_tail_min_simplify_cleanup"
   echo
   echo "| Variant | Stage | affine.min | arith.minsi | tail guards | dynamic steps | static steps | arith.muli | direct index | total ops | LOC | Removed delta | Notes |"
   echo "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"
-  tail -n +2 "$METRICS" | while IFS=, read -r variant stage toolchain status artifact affine_min arith_min d_affine_min tail_guard dynamic_step static_step nat_mul shape_to_index d_affine_for affine_for total_ops loc delta notes; do
-    echo "| \`$variant\` | \`$stage\` | $affine_min | $arith_min | $tail_guard | $dynamic_step | $static_step | $nat_mul | $shape_to_index | $total_ops | $loc | $delta | $notes |"
+  tail -n +2 "$METRICS" | while IFS=, read -r variant stage toolchain status artifact affine_min arith_min d_affine_min tail_guard dynamic_step static_step index_arith_ops direct_index d_affine_for affine_for total_ops loc delta notes; do
+    echo "| \`$variant\` | \`$stage\` | $affine_min | $arith_min | $tail_guard | $dynamic_step | $static_step | $index_arith_ops | $direct_index | $total_ops | $loc | $delta | $notes |"
   done
   echo
   echo "Key comparison:"
