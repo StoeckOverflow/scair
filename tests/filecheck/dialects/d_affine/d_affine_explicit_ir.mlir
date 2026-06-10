@@ -12,7 +12,7 @@ builtin.module {
   %applied = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%lb)[%n] : (index)[!d_tensor.size] -> index
   %minimum = d_affine.min affine_map<(d0)[s0] -> (d0, s0, d0 + s0)>(%applied)[%n] : (index)[!d_tensor.size] -> index
   %sum = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%m) step 1 : i32 iter_args(%acc = %init : index) {
-    %inner = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%iv)[%acc] : (index)[index] -> index
+    %inner = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%iv, %acc)[] : (index, index)[] -> index
     d_affine.yield %inner : (index)
   }
   d_affine.for %dyn = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%m) step %step : index {
@@ -36,9 +36,7 @@ builtin.module {
   ^else_res:
     d_affine.yield %minimum : (index)
   }) : (index) -> index
-  // d_affine.parallel currently has no custom verifier; this pins the
-  // supported parse/print contract without claiming deeper bound semantics.
-  "d_affine.parallel"(%lb, %m) <{
+  "d_affine.parallel"(%lb) <{
     lowerBoundsMap = affine_map<(d0) -> (0)>,
     lowerBoundsGroups = dense<1> : vector<1xi32>,
     upperBoundsMap = affine_map<(d0) -> (d0)>,
@@ -46,8 +44,8 @@ builtin.module {
     steps = [1 : i64],
     reductions = []
   }> ({
-  ^par:
-  }) : (index, !d_tensor.size) -> ()
+  ^par(%p: index):
+  }) : (index) -> ()
   "test.keep"(%applied, %minimum, %sum, %loaded, %if_result) : (index, index, index, i32, index) -> ()
 }
 
@@ -56,7 +54,7 @@ builtin.module {
 // CHECK:        %[[APPLIED:[0-9]+]] = d_affine.apply #[[MAP0:map[0-9]*]] (%{{[0-9]+}})[%{{[0-9]+}}] : (index)[!d_tensor.size] -> index
 // CHECK:        %[[MIN:[0-9]+]] = d_affine.min #[[MAP1:map[0-9]*]] (%[[APPLIED]])[%{{[0-9]+}}] : (index)[!d_tensor.size] -> index
 // CHECK:        %[[SUM:[0-9]+]] = d_affine.for %{{[0-9]+}} = #[[MAP2:map[0-9]*]](%{{[0-9]+}}) to #[[MAP2]](%{{[0-9]+}}) step 1 : i32 iter_args(%{{[0-9]+}} = %{{[0-9]+}} : index) {
-// CHECK:          %{{[0-9]+}} = d_affine.apply #[[MAP0]] (%{{[0-9]+}})[%{{[0-9]+}}] : (index)[index] -> index
+// CHECK:          %{{[0-9]+}} = d_affine.apply #{{.*}} (%{{[0-9]+}}, %{{[0-9]+}})[] : (index, index)[] -> index
 // CHECK:          d_affine.yield %{{[0-9]+}} : (index)
 // CHECK:        d_affine.for %{{[0-9]+}} = #[[MAP2]](%{{[0-9]+}}) to #[[MAP2]](%{{[0-9]+}}) step %{{[0-9]+}} : index {
 // CHECK:          d_affine.yield
@@ -67,6 +65,6 @@ builtin.module {
 // CHECK:        %[[IF_RESULT:[0-9]+]] = "d_affine.if"(%{{[0-9]+}}) <{condition = #set}> ({
 // CHECK:          d_affine.yield %[[SUM]] : (index)
 // CHECK:          d_affine.yield %[[MIN]] : (index)
-// CHECK:        "d_affine.parallel"(%{{[0-9]+}}, %{{[0-9]+}}) <{
+// CHECK:        "d_affine.parallel"(%{{[0-9]+}}) <{
 // CHECK:        "test.keep"(%[[APPLIED]], %[[MIN]], %[[SUM]], %[[LOADED]], %[[IF_RESULT]]) : (index, index, index, i32, index) -> ()
 // CHECK:      }

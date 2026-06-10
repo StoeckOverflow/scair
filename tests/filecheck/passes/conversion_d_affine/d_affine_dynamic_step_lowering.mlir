@@ -4,7 +4,7 @@
 builtin.module {
   func.func @dynamic_step_lowering(%lb: index, %ub: index, %step_size: !d_tensor.pos_size, %init: index) -> index {
     %sum = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step %step_size : index iter_args(%acc = %init : index) {
-      %next = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%iv)[%acc] : (index)[index] -> index
+      %next = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%iv, %acc)[] : (index, index)[] -> index
       d_affine.yield %next : (index)
     }
     func.return %sum : index

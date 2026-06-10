@@ -11,7 +11,7 @@ builtin.module {
   %sum = d_affine.for %tile = affine_map<(d0) -> (d0)>(%c0) to affine_map<(d0) -> (d0)>(%k) step %k1 : index iter_args(%acc0 = %init : index) {
     %clamped = d_affine.min affine_map<(d0)[s0, s1] -> (d0 + s0, s1)>(%tile)[%k1, %other] : (index)[!d_tensor.pos_size, !d_tensor.size] -> index
     %inner = d_affine.for %p = affine_map<(d0) -> (d0)>(%tile) to affine_map<(d0) -> (d0)>(%clamped) step 1 : index iter_args(%acc1 = %acc0 : index) {
-      %next = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%p)[%acc1] : (index)[index] -> index
+      %next = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%p, %acc1)[] : (index, index)[] -> index
       d_affine.yield %next : (index)
     }
     d_affine.yield %inner : (index)
@@ -21,7 +21,7 @@ builtin.module {
 
 // CHECK: #[[ID:.*]] = affine_map<(d0)[] -> (d0)>
 // CHECK: #[[BAD_MIN:.*]] = affine_map<(d0)[s0, s1] -> (d0 + s0, s1)>
-// CHECK: #[[ADD_ACC:.*]] = affine_map<(d0)[s0] -> (d0 + s0)>
+// CHECK: #[[ADD_ACC:.*]] = affine_map<(d0, d1)[] -> (d0 + d1)>
 // CHECK: %[[K0:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
 // CHECK: %[[K1:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.pos_size
 // CHECK: %[[OTHER:[0-9]+]] = "d_tensor.size.param"() : () -> !d_tensor.size
@@ -29,7 +29,7 @@ builtin.module {
 // CHECK: %[[SUM:[0-9]+]] = d_affine.for %[[TILE:[0-9]+]] = #[[ID]](%{{[0-9]+}}) to #[[ID]](%[[K]]) step %[[K1]] : !d_tensor.pos_size iter_args(%[[ACC0:[0-9]+]] = %{{[0-9]+}} : index) {
 // CHECK: %[[CLAMPED:[0-9]+]] = d_affine.min #[[BAD_MIN]] (%[[TILE]])[%[[K1]], %[[OTHER]]] : (index)[!d_tensor.pos_size, !d_tensor.size] -> index
 // CHECK: %[[INNER:[0-9]+]] = d_affine.for %[[P:[0-9]+]] = #[[ID]](%[[TILE]]) to #[[ID]](%[[CLAMPED]]) step 1 : index iter_args(%[[ACC1:[0-9]+]] = %[[ACC0]] : index) {
-// CHECK: %[[NEXT:[0-9]+]] = d_affine.apply #[[ADD_ACC]] (%[[P]])[%[[ACC1]]] : (index)[index] -> index
+// CHECK: %[[NEXT:[0-9]+]] = d_affine.apply #[[ADD_ACC]] (%[[P]], %[[ACC1]])[] : (index, index)[] -> index
 // CHECK: d_affine.yield %[[NEXT]] : (index)
 // CHECK: d_affine.yield %[[INNER]] : (index)
 // CHECK: "test.keep"(%[[SUM]]) : (index) -> ()

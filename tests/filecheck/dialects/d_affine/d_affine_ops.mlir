@@ -27,6 +27,8 @@ builtin.module {
 
 // VERIFY: d_affine.for %{{.*}} = #{{.*}}(%{{.*}}) to #{{.*}}(%{{.*}}) step %{{.*}} : !d_tensor.size {
 // VERIFY: d_affine.yield
+// This verifier intentionally accepts dynamic steps structurally.
+// Strict positivity/lowerability is validated by dedicated conversion checks.
 
 // -----
 
@@ -143,7 +145,7 @@ builtin.module {
   "test.keep"(%r) : (index) -> ()
 }
 
-// VERIFY: d_affine.yield: operand type mismatch at position 0; expected index, got i32
+// VERIFY: d_affine.yield: operand type mismatch at position 0. Expected index, got i32
 
 // -----
 
@@ -185,8 +187,11 @@ builtin.module {
   %i = "arith.constant"() <{value = 1 : index}> : () -> index
   "d_affine.if"(%i) <{condition = affine_set<(d0) : (d0 >= 0)>}> ({
   ^0:
+    "test.keep"(%i) : (index) -> ()
+    d_affine.yield
   }, {
   ^1:
+    d_affine.yield
   }) : (index) -> ()
 
   "d_affine.parallel"(%i) <{
@@ -197,9 +202,43 @@ builtin.module {
     steps = [1 : i64],
     reductions = []
   }> ({
-  ^2:
+  ^2(%p: index):
   }) : (index) -> ()
 }
 
 // VERIFY: "d_affine.if"
+// VERIFY: d_affine.yield
 // VERIFY: "d_affine.parallel"
+
+// -----
+
+builtin.module {
+  %i = "arith.constant"() <{value = 7 : index}> : () -> index
+  %j = "arith.constant"() <{value = 3 : index}> : () -> index
+  %s0 = "arith.constant"() <{value = 2 : index}> : () -> index
+  %s1 = "arith.constant"() <{value = 1 : index}> : () -> index
+  %r = d_affine.apply affine_map<(d0, d1)[s0, s1] -> (d0 + d1 + s0 - s1)>(%i, %j)[%s0, %s1] : (index, index)[index, index] -> index
+  %m = d_affine.min affine_map<(d0, d1)[s0] -> (d0 + s0, d1 + s0)>(%i, %j)[%s0] : (index, index)[index] -> index
+  "test.keep"(%r, %m) : (index, index) -> ()
+}
+
+// VERIFY: d_affine.apply #{{.*}}(%{{.*}}, %{{.*}})[%{{.*}}, %{{.*}}] : (index, index)[index, index] -> index
+// VERIFY: d_affine.min #{{.*}}(%{{.*}}, %{{.*}})[%{{.*}}] : (index, index)[index] -> index
+
+// -----
+
+builtin.module {
+  %lb = "arith.constant"() <{value = 0 : index}> : () -> index
+  %ub = "arith.constant"() <{value = 8 : index}> : () -> index
+  %sym = "test.index"() : () -> index
+  d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb) to affine_map<(d0) -> (d0)>(%ub) step 1 : i32 {
+    %r = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%iv)[%sym] : (index)[index] -> index
+    %m = d_affine.min affine_map<(d0)[s0] -> (d0 + s0, s0)>(%iv)[%sym] : (index)[index] -> index
+    "test.keep"(%r, %m) : (index, index) -> ()
+    d_affine.yield
+  }
+}
+
+// VERIFY: d_affine.for %{{.*}} = #{{.*}}(%{{.*}}) to #{{.*}}(%{{.*}}) step 1 : i32 {
+// VERIFY: d_affine.apply #{{.*}}(%{{.*}})[%{{.*}}] : (index)[index] -> index
+// VERIFY: d_affine.min #{{.*}}(%{{.*}})[%{{.*}}] : (index)[index] -> index

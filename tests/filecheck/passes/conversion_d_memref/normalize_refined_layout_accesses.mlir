@@ -28,9 +28,9 @@ builtin.module {
   }
 
   func.func @normalize_subview_load(%i : index) -> f32 {
-    %d0 = "d_tensor.size.constant"() <{value = 16 : i32}> : () -> !d_tensor.size
+    %d0 = "d_tensor.size.constant"() <{value = 32 : i32}> : () -> !d_tensor.size
     %d1 = "d_tensor.size.constant"() <{value = 8 : i32}> : () -> !d_tensor.size
-    %flat = "d_tensor.size.constant"() <{value = 16 : i32}> : () -> !d_tensor.size
+    %flat = "d_tensor.size.constant"() <{value = 32 : i32}> : () -> !d_tensor.size
     %src = d_memref.alloc : () -> !d_memref.memref<[%d0], f32>
     %off = "arith.constant"() <{value = 4 : index}> : () -> index
     %stride = "arith.constant"() <{value = 2 : index}> : () -> index

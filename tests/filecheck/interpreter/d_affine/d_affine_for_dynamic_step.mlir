@@ -9,7 +9,7 @@ builtin.module {
     %init = "arith.constant"() <{value = 0 : index}> : () -> index
 
     %sum = d_affine.for %iv = affine_map<(d0) -> (d0)>(%lb_size) to affine_map<(d0) -> (d0)>(%ub_size) step %step_size : index iter_args(%acc = %init : index) {
-      %next = d_affine.apply affine_map<(d0)[s0] -> (d0 + s0)>(%iv)[%acc] : (index)[index] -> index
+      %next = d_affine.apply affine_map<(d0, d1) -> (d0 + d1)>(%iv, %acc)[] : (index, index)[] -> index
       d_affine.yield %next : (index)
     }
     func.return %sum : index

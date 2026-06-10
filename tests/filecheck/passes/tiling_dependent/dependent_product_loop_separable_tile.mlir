@@ -26,6 +26,7 @@ builtin.module {
 // CHECK-LABEL: func.func @ordinary_product_gets_separable_tile
 // CHECK: d_affine.for %[[TILE:[0-9]+]] = #map(%{{[0-9]+}}) to #map(%{{[0-9]+}}) step 4 : i32 iter_args
 // CHECK: "d_affine.if"(%[[TILE]], %{{[0-9]+}}, %{{[0-9]+}}) <{condition = #set}> ({
+// The generated guard uses operands as (tile iv dim, tile size dim, full upper bound symbol).
 // CHECK: d_affine.yield
 // CHECK: }, {
 // CHECK: d_affine.min
