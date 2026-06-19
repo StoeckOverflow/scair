@@ -11,26 +11,13 @@ import scair.passes.convert_arith_to_llvm.ConvertArithToLLVM
 import scair.passes.convert_func_to_llvm.ConvertFuncToLLVM
 import scair.passes.cse.CommonSubexpressionElimination
 import scair.passes.convert_llvm_export_abi.ConvertLLVMExportABI
-import scair.passes.context_band_tiling.DependentContextBandExactTile
-import scair.passes.context_band_tiling.DependentContextBandFactorTileWithTail
-import scair.passes.context_band_tiling.DependentContextBandSeparableTile
-import scair.passes.context_band_tiling.DependentContextBandTileWithTail
-import scair.passes.context_band_tiling.OrdinaryAffineContextBandTileWithTail
 import scair.passes.dce.DeadCodeElimination
 import scair.passes.d_memref_bounds.DMemrefBoundsCheck
 import scair.passes.finalize_dynamic_memref_to_llvm.FinalizeDynamicMemrefToLLVM
 import scair.passes.finalize_refined_d_memref_to_llvm.FinalizeRefinedDMemrefToLLVM
 import scair.passes.d_affine_to_affine_compatible.DAffineToAffineCompatible
 import scair.passes.d_affine_loop_invariant_code_motion.DAffineLoopInvariantCodeMotion
-import scair.passes.dependent_product_loop_factorization.DependentProductLoopFactorization
-import scair.passes.dependent_product_tiling.DependentExactTile
-import scair.passes.dependent_product_tiling.DependentProductLoopExactTile
-import scair.passes.dependent_product_tiling.DependentProductLoopSeparableTile
-import scair.passes.dependent_product_tiling.DependentTileWithTailControl
 import scair.passes.dependent_dim_query_elim.DependentDimQueryElim
-import scair.passes.dependent_tail_min_simplify.DependentTailMinSimplify
-import scair.passes.dependent_product_tiling.OrdinaryAffineProductLoopTileWithTail
-import scair.passes.dependent_product_tiling.OrdinaryProductTileWithTail
 import scair.passes.lower_baseline_control_flow_to_llvm.LowerBaselineControlFlowToLLVM
 import scair.passes.lower_cf_assert_to_llvm.LowerCFAssertToLLVM
 import scair.passes.lower_refined_control_flow_to_llvm.LowerRefinedControlFlowToLLVM
@@ -90,21 +77,8 @@ val allPasses: Seq[MLContext => ModulePass] =
     DAffineLoopInvariantCodeMotion(_),
     ValidateDAffineDynamicSteps(_),
     ValidateRefinedControlFlowLowerable(_),
-    DependentProductLoopFactorization(_),
     DAffineToAffineCompatible(_),
-    OrdinaryProductTileWithTail(_),
-    OrdinaryAffineProductLoopTileWithTail(_, BigInt(1)),
-    OrdinaryAffineContextBandTileWithTail(_, BigInt(1)),
-    DependentContextBandExactTile(_),
-    DependentContextBandFactorTileWithTail(_),
-    DependentContextBandSeparableTile(_),
-    DependentContextBandTileWithTail(_, BigInt(1)),
-    DependentExactTile(_),
-    DependentProductLoopExactTile(_),
-    DependentProductLoopSeparableTile(_),
-    DependentTileWithTailControl(_),
     DependentDimQueryElim(_),
-    DependentTailMinSimplify(_),
     LowerBaselineControlFlowToLLVM(_),
     LowerRefinedControlFlowToLLVM(_),
     LowerCFAssertToLLVM(_),

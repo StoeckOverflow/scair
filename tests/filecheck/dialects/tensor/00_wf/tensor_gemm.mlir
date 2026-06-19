@@ -3,14 +3,14 @@
 
 func.func @gemm_symbolic_factorized(
     %m      : index,
-    %nTiles : index,
-    %TN     : index,
-    %kTiles : index,
-    %TK     : index
+    %nBlocks : index,
+    %blockN  : index,
+    %kBlocks : index,
+    %blockK  : index
 ) {
 
-  %N = "arith.muli" (%nTiles, %TN) : (index, index) -> index
-  %K = "arith.muli" (%kTiles, %TK) : (index, index) -> index
+  %N = "arith.muli" (%nBlocks, %blockN) : (index, index) -> index
+  %K = "arith.muli" (%kBlocks, %blockK) : (index, index) -> index
 
   %A = "d_tensor.empty" () : () -> !d_tensor.tensor<[%m, %K], f32>
   %B = "d_tensor.empty" () : () -> !d_tensor.tensor<[%K, %N], f32>

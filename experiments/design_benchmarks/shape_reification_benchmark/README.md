@@ -1,7 +1,6 @@
 # shape_reification_benchmark
 
-This experiment is structural/code-generation evidence for value-dependent shape provenance. It is
-separate from the matmul exact-tiling benchmark.
+This experiment is structural/code-generation evidence for value-dependent shape provenance.
 
 Thesis claim:
 

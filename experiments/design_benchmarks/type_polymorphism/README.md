@@ -5,7 +5,7 @@ supports the thesis story by showing that polymorphic IR can be specialized, era
 ordinary `func` IR with no residual polymorphic/type-level TLam constructs.
 
 It is not a central runtime or performance benchmark. The main experimental emphasis remains on
-matmul, convolution, semi-affine indexing, and the tiling/provenance experiments.
+matmul, convolution, semi-affine indexing, and shape-provenance experiments.
 
 Evidence that type polymorphism is viable supporting infrastructure on the path toward dependent
 typing, monomorphization, specialization, and proof erasure.

@@ -45,11 +45,11 @@ builtin.module {
   %tn = "test.index"() : () -> index
   %q0 = "test.index"() : () -> index
   %q1 = "test.index"() : () -> index
-  %tiled = "test.tiled"() : () -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
-  %untiled = "d_tensor.collapse_shape"(%tiled)
+  %grouped = "test.grouped"() : () -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
+  %collapsed = "d_tensor.collapse_shape"(%grouped)
     <{reassociation = [[0 : i32, 1 : i32], [2 : i32, 3 : i32]]}>
     : (!d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>) -> !d_tensor.tensor<[%q0, %q1], f32>
-  "test.keep"(%untiled) : (!d_tensor.tensor<[%q0, %q1], f32>) -> ()
+  "test.keep"(%collapsed) : (!d_tensor.tensor<[%q0, %q1], f32>) -> ()
 }
 
 // CANON-LABEL: builtin.module {
@@ -59,11 +59,11 @@ builtin.module {
 // CANON-NEXT:   %[[TN:[0-9]+]] = "test.index"() : () -> index
 // CANON-NEXT:   %[[Q0:[0-9]+]] = "test.index"() : () -> index
 // CANON-NEXT:   %[[Q1:[0-9]+]] = "test.index"() : () -> index
-// CANON-NEXT:   %[[TILED:[0-9]+]] = "test.tiled"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>
+// CANON-NEXT:   %[[GROUPED:[0-9]+]] = "test.grouped"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>
 // CANON-NEXT:   %[[MTTM:[0-9]+]] = "arith.muli"(%[[MT]], %[[TM]]) {{.*}} : (index, index) -> index
 // CANON-NEXT:   %[[NTTN:[0-9]+]] = "arith.muli"(%[[NT]], %[[TN]]) {{.*}} : (index, index) -> index
-// CANON-NEXT:   %[[UNTILED:[0-9]+]] = "d_tensor.collapse_shape"(%[[TILED]]) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>) -> !d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>
-// CANON-NEXT:   "test.keep"(%[[UNTILED]]) : (!d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>) -> ()
+// CANON-NEXT:   %[[COLLAPSED:[0-9]+]] = "d_tensor.collapse_shape"(%[[GROUPED]]) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>) -> !d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>
+// CANON-NEXT:   "test.keep"(%[[COLLAPSED]]) : (!d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>) -> ()
 // CANON-NEXT: }
 
 // PIPE-LABEL: builtin.module {
@@ -73,11 +73,11 @@ builtin.module {
 // PIPE-NEXT:   %[[TN:[0-9]+]] = "test.index"() : () -> index
 // PIPE-NEXT:   %[[Q0:[0-9]+]] = "test.index"() : () -> index
 // PIPE-NEXT:   %[[Q1:[0-9]+]] = "test.index"() : () -> index
-// PIPE-NEXT:   %[[TILED:[0-9]+]] = "test.tiled"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>
+// PIPE-NEXT:   %[[GROUPED:[0-9]+]] = "test.grouped"() : () -> !d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>
 // PIPE-NEXT:   %[[MTTM:[0-9]+]] = "arith.muli"(%[[MT]], %[[TM]]) {{.*}} : (index, index) -> index
 // PIPE-NEXT:   %[[NTTN:[0-9]+]] = "arith.muli"(%[[NT]], %[[TN]]) {{.*}} : (index, index) -> index
-// PIPE-NEXT:   %[[UNTILED:[0-9]+]] = "d_tensor.collapse_shape"(%[[TILED]]) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>) -> !d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>
-// PIPE-NEXT:   "test.keep"(%[[UNTILED]]) : (!d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>) -> ()
+// PIPE-NEXT:   %[[COLLAPSED:[0-9]+]] = "d_tensor.collapse_shape"(%[[GROUPED]]) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%[[MT]], %[[TM]], %[[NT]], %[[TN]]], f32>) -> !d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>
+// PIPE-NEXT:   "test.keep"(%[[COLLAPSED]]) : (!d_tensor.tensor<[%[[MTTM]], %[[NTTN]]], f32>) -> ()
 // PIPE-NEXT: }
 
 // -----

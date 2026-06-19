@@ -154,8 +154,7 @@ position, a DTensor or D-affine shape consumer, or an explicit
 `d_tensor.assume_extent` marker that a consumer chooses to honor before it is
 erased.
 
-`ShapeIndexProvenance`, `ShapeProductFacts`, and `ShapeDivisibility` recover only
-local structural facts:
+`ShapeIndexProvenance` and `ShapeProductFacts` recover only local structural facts:
 - constants from `arith.constant : index`;
 - additions from `arith.addi : index` where existing consumers need them;
 - products from nested `arith.muli : index` rooted in shape use.

@@ -28,16 +28,9 @@
 #   op.memref.alloc=...
 COMMON_METRICS_HEADER="experiment_family,benchmark,variant,representation_group,build_status,run_status,source_bytes,source_loc,source_ops,source_ops_structural,source_func_defs,source_block_args,source_alloc_ops,source_reinterpret_cast_ops,source_subview_ops,source_extract_strided_metadata_ops,source_memref_load_ops,source_memref_store_ops,source_d_memref_load_ops,source_d_memref_store_ops,lowered_func_defs,lowered_ops,lowered_ops_structural,lowered_mlir_lines,llvm_ir_lines,llvm_call_count,compile_ms,result,expected_result,runtime_ns_per_iter,notes,source_helper_defs,bvar_refs,value_ssa_refs,opt_llvm_lines,opt_llvm_call_count,kernel,size,route,parse_time_ms,verification_time_ms,lowering_time_ms,compile_total_ms,runtime_median_ns_per_iter,runtime_iqr_ns_per_iter,benchmark_repetitions,checksum,checksum_status,compiler_flags,git_commit,date,machine_id,env_path,raw_timings_path"
 
-if [[ "${TILING_BENCHMARK_QUICK:-0}" == "1" ]]; then
-  BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-1}"
-  BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-1}"
-  TILING_BENCHMARK_MAX_SHAPES="${TILING_BENCHMARK_MAX_SHAPES:-1}"
-else
-  BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-5}"
-  BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-15}"
-fi
+BENCH_WARMUP_REPS="${BENCH_WARMUP_REPS:-5}"
+BENCH_TIMING_REPS="${BENCH_TIMING_REPS:-15}"
 BENCH_PROGRESS="${BENCH_PROGRESS:-1}"
-TILING_BENCHMARK_MAX_SHAPES="${TILING_BENCHMARK_MAX_SHAPES:-0}"
 
 require_file() {
   local path="$1"
@@ -53,20 +46,6 @@ require_bin() {
     echo "error: missing executable: $path" >&2
     exit 1
   fi
-}
-
-limit_csv_entries() {
-  local csv="$1"
-  local limit="${2:-$TILING_BENCHMARK_MAX_SHAPES}"
-  if [[ -z "$csv" ]]; then
-    printf '\n'
-    return
-  fi
-  if [[ -z "$limit" || "$limit" == "0" ]]; then
-    printf '%s\n' "$csv"
-    return
-  fi
-  awk -v limit="$limit" 'BEGIN { RS=","; ORS=""; count=0 } count < limit { if (count > 0) printf ","; printf "%s", $0; count++ }' <<<"$csv"
 }
 
 try_lower_d_memref_to_llvm_artifacts() {

@@ -23,7 +23,7 @@ builtin.module {
 
 // -----
 
-// Valid: 4D to 2D collapse for exact tiling-shaped tensors.
+// Valid: 4D to 2D collapse for grouped product-shaped tensors.
 builtin.module {
   %mt = "test.index"() : () -> index
   %tm = "test.index"() : () -> index
@@ -31,11 +31,11 @@ builtin.module {
   %tn = "test.index"() : () -> index
   %m = "arith.muli"(%mt, %tm) : (index, index) -> index
   %n = "arith.muli"(%nt, %tn) : (index, index) -> index
-  %tiled = "test.tiled"() : () -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
-  %untiled = "d_tensor.collapse_shape"(%tiled)
+  %grouped = "test.grouped"() : () -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
+  %collapsed = "d_tensor.collapse_shape"(%grouped)
     <{reassociation = [[0 : i32, 1 : i32], [2 : i32, 3 : i32]]}>
     : (!d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>) -> !d_tensor.tensor<[%m, %n], f32>
-  "test.keep"(%untiled) : (!d_tensor.tensor<[%m, %n], f32>) -> ()
+  "test.keep"(%collapsed) : (!d_tensor.tensor<[%m, %n], f32>) -> ()
 }
 
 // CHECK: builtin.module {
@@ -45,7 +45,7 @@ builtin.module {
 // CHECK-NEXT:   %3 = "test.index"() : () -> index
 // CHECK-NEXT:   %4 = "arith.muli"(%0, %1) {{.*}} : (index, index) -> index
 // CHECK-NEXT:   %5 = "arith.muli"(%2, %3) {{.*}} : (index, index) -> index
-// CHECK-NEXT:   %6 = "test.tiled"() : () -> !d_tensor.tensor<[%0, %1, %2, %3], f32>
+// CHECK-NEXT:   %6 = "test.grouped"() : () -> !d_tensor.tensor<[%0, %1, %2, %3], f32>
 // CHECK-NEXT:   %7 = "d_tensor.collapse_shape"(%6) <{reassociation = {{\[\[0 : i32, 1 : i32\], \[2 : i32, 3 : i32\]\]}}}> : (!d_tensor.tensor<[%0, %1, %2, %3], f32>) -> !d_tensor.tensor<[%4, %5], f32>
 // CHECK-NEXT:   "test.keep"(%7) : (!d_tensor.tensor<[%4, %5], f32>) -> ()
 // CHECK-NEXT: }

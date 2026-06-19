@@ -99,7 +99,7 @@ builtin.module {
 
 // -----
 
-// Valid: 4D tile-major permutation.
+// Valid: 4D block-major permutation.
 builtin.module {
   %mt = "test.index"() : () -> index
   %tm = "test.index"() : () -> index
@@ -118,17 +118,17 @@ builtin.module {
 
 // -----
 
-// Valid: tile-major permutation is its own inverse.
+// Valid: block-major permutation is its own inverse.
 builtin.module {
   %mt = "test.index"() : () -> index
   %tm = "test.index"() : () -> index
   %nt = "test.index"() : () -> index
   %tn = "test.index"() : () -> index
   %c = "test.c"() : () -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
-  %tile_major = "d_tensor.permute_dims"(%c)
+  %block_major = "d_tensor.permute_dims"(%c)
     <{permutation = [0 : i32, 2 : i32, 1 : i32, 3 : i32]}>
     : (!d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>) -> !d_tensor.tensor<[%mt, %nt, %tm, %tn], f32>
-  %round_trip = "d_tensor.permute_dims"(%tile_major)
+  %round_trip = "d_tensor.permute_dims"(%block_major)
     <{permutation = [0 : i32, 2 : i32, 1 : i32, 3 : i32]}>
     : (!d_tensor.tensor<[%mt, %nt, %tm, %tn], f32>) -> !d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>
   "test.keep"(%round_trip) : (!d_tensor.tensor<[%mt, %tm, %nt, %tn], f32>) -> ()

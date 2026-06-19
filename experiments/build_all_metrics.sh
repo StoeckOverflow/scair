@@ -19,29 +19,6 @@ export BENCH_CPU_PIN
 SEMI_AFFINE_ITERATIONS_DEFAULT="${SEMI_AFFINE_ITERATIONS:-1000}"
 STRIDED_MATMUL_ITERATIONS_DEFAULT="${STRIDED_MATMUL_ITERATIONS:-200}"
 CONVOLUTION_ITERATIONS_DEFAULT="${CONVOLUTION_ITERATIONS:-50}"
-MATMUL_REDUCTION_DIM_TILING_ITERATIONS_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_ITERATIONS:-100}"
-MATMUL_REDUCTION_DIM_TILING_PROFILE_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_PROFILE:-default}"
-MATMUL_REDUCTION_DIM_TILING_TILE_POLICY_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_TILE_POLICY:-inner_factor}"
-MATMUL_REDUCTION_DIM_TILING_TILE_SIZE_SET_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_TILE_SIZE_SET:-}"
-MATMUL_OUTER_DIM_TILING_ITERATIONS_DEFAULT="${MATMUL_OUTER_DIM_TILING_ITERATIONS:-30}"
-MATMUL_FULL_FACTORIZED_TILING_ITERATIONS_DEFAULT="${MATMUL_FULL_FACTORIZED_TILING_ITERATIONS:-30}"
-AFFINE_TILING_SIZE_SET_DEFAULT="${AFFINE_TILING_SIZE_SET:-16x3}"
-MATMUL_REDUCTION_DIM_TILING_DEFAULT_SIZE_SET="128x128x12x64,128x128x16x32,256x128x12x64"
-MATMUL_REDUCTION_DIM_TILING_CACHE_CONTROL_SIZE_SET="8x8x4096x3,8x8x4096x5,8x8x4096x7,8x8x4096x8,16x16x2048x3,16x16x2048x5,16x16x2048x7,16x16x1024x16,32x16x1024x8"
-MATMUL_REDUCTION_DIM_TILING_CACHE_SWEEP_SIZE_SET="${MATMUL_REDUCTION_DIM_TILING_CACHE_SWEEP_SIZE_SET:-$MATMUL_REDUCTION_DIM_TILING_CACHE_CONTROL_SIZE_SET}"
-if [[ -n "${MATMUL_REDUCTION_DIM_TILING_SIZE_SET:-}" ]]; then
-  MATMUL_REDUCTION_DIM_TILING_SIZE_SET_DEFAULT="$MATMUL_REDUCTION_DIM_TILING_SIZE_SET"
-elif [[ "$MATMUL_REDUCTION_DIM_TILING_PROFILE_DEFAULT" == "cache_control" ]]; then
-  MATMUL_REDUCTION_DIM_TILING_SIZE_SET_DEFAULT="$MATMUL_REDUCTION_DIM_TILING_CACHE_CONTROL_SIZE_SET"
-  MATMUL_REDUCTION_DIM_TILING_ITERATIONS_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_ITERATIONS:-1000}"
-  MATMUL_REDUCTION_DIM_TILING_TILE_POLICY_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_TILE_POLICY:-inner_factor}"
-elif [[ "$MATMUL_REDUCTION_DIM_TILING_PROFILE_DEFAULT" == "cache_sweep" ]]; then
-  MATMUL_REDUCTION_DIM_TILING_SIZE_SET_DEFAULT="$MATMUL_REDUCTION_DIM_TILING_CACHE_SWEEP_SIZE_SET"
-  MATMUL_REDUCTION_DIM_TILING_ITERATIONS_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_ITERATIONS:-1000}"
-  MATMUL_REDUCTION_DIM_TILING_TILE_SIZE_SET_DEFAULT="${MATMUL_REDUCTION_DIM_TILING_TILE_SIZE_SET:-8,16,32,64,128}"
-else
-  MATMUL_REDUCTION_DIM_TILING_SIZE_SET_DEFAULT="$MATMUL_REDUCTION_DIM_TILING_DEFAULT_SIZE_SET"
-fi
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
 # The per-family CSVs are expected to share one identical header so we can
@@ -53,16 +30,7 @@ SCRIPTS=(
   "$SCAIR_ROOT/experiments/structural_benchmarks/semi_affine_indexing_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/structural_benchmarks/strided_matmul_benchmark/build_scair_example.sh"
   "$SCAIR_ROOT/experiments/structural_benchmarks/convolution_benchmark/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/affine_tiling_benchmark/build_scair_example.sh"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/conv2d_output_dim_tiling_benchmark/build_conv2d_output_dim_tiling_example.sh"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/conv2d_reduction_dim_tiling_benchmark/build_conv2d_reduction_dim_tiling_example.sh"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/conv2d_full_factorized_tiling_benchmark/build_conv2d_full_factorized_tiling_example.sh"
   "$SCAIR_ROOT/experiments/design_benchmarks/shape_reification_benchmark/build_shape_reification_example.sh"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/tail_min_simplifier_benchmark/build_tail_min_simplifier_example.sh"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/tiling_correctness_matrix/build_tiling_correctness_matrix.sh"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/matmul_outer_dim_tiling_benchmark/build_matmul_outer_dim_tiling_example.sh"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/matmul_reduction_dim_tiling_benchmark/build_matmul_reduction_dim_tiling_example.sh"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/matmul_full_factorized_tiling_benchmark/build_matmul_full_factorized_tiling_example.sh"
 )
 
 METRIC_FILES=(
@@ -70,8 +38,6 @@ METRIC_FILES=(
   "$SCAIR_ROOT/experiments/structural_benchmarks/semi_affine_indexing_benchmark/out/metrics.csv"
   "$SCAIR_ROOT/experiments/structural_benchmarks/strided_matmul_benchmark/out/metrics.csv"
   "$SCAIR_ROOT/experiments/structural_benchmarks/convolution_benchmark/out/metrics.csv"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/affine_tiling_benchmark/out/metrics.csv"
-  "$SCAIR_ROOT/experiments/tiling_benchmarks/matmul_reduction_dim_tiling_benchmark/out/metrics.csv"
 )
 
 COMMON_FAMILIES=(
@@ -79,22 +45,13 @@ COMMON_FAMILIES=(
   "structural_benchmarks/semi_affine_indexing_benchmark"
   "structural_benchmarks/strided_matmul_benchmark"
   "structural_benchmarks/convolution_benchmark"
-  "tiling_benchmarks/affine_tiling_benchmark"
-  "tiling_benchmarks/matmul_reduction_dim_tiling_benchmark"
 )
 
 # Structural validation families intentionally keep family-specific schemas.
 # Run them with the aggregate suite, but archive their outputs separately from
 # the common-schema runtime CSV.
 STRUCTURAL_FAMILIES=(
-  "tiling_benchmarks/conv2d_output_dim_tiling_benchmark"
-  "tiling_benchmarks/conv2d_reduction_dim_tiling_benchmark"
-  "tiling_benchmarks/conv2d_full_factorized_tiling_benchmark"
   "design_benchmarks/shape_reification_benchmark"
-  "tiling_benchmarks/tail_min_simplifier_benchmark"
-  "tiling_benchmarks/tiling_correctness_matrix"
-  "tiling_benchmarks/matmul_outer_dim_tiling_benchmark"
-  "tiling_benchmarks/matmul_full_factorized_tiling_benchmark"
 )
 
 run_benchmark_script() {
@@ -131,41 +88,7 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
         ITERATIONS="$CONVOLUTION_ITERATIONS_DEFAULT" \
         run_benchmark_script "$script"
         ;;
-      affine_tiling_benchmark)
-        AFFINE_TILING_SIZE_SET="$AFFINE_TILING_SIZE_SET_DEFAULT" \
-        run_benchmark_script "$script"
-        ;;
-      conv2d_output_dim_tiling_benchmark)
-        run_benchmark_script "$script"
-        ;;
-      conv2d_reduction_dim_tiling_benchmark)
-        run_benchmark_script "$script"
-        ;;
-      conv2d_full_factorized_tiling_benchmark)
-        run_benchmark_script "$script"
-        ;;
       shape_reification_benchmark)
-        run_benchmark_script "$script"
-        ;;
-      tail_min_simplifier_benchmark)
-        run_benchmark_script "$script"
-        ;;
-      matmul_outer_dim_tiling_benchmark)
-        MATMUL_OUTER_DIM_TILING_ITERATIONS="$MATMUL_OUTER_DIM_TILING_ITERATIONS_DEFAULT" \
-        run_benchmark_script "$script"
-        ;;
-      matmul_reduction_dim_tiling_benchmark)
-        BENCH_WARMUP_REPS="$BENCH_WARMUP_REPS_DEFAULT" \
-        BENCH_TIMING_REPS="$BENCH_TIMING_REPS_DEFAULT" \
-        ITERATIONS="$MATMUL_REDUCTION_DIM_TILING_ITERATIONS_DEFAULT" \
-        MATMUL_REDUCTION_DIM_TILING_SIZE_SET="$MATMUL_REDUCTION_DIM_TILING_SIZE_SET_DEFAULT" \
-        MATMUL_REDUCTION_DIM_TILING_PROFILE="$MATMUL_REDUCTION_DIM_TILING_PROFILE_DEFAULT" \
-        MATMUL_REDUCTION_DIM_TILING_TILE_POLICY="$MATMUL_REDUCTION_DIM_TILING_TILE_POLICY_DEFAULT" \
-        MATMUL_REDUCTION_DIM_TILING_TILE_SIZE_SET="$MATMUL_REDUCTION_DIM_TILING_TILE_SIZE_SET_DEFAULT" \
-        run_benchmark_script "$script"
-        ;;
-      matmul_full_factorized_tiling_benchmark)
-        MATMUL_FULL_FACTORIZED_TILING_ITERATIONS="$MATMUL_FULL_FACTORIZED_TILING_ITERATIONS_DEFAULT" \
         run_benchmark_script "$script"
         ;;
       *)

@@ -13,8 +13,7 @@ Use in thesis:
 - structural/code-generation evidence that selected refined `d_memref` layout routes can avoid
   unnecessary memref descriptor extract/insert plumbing
 - runtime checksum validation for the generated routes
-- not factorization-aware tiling evidence, not exact product tiling evidence, not a full memref ABI
-  or bufferization result, and not a broad GEMM speedup claim
+- not a full memref ABI or bufferization result, and not a broad GEMM speedup claim
 
 Metric interpretation / limitations:
 

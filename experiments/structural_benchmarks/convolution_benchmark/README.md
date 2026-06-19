@@ -19,8 +19,7 @@ Use in thesis:
 - runtime checksum validation for the generated routes
 - large image-like cases may use fewer driver iterations per timing sample to keep final runs
   executable
-- not cache-tuned factorization evidence, not exact-tiling evidence, not a full memref ABI or
-  bufferization result, and not a broad Conv2D speedup claim
+- not a full memref ABI or bufferization result, and not a broad Conv2D speedup claim
 
 Metric interpretation / limitations:
 

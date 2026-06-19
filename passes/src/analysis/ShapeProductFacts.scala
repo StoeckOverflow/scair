@@ -40,12 +40,12 @@ object ShapeProductFacts:
           case _                                        => false
         )
 
-    def containsEquivalentFactor(tileSize: Value[Attribute]): Boolean =
-      val factor = Factor(tileSize, ShapeIndexProvenance.exactConstInShapeExpr(tileSize))
+    def containsEquivalentFactor(factorValue: Value[Attribute]): Boolean =
+      val factor = Factor(factorValue, ShapeIndexProvenance.exactConstInShapeExpr(factorValue))
       factors.exists(sameExplicitFactor(_, factor))
 
-    def removeOneEquivalentFactor(tileSize: Value[Attribute]): Option[Seq[Factor]] =
-      val factor = Factor(tileSize, ShapeIndexProvenance.exactConstInShapeExpr(tileSize))
+    def removeOneEquivalentFactor(factorValue: Value[Attribute]): Option[Seq[Factor]] =
+      val factor = Factor(factorValue, ShapeIndexProvenance.exactConstInShapeExpr(factorValue))
       val idx = factors.indexWhere(sameExplicitFactor(_, factor))
       if idx < 0 then None else Some(factors.patch(idx, Nil, 1))
 
@@ -101,8 +101,8 @@ object ShapeProductFacts:
   def factorMultiset(v: Value[Attribute]): Option[ProductFactors] =
     flattenProduct(v)
 
-  def containsFactor(fullBound: Value[Attribute], tileSize: Value[Attribute]): Boolean =
-    flattenProduct(fullBound).exists(_.containsEquivalentFactor(tileSize))
+  def containsFactor(fullBound: Value[Attribute], factorValue: Value[Attribute]): Boolean =
+    flattenProduct(fullBound).exists(_.containsEquivalentFactor(factorValue))
 
   def containsExplicitFactor(product: Value[Attribute], factor: Value[Attribute]): Boolean =
     containsExplicitFactorProduct(product, factor)
